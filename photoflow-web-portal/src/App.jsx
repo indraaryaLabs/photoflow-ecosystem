@@ -12,7 +12,7 @@ import AdminLogin from './components/AdminLogin';
 import { supabase } from './lib/supabase';
 
 // ─── API Base URL ────────────────────────────────────────────────
-const API_BASE = 'http://localhost:3000';
+const API_BASE = ' https://sufur-2001-448a-7024-49e3-e5ab-e2b2-f6db-bdea.run.pinggy-free.link';
 
 export default function App() {
   const isAdminRoute = window.location.pathname.startsWith('/admin');
@@ -23,28 +23,28 @@ export default function App() {
 
   useEffect(() => {
     if (!isAdminRoute) return;
-    
+
     // Cek sesi awal
     supabase.auth.getSession().then(({ data: { session } }) => {
       setIsAdminAuthenticated(!!session);
       setIsAuthChecking(false);
     });
-    
+
     // Dengarkan perubahan login/logout
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAdminAuthenticated(!!session);
     });
-    
+
     return () => subscription.unsubscribe();
   }, [isAdminRoute]);
 
   if (isAdminRoute) {
     if (isAuthChecking) {
-       return (
-          <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-             <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-          </div>
-       );
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+          <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+        </div>
+      );
     }
     return isAdminAuthenticated ? <AdminDashboard /> : <AdminLogin />;
   }
@@ -221,7 +221,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300 font-sans selection:bg-indigo-500/30">
       <Toast toasts={toasts} />
-      
+
       <Header project={project} isDark={isDark} toggleTheme={toggleTheme} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28">
@@ -230,12 +230,12 @@ export default function App() {
             Pilih Foto Favorit
           </h2>
           <p className="text-zinc-500 dark:text-zinc-400 text-sm sm:text-base max-w-2xl">
-            Klik gambar untuk memilih, atau tekan ikon <strong>👁 (Mata)</strong> untuk melihat resolusi tinggi secara utuh. 
+            Klik gambar untuk memilih, atau tekan ikon <strong>👁 (Mata)</strong> untuk melihat resolusi tinggi secara utuh.
             Maksimal <strong className="text-zinc-700 dark:text-zinc-200">{project.max_selections}</strong> foto.
           </p>
         </div>
 
-        <motion.div 
+        <motion.div
           className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6"
           variants={{
             hidden: { opacity: 0 },
