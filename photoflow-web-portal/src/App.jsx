@@ -12,7 +12,7 @@ import AdminLogin from './components/AdminLogin';
 import { supabase } from './lib/supabase';
 
 // ─── API Base URL ────────────────────────────────────────────────
-const API_BASE = 'https://e92729b24d39ea.lhr.life';
+const API_BASE = 'https://9efbf84afeea93.lhr.life';
 
 export default function App() {
   const isAdminRoute = window.location.pathname.startsWith('/admin');

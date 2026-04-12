@@ -225,6 +225,17 @@ func main() {
 		c.JSON(http.StatusOK, projects)
 	})
 
+	// --- 5. RUTE INTEGRASI GDRIVE & FORMAT RAW ---
+	r.GET("/api/gdrive/:folderId", func(c *gin.Context) {
+		folderID := c.Param("folderId")
+		files, err := GetImagesFromFolder(folderID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membaca folder Google Drive", "details": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"files": files})
+	})
+
 	// --- PENGATURAN PORT & START SERVER ---
 	port := os.Getenv("PORT")
 	if port == "" {

@@ -1,0 +1,13 @@
+# Kunci Rahasia API (SANGAT PENTING)
+gdrive-key.json
+
+# File Hasil Build Golang
+main
+main.exe
+*.exe
+
+# Konfigurasi Environment
+.env
+
+# File Sistem OS
+.DS_Store
