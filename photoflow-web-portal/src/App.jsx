@@ -12,7 +12,7 @@ import AdminLogin from './components/AdminLogin';
 import { supabase } from './lib/supabase';
 
 // ─── API Base URL ────────────────────────────────────────────────
-const API_BASE = ' https://sufur-2001-448a-7024-49e3-e5ab-e2b2-f6db-bdea.run.pinggy-free.link';
+const API_BASE = ' https://dcoby-2001-448a-7024-49e3-316a-1b98-d08e-cde5.run.pinggy-free.link';
 
 export default function App() {
   const isAdminRoute = window.location.pathname.startsWith('/admin');
