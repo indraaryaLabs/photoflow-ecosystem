@@ -51,7 +51,8 @@ const PreviewModal = ({
 
   const currentPhoto = photos[index];
   const isSelected = selectedIds.has(currentPhoto.id);
-  const highResUrl = currentPhoto.thumbnail_url.replace('&sz=w800', '&sz=w2000');
+  const thumbUrl = currentPhoto.thumbnailLink || currentPhoto.thumbnail_url;
+  const highResUrl = thumbUrl.replace('=s1000', '=s2000').replace('&sz=w800', '&sz=w2000');
 
   // Zoom Handlers
   const handleWheel = (e) => {
@@ -156,7 +157,7 @@ const PreviewModal = ({
                 {/* Blur-up Placeholder */}
                 {!isImgLoaded && (
                   <img 
-                    src={currentPhoto.thumbnail_url} 
+                    src={thumbUrl} 
                     alt="placeholder"
                     referrerPolicy="no-referrer"
                     className="absolute max-h-[85vh] w-auto max-w-full object-contain blur-xl opacity-60 scale-105" 

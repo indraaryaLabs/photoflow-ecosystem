@@ -12,7 +12,7 @@ import AdminLogin from './components/AdminLogin';
 import { supabase } from './lib/supabase';
 
 // ─── API Base URL ────────────────────────────────────────────────
-const API_BASE = 'https://9efbf84afeea93.lhr.life';
+const API_BASE = 'https://ee322930bc46b4.lhr.life';
 
 export default function App() {
   const isAdminRoute = window.location.pathname.startsWith('/admin');
@@ -86,7 +86,19 @@ export default function App() {
 
         const data = await res.json();
         setProject(data.project);
-        setPhotos(data.photos || []);
+
+        // Menggunakan GDrive Proxy API dari Backend Golang
+        const folderId = data.project?.drive_folder_id;
+        if (folderId) {
+          const gDriveRes = await fetch(`${API_BASE}/api/gdrive/${folderId}`);
+          if (!gDriveRes.ok) {
+            throw new Error(`Gagal memuat proxy Google Drive (status ${gDriveRes.status})`);
+          }
+          const gDriveData = await gDriveRes.json();
+          setPhotos(gDriveData.files || []);
+        } else {
+          setPhotos(data.photos || []);
+        }
       } catch (err) {
         setError(err.message || 'Terjadi kesalahan saat memuat galeri.');
       } finally {

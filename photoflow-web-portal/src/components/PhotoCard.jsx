@@ -23,7 +23,7 @@ const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
       {!isLoaded && <div className="absolute inset-0 animate-pulse bg-zinc-300 dark:bg-zinc-800" />}
 
       <img
-        src={photo.thumbnail_url}
+        src={photo.thumbnailLink}
         alt="Gallery shot"
         loading="lazy"
         referrerPolicy="no-referrer"
