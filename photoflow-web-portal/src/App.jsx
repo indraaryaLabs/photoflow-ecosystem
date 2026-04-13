@@ -75,7 +75,11 @@ export default function App() {
 
     const fetchGallery = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/p/${token}`);
+        const res = await fetch(`${API_BASE}/api/p/${token}`, {
+          headers: {
+            'ngrok-skip-browser-warning': 'true'
+          }
+        });
 
         if (!res.ok) {
           const body = await res.json().catch(() => null);
@@ -90,7 +94,11 @@ export default function App() {
         // Menggunakan GDrive Proxy API dari Backend Golang
         const folderId = data.project?.drive_folder_id;
         if (folderId) {
-          const gDriveRes = await fetch(`${API_BASE}/api/gdrive/${folderId}`);
+          const gDriveRes = await fetch(`${API_BASE}/api/gdrive/${folderId}`, {
+            headers: {
+              'ngrok-skip-browser-warning': 'true'
+            }
+          });
           if (!gDriveRes.ok) {
             throw new Error(`Gagal memuat proxy Google Drive (status ${gDriveRes.status})`);
           }
@@ -151,7 +159,10 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/api/p/${token}/submit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
         body: JSON.stringify({ selected_photo_ids: Array.from(selectedIds) }),
       });
 

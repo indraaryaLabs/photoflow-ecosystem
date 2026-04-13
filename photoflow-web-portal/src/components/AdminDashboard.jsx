@@ -48,7 +48,11 @@ export default function AdminDashboard() {
   const fetchProjects = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('http://localhost:3000/api/projects');
+      const res = await fetch('http://localhost:3000/api/projects', {
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        }
+      });
       if (!res.ok) throw new Error('Gagal memuat data');
       const data = await res.json();
       setProjects(data || []);
@@ -78,7 +82,10 @@ export default function AdminDashboard() {
     try {
       const res = await fetch('http://localhost:3000/api/projects', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
         body: JSON.stringify({
           client_name: formData.clientName,
           max_selections: parseInt(formData.maxSelection),
@@ -329,7 +336,11 @@ function ProjectCard({ project, index, onCopy }) {
   const handleExportJSON = async () => {
     try {
       setIsExporting(true);
-      const res = await fetch(`http://localhost:3000/api/p/${project.magic_link_token}`);
+      const res = await fetch(`http://localhost:3000/api/p/${project.magic_link_token}`, {
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        }
+      });
       if (!res.ok) throw new Error('Gagal mengambil data project');
       const data = await res.json();
       
