@@ -12,7 +12,7 @@ import AdminLogin from './components/AdminLogin';
 import { supabase } from './lib/supabase';
 
 // ─── API Base URL ────────────────────────────────────────────────
-const API_BASE = 'https://a30d84db41772b.lhr.life';
+const API_BASE = 'https://disaster-antarctic-regress.ngrok-free.dev';
 
 export default function App() {
   const isAdminRoute = window.location.pathname.startsWith('/admin');
