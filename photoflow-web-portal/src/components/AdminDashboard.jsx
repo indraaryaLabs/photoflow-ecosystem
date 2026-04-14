@@ -305,7 +305,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                           min="1"
                           value={formData.maxSelection}
                           onChange={(e) => setFormData({...formData, maxSelection: parseInt(e.target.value)})}
-                          className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm transition-all duration-300 outline-none"
+                          className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-500/20 rounded-xl pl-4 pr-16 py-3 text-sm transition-all duration-300 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                         <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-zinc-400 font-medium">
                           Photos
@@ -420,7 +420,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Max Selections</label>
-                  <input type="number" min="1" required value={editingProject.max_selections} onChange={e => setEditingProject({...editingProject, max_selections: e.target.value})} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none" />
+                  <input type="number" min="1" required value={editingProject.max_selections} onChange={e => setEditingProject({...editingProject, max_selections: e.target.value})} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Google Drive Link</label>
