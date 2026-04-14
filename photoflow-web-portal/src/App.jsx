@@ -15,54 +15,22 @@ import { supabase } from './lib/supabase';
 const API_BASE = 'https://disaster-antarctic-regress.ngrok-free.dev';
 
 export default function App() {
+  // ─── Variables routing (No hook dependencies) ────────────────
   const isAdminRoute = window.location.pathname.startsWith('/admin');
-
-  // --- Auth State ---
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
-  const [isAuthChecking, setIsAuthChecking] = useState(true);
-
-  useEffect(() => {
-    // Cek sesi awal
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAdminAuthenticated(!!session);
-      setIsAuthChecking(false);
-    });
-
-    // Dengarkan perubahan login/logout
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsAdminAuthenticated(!!session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
   const token = new URLSearchParams(window.location.search).get('token');
   const isHome = window.location.pathname === '/';
 
-  if (isAuthChecking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-      </div>
-    );
-  }
+  // ─── 1. Auth State ───────────────────────────────────────────
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
 
-  // Strict Routing Protection (!session && !token)
-  if (!isAdminAuthenticated && (isAdminRoute || (isHome && !token))) {
-    return <AdminLogin />;
-  }
-
-  if (isAdminRoute && isAdminAuthenticated) {
-    return <AdminDashboard />;
-  }
-
-  // ─── Data State (from API) ───────────────────────────────────
+  // ─── 2. Data State (from API) ────────────────────────────────
   const [project, setProject] = useState(null);
   const [photos, setPhotos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // ─── UI State ────────────────────────────────────────────────
+  // ─── 3. UI State ─────────────────────────────────────────────
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('theme');
     if (saved !== null) return saved === 'dark';
@@ -75,10 +43,24 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmittedState, setIsSubmittedState] = useState(false);
 
-  // ─── Read token from URL & Fetch data ────────────────────────
+  // ─── 4. Hooks / Effects ──────────────────────────────────────
+  
+  // Auth Session Checker
   useEffect(() => {
-    // Token already grabbed above: const token = new URLSearchParams...
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAdminAuthenticated(!!session);
+      setIsAuthChecking(false);
+    });
 
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAdminAuthenticated(!!session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Fetch Gallery Data
+  useEffect(() => {
     if (!token) {
       setError('Link galeri tidak valid atau hilang.');
       setIsLoading(false);
@@ -88,32 +70,23 @@ export default function App() {
     const fetchGallery = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/p/${token}`, {
-          headers: {
-            'ngrok-skip-browser-warning': 'true'
-          }
+          headers: { 'ngrok-skip-browser-warning': 'true' }
         });
 
         if (!res.ok) {
           const body = await res.json().catch(() => null);
-          throw new Error(
-            body?.message || `Galeri tidak ditemukan. (status ${res.status})`
-          );
+          throw new Error(body?.message || `Galeri tidak ditemukan. (status ${res.status})`);
         }
 
         const data = await res.json();
         setProject(data.project);
 
-        // Menggunakan GDrive Proxy API dari Backend Golang
         const folderId = data.project?.drive_folder_id;
         if (folderId) {
           const gDriveRes = await fetch(`${API_BASE}/api/gdrive/${folderId}`, {
-            headers: {
-              'ngrok-skip-browser-warning': 'true'
-            }
+            headers: { 'ngrok-skip-browser-warning': 'true' }
           });
-          if (!gDriveRes.ok) {
-            throw new Error(`Gagal memuat proxy Google Drive (status ${gDriveRes.status})`);
-          }
+          if (!gDriveRes.ok) throw new Error(`Gagal memuat proxy Google Drive (status ${gDriveRes.status})`);
           const gDriveData = await gDriveRes.json();
           setPhotos(gDriveData.files || []);
         } else {
@@ -127,9 +100,9 @@ export default function App() {
     };
 
     fetchGallery();
-  }, []);
+  }, [token]);
 
-  // ─── Dark mode sync ──────────────────────────────────────────
+  // Dark mode sync
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
@@ -140,10 +113,10 @@ export default function App() {
     }
   }, [isDark]);
 
+  // Dark mode auto listener
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = (e) => {
-      // Hanya auto-switch jika user belum pernah set preferensi manual
       if (localStorage.getItem('theme') === null) {
         setIsDark(e.matches);
       }
@@ -183,8 +156,6 @@ export default function App() {
     if (isSubmitting) return;
     setIsSubmitting(true);
 
-    const token = new URLSearchParams(window.location.search).get('token');
-
     try {
       const res = await fetch(`${API_BASE}/api/p/${token}/submit`, {
         method: 'POST',
@@ -207,7 +178,7 @@ export default function App() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [selectedIds, addToast, isSubmitting]);
+  }, [selectedIds, addToast, isSubmitting, token]);
 
   const handleOpenPreview = useCallback((index) => {
     setPreviewState({ index, direction: 0 });
@@ -232,8 +203,25 @@ export default function App() {
   }, [photos.length]);
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  //  CONDITIONAL RENDERING — Loading & Error States
+  //  CONDITIONAL RENDERING — Early Returns
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+      </div>
+    );
+  }
+
+  // Strict Routing Protection (!session && !token)
+  if (!isAdminAuthenticated && (isAdminRoute || (isHome && !token))) {
+    return <AdminLogin />;
+  }
+
+  if (isAdminRoute && isAdminAuthenticated) {
+    return <AdminDashboard />;
+  }
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300">
