@@ -208,7 +208,10 @@ func main() {
 		magicLink := c.Param("magic_link")
 
 		var input struct {
-			SelectedPhotoIDs []string `json:"selected_photo_ids" binding:"required"`
+			SelectedPhotos []struct {
+				DriveID  string `json:"drive_id"`
+				FileName string `json:"file_name"`
+			} `json:"selected_photos" binding:"required"`
 		}
 
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -222,16 +225,28 @@ func main() {
 			return
 		}
 
-		// Reset lalu set yang baru
-		db.Model(&Photo{}).Where("project_id = ?", project.ID).Update("is_selected", false)
+		// Hapus semua foto lama untuk project ini, lalu insert yang baru
+		db.Where("project_id = ?", project.ID).Delete(&Photo{})
 
-		if len(input.SelectedPhotoIDs) > 0 {
-			db.Model(&Photo{}).Where("id IN ?", input.SelectedPhotoIDs).Update("is_selected", true)
+		if len(input.SelectedPhotos) > 0 {
+			var photosToInsert []Photo
+			for _, sp := range input.SelectedPhotos {
+				photosToInsert = append(photosToInsert, Photo{
+					ProjectID:    project.ID,
+					FileName:     sp.FileName,
+					ThumbnailURL: "", // tidak diperlukan untuk desktop harvester
+					IsSelected:   true,
+				})
+			}
+			db.Create(&photosToInsert)
 		}
 
 		db.Model(&project).Update("status", "submitted")
 
-		c.JSON(http.StatusOK, gin.H{"message": "Pilihan berhasil disimpan!"})
+		c.JSON(http.StatusOK, gin.H{
+			"message":        "Pilihan berhasil disimpan!",
+			"photos_saved":   len(input.SelectedPhotos),
+		})
 	})
 
 	// --- 4. RUTE GET ALL PROJECTS (UNTUK ADMIN DASHBOARD) ---

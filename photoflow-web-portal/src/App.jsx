@@ -166,13 +166,18 @@ export default function App() {
     setIsSubmitting(true);
 
     try {
+      // Build payload with file names so backend can INSERT into photos table
+      const selectedPhotosPayload = photos
+        .filter(p => selectedIds.has(p.id))
+        .map(p => ({ drive_id: p.id, file_name: p.name }));
+
       const res = await fetch(`${API_BASE}/api/p/${token}/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true'
         },
-        body: JSON.stringify({ selected_photo_ids: Array.from(selectedIds) }),
+        body: JSON.stringify({ selected_photos: selectedPhotosPayload }),
       });
 
       if (!res.ok) {
