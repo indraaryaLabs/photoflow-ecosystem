@@ -38,6 +38,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
   const [projects, setProjects] = useState([]);
 
   const [formData, setFormData] = useState({
+    projectName: '',
     clientName: '',
     maxSelection: 50,
     driveLink: ''
@@ -122,6 +123,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
           'X-User-ID': user?.id || ''
         },
         body: JSON.stringify({
+          project_name: editingProject.project_name,
           client_name: editingProject.client_name,
           max_selections: parseInt(editingProject.max_selections),
           drive_folder_url: editingProject.drive_folder_url,
@@ -144,7 +146,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.clientName) return;
+    if (!formData.clientName || !formData.projectName) return;
 
     setIsSubmitting(true);
     
@@ -160,6 +162,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
           'X-User-ID': user?.id || ''
         },
         body: JSON.stringify({
+          project_name: formData.projectName,
           client_name: formData.clientName,
           max_selections: parseInt(formData.maxSelection),
           drive_folder_url: formData.driveLink,
@@ -173,7 +176,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
       }
 
       await fetchProjects();
-      setFormData({ clientName: '', maxSelection: 50, driveLink: '' });
+      setFormData({ projectName: '', clientName: '', maxSelection: 50, driveLink: '' });
       showToast("Project successfully created!");
     } catch (err) {
       showToast(err.message || "Terjadi kesalahan", 'error');
@@ -267,6 +270,19 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                   <div className="absolute -top-24 -right-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all duration-500 pointer-events-none hidden dark:block"></div>
 
                   <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
+                    {/* Input: Project Name */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Project Name</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={formData.projectName}
+                        onChange={(e) => setFormData({...formData, projectName: e.target.value})}
+                        placeholder="e.g. Wedding Session, Maternity"
+                        className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm transition-all duration-300 outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
+                      />
+                    </div>
+
                     {/* Input: Client Name */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Client Name</label>
@@ -375,7 +391,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                       project={project} 
                       index={index} 
                       onCopy={() => handleCopyLink(project.magic_link_token)} 
-                      onEdit={() => setEditingProject({...project, drive_folder_url: project.drive_folder_url})}
+                      onEdit={() => setEditingProject({...project, drive_folder_url: project.drive_folder_url, project_name: project.project_name})}
                       onDelete={() => setDeletingProject(project)}
                     />
                   ))}
@@ -394,6 +410,10 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
               </button>
               <h2 className="text-xl font-semibold mb-6 flex items-center gap-2"><Edit className="w-5 h-5 text-indigo-500" /> Edit Project</h2>
               <form onSubmit={handleEdit} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Project Name</label>
+                  <input type="text" required value={editingProject.project_name || ''} onChange={e => setEditingProject({...editingProject, project_name: e.target.value})} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none" />
+                </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Client Name</label>
                   <input type="text" required value={editingProject.client_name} onChange={e => setEditingProject({...editingProject, client_name: e.target.value})} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none" />
@@ -487,8 +507,11 @@ function ProjectCard({ project, index, onCopy, onEdit, onDelete }) {
         
         <div>
           <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-            {project.client_name}
+            {project.project_name || "Untitled Project"}
           </h3>
+          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mt-0.5">
+            {project.client_name}
+          </p>
           <div className="flex items-center gap-3 mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
             <span className="flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5" />

@@ -22,6 +22,7 @@ import (
 type Project struct {
 	ID             string    `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
 	UserID         string    `gorm:"type:uuid" json:"user_id"`
+	ProjectName    string    `gorm:"type:text;not null" json:"project_name"`
 	ClientName     string    `gorm:"type:text;not null" json:"client_name"`
 	MaxSelections  int       `gorm:"default:50" json:"max_selections"`
 	DriveFolderURL string    `gorm:"type:text;not null" json:"drive_folder_url"`
@@ -43,6 +44,7 @@ type Photo struct {
 }
 
 type CreateProjectInput struct {
+	ProjectName    string `json:"project_name" binding:"required"`
 	ClientName     string `json:"client_name" binding:"required"`
 	MaxSelections  int    `json:"max_selections"`
 	DriveFolderURL string `json:"drive_folder_url" binding:"required"`
@@ -124,6 +126,7 @@ func main() {
 		}
 
 		newProject := Project{
+			ProjectName:    input.ProjectName,
 			ClientName:     input.ClientName,
 			MaxSelections:  input.MaxSelections,
 			DriveFolderURL: input.DriveFolderURL,
@@ -291,6 +294,7 @@ func main() {
 			driveChanged = true
 		}
 
+		project.ProjectName = input.ProjectName
 		project.ClientName = input.ClientName
 		project.MaxSelections = input.MaxSelections
 		if project.MaxSelections == 0 {

@@ -66,8 +66,16 @@ const FloatingBar = ({ project, selectedCount, maxSelections, onSubmit, isSubmit
               onClick={() => {
                 if (isSubmitted) {
                   const clientName = project?.client_name || 'Klien';
+                  const projectName = project?.project_name || project?.client_name || 'Galeri';
                   const adminWa = project?.admin_whatsapp || '';
-                  const message = `Halo, saya ${clientName} sudah selesai memilih foto untuk proyek ${clientName}. Silakan cek sistem PhotoFlow.`;
+                  
+                  const message = `Halo,
+Saya ${clientName} menginformasikan bahwa proses pemilihan foto untuk project *${projectName}* telah selesai.
+
+Seluruh foto pilihan sudah tersubmit di sistem PhotoFlow dan siap untuk tahapan pengeditan selanjutnya.
+
+Terima kasih atas kerja samanya.`;
+                  
                   const url = `https://wa.me/${adminWa}?text=${encodeURIComponent(message)}`;
                   window.open(url, '_blank');
                 } else {
