@@ -19,11 +19,9 @@ export default function App() {
 
   // --- Auth State ---
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
-  const [isAuthChecking, setIsAuthChecking] = useState(isAdminRoute);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   useEffect(() => {
-    if (!isAdminRoute) return;
-
     // Cek sesi awal
     supabase.auth.getSession().then(({ data: { session } }) => {
       setIsAdminAuthenticated(!!session);
@@ -36,17 +34,26 @@ export default function App() {
     });
 
     return () => subscription.unsubscribe();
-  }, [isAdminRoute]);
+  }, []);
 
-  if (isAdminRoute) {
-    if (isAuthChecking) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-          <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-        </div>
-      );
-    }
-    return isAdminAuthenticated ? <AdminDashboard /> : <AdminLogin />;
+  const token = new URLSearchParams(window.location.search).get('token');
+  const isHome = window.location.pathname === '/';
+
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+      </div>
+    );
+  }
+
+  // Strict Routing Protection (!session && !token)
+  if (!isAdminAuthenticated && (isAdminRoute || (isHome && !token))) {
+    return <AdminLogin />;
+  }
+
+  if (isAdminRoute && isAdminAuthenticated) {
+    return <AdminDashboard />;
   }
 
   // ─── Data State (from API) ───────────────────────────────────
@@ -56,7 +63,12 @@ export default function App() {
   const [error, setError] = useState(null);
 
   // ─── UI State ────────────────────────────────────────────────
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved !== null) return saved === 'dark';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+  
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [toasts, setToasts] = useState([]);
   const [previewState, setPreviewState] = useState({ index: null, direction: 0 });
@@ -65,7 +77,7 @@ export default function App() {
 
   // ─── Read token from URL & Fetch data ────────────────────────
   useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get('token');
+    // Token already grabbed above: const token = new URLSearchParams...
 
     if (!token) {
       setError('Link galeri tidak valid atau hilang.');
@@ -119,9 +131,26 @@ export default function App() {
 
   // ─── Dark mode sync ──────────────────────────────────────────
   useEffect(() => {
-    if (isDark) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
   }, [isDark]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e) => {
+      // Hanya auto-switch jika user belum pernah set preferensi manual
+      if (localStorage.getItem('theme') === null) {
+        setIsDark(e.matches);
+      }
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
 
   // ─── Callbacks ───────────────────────────────────────────────
   const toggleTheme = useCallback(() => setIsDark(prev => !prev), []);

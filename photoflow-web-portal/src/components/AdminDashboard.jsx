@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Camera, Sun, Moon, Copy, Check, Plus, 
   FolderOpen, Link as LinkIcon, Clock, ChevronRight, 
-  LayoutDashboard, CheckCircle2, Sparkles, Loader2, Download
+  LayoutDashboard, CheckCircle2, Sparkles, Loader2, Download,
+  MoreVertical, Edit, Trash2, X, AlertOctagon
 } from 'lucide-react';
 
 // --- STYLES & ANIMATIONS ---
@@ -43,6 +44,9 @@ export default function AdminDashboard() {
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingProject, setEditingProject] = useState(null);
+  const [deletingProject, setDeletingProject] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   // --- API INTEGRATION ---
   const fetchProjects = async () => {
@@ -71,6 +75,56 @@ export default function AdminDashboard() {
   const showToast = (message, type = 'success') => {
     setToast({ message, type, id: Date.now() });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleDelete = async () => {
+    if (!deletingProject) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`http://localhost:3000/api/projects/${deletingProject.id}`, {
+        method: 'DELETE',
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
+      if (!res.ok) throw new Error('Gagal menghapus project');
+      showToast("Project berhasil dihapus!");
+      setDeletingProject(null);
+      fetchProjects();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleEdit = async (e) => {
+    e.preventDefault();
+    if (!editingProject) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`http://localhost:3000/api/projects/${editingProject.id}`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify({
+          client_name: editingProject.client_name,
+          max_selections: parseInt(editingProject.max_selections),
+          drive_folder_url: editingProject.drive_folder_url
+        })
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.error || 'Gagal mengupdate project');
+      }
+      showToast("Project berhasil diupdate!");
+      setEditingProject(null);
+      fetchProjects();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -178,9 +232,9 @@ export default function AdminDashboard() {
                   <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Create a new gallery selection for your client.</p>
                 </div>
 
-                <div className="bg-white/80 dark:bg-white/[0.03] backdrop-blur-2xl border border-zinc-200 dark:border-white/10 shadow-xl dark:shadow-2xl rounded-2xl p-6 transition-all duration-300 relative overflow-hidden group">
+                <div className="bg-white/80 dark:bg-white/[0.03] backdrop-blur-2xl border border-zinc-200 dark:border-white/10 shadow-sm dark:shadow-2xl rounded-2xl p-6 transition-all duration-300 relative overflow-hidden group">
                   {/* Subtle Background Glow */}
-                  <div className="absolute -top-24 -right-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all duration-500 pointer-events-none"></div>
+                  <div className="absolute -top-24 -right-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all duration-500 pointer-events-none hidden dark:block"></div>
 
                   <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
                     {/* Input: Client Name */}
@@ -215,11 +269,12 @@ export default function AdminDashboard() {
 
                     {/* Input: Drive Link */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Google Drive Link <span className="text-zinc-400 normal-case tracking-normal">(Optional)</span></label>
+                      <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Google Drive Link</label>
                       <div className="relative">
                         <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                         <input 
-                          type="url" 
+                          type="url"
+                          required
                           value={formData.driveLink}
                           onChange={(e) => setFormData({...formData, driveLink: e.target.value})}
                           placeholder="https://drive.google.com/..."
@@ -290,6 +345,8 @@ export default function AdminDashboard() {
                       project={project} 
                       index={index} 
                       onCopy={() => handleCopyLink(project.magic_link_token)} 
+                      onEdit={() => setEditingProject({...project, drive_folder_url: project.drive_folder_url})}
+                      onDelete={() => setDeletingProject(project)}
                     />
                   ))}
                 </div>
@@ -297,6 +354,57 @@ export default function AdminDashboard() {
             </div>
           </div>
         </main>
+
+        {/* CUSTOM EDIT MODAL */}
+        {editingProject && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-slide-up-fade">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-2xl rounded-2xl p-6 w-full max-w-md relative">
+              <button type="button" onClick={() => setEditingProject(null)} className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+              <h2 className="text-xl font-semibold mb-6 flex items-center gap-2"><Edit className="w-5 h-5 text-indigo-500" /> Edit Project</h2>
+              <form onSubmit={handleEdit} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Client Name</label>
+                  <input type="text" required value={editingProject.client_name} onChange={e => setEditingProject({...editingProject, client_name: e.target.value})} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Max Selections</label>
+                  <input type="number" min="1" required value={editingProject.max_selections} onChange={e => setEditingProject({...editingProject, max_selections: e.target.value})} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Google Drive Link</label>
+                  <input type="url" required value={editingProject.drive_folder_url} onChange={e => setEditingProject({...editingProject, drive_folder_url: e.target.value})} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none" />
+                </div>
+                <div className="pt-4 flex gap-3">
+                  <button type="button" onClick={() => setEditingProject(null)} className="flex-1 px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 font-medium text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">Cancel</button>
+                  <button type="submit" disabled={actionLoading} className="flex-1 px-4 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-medium text-sm shadow-lg shadow-indigo-500/25 transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
+                    {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Changes"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* CUSTOM DELETE CONFIRMATION MODAL */}
+        {deletingProject && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-slide-up-fade">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-2xl rounded-2xl p-6 w-full max-w-sm text-center relative">
+              <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 flex items-center justify-center mb-4 text-red-500">
+                <AlertOctagon className="w-6 h-6" />
+              </div>
+              <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mb-2">Delete Project?</h2>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">Are you sure you want to delete <strong className="text-zinc-800 dark:text-zinc-300">{deletingProject.client_name}</strong>? This action cannot be undone and will remove all associated photos.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setDeletingProject(null)} className="flex-1 px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 font-medium text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">Cancel</button>
+                <button onClick={handleDelete} disabled={actionLoading} className="flex-1 px-4 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm shadow-lg shadow-red-500/25 transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
+                  {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Yes, Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* TOAST NOTIFICATION */}
         {toast && (
@@ -323,52 +431,14 @@ export default function AdminDashboard() {
 
 // --- SUB-COMPONENTS ---
 
-function ProjectCard({ project, index, onCopy }) {
+function ProjectCard({ project, index, onCopy, onEdit, onDelete }) {
   const [copied, setCopied] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleCopyClick = () => {
     onCopy();
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleExportJSON = async () => {
-    try {
-      setIsExporting(true);
-      const res = await fetch(`http://localhost:3000/api/p/${project.magic_link_token}`, {
-        headers: {
-          'ngrok-skip-browser-warning': 'true'
-        }
-      });
-      if (!res.ok) throw new Error('Gagal mengambil data project');
-      const data = await res.json();
-      
-      const filesToSync = (data.photos || [])
-        .filter(photo => photo.is_selected)
-        .map(photo => photo.file_name);
-        
-      const exportData = {
-        project_id: project.id,
-        client_name: project.client_name,
-        files_to_sync: filesToSync
-      };
-      
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `photoflow_sync_${project.client_name}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Export error:', err);
-      alert('Gagal mengekspor JSON: ' + err.message);
-    } finally {
-      setIsExporting(false);
-    }
   };
 
   const isPending = project.status === 'pending';
@@ -427,27 +497,29 @@ function ProjectCard({ project, index, onCopy }) {
           )}
         </button>
         
-        {/* Download JSON Action (Only if submitted) */}
-        {project.status === 'submitted' && (
+        {/* Kebab Action */}
+        <div className="relative">
           <button 
-            onClick={handleExportJSON}
-            disabled={isExporting}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-medium shadow-sm hover:shadow-indigo-500/20 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed active:scale-95"
-            title="Export JSON Manifest"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="p-2 rounded-xl text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/10 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
           >
-            {isExporting ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Download className="w-3.5 h-3.5" />
-            )}
-            <span className="hidden sm:inline">Export JSON</span>
+            <MoreVertical className="w-4 h-4" />
           </button>
-        )}
-        
-        {/* Detail Arrow */}
-        <button className="hidden sm:flex text-zinc-400 hover:text-indigo-500 transition-colors">
-          <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
-        </button>
+          
+          {isMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setIsMenuOpen(false)}></div>
+              <div className="absolute right-0 top-full mt-2 w-36 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden z-20 animate-slide-up-fade origin-top-right">
+                <button onClick={() => { setIsMenuOpen(false); onEdit(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5 flex items-center gap-2">
+                  <Edit className="w-3.5 h-3.5" /> Edit
+                </button>
+                <button onClick={() => { setIsMenuOpen(false); onDelete(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center gap-2">
+                  <Trash2 className="w-3.5 h-3.5" /> Delete
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

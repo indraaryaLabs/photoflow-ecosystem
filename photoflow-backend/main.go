@@ -66,6 +66,23 @@ func generateMagicLink() string {
 	return hex.EncodeToString(bytes)
 }
 
+func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, ngrok-skip-browser-warning")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
+
+		// Tangani Preflight Request
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
+}
+
 func main() {
 	godotenv.Load()
 
@@ -81,18 +98,7 @@ func main() {
 	r := gin.Default()
 
 	// --- MIDDLEWARE CORS ---
-	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "*, ngrok-skip-browser-warning")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(200)
-			return
-		}
-		
-		c.Next()
-	})
+	r.Use(CORSMiddleware())
 
 	// --- 1. RUTE CREATE PROJECT ---
 	r.POST("/api/projects", func(c *gin.Context) {
@@ -234,6 +240,99 @@ func main() {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"files": files})
+	})
+
+	// --- 6. RUTE EDIT PROJECT ---
+	r.PUT("/api/projects/:id", func(c *gin.Context) {
+		projectID := c.Param("id")
+		var input CreateProjectInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Input tidak valid"})
+			return
+		}
+
+		var project Project
+		if err := db.Where("id = ?", projectID).First(&project).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Project tidak ditemukan"})
+			return
+		}
+
+		newFolderID := extractDriveFolderID(input.DriveFolderURL)
+		if newFolderID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Link Google Drive tidak valid"})
+			return
+		}
+
+		driveChanged := false
+		if project.DriveFolderID != newFolderID {
+			driveChanged = true
+		}
+
+		project.ClientName = input.ClientName
+		project.MaxSelections = input.MaxSelections
+		if project.MaxSelections == 0 {
+			project.MaxSelections = 50
+		}
+		project.DriveFolderURL = input.DriveFolderURL
+		project.DriveFolderID = newFolderID
+
+		if err := db.Save(&project).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengupdate project"})
+			return
+		}
+
+		if driveChanged {
+			// Delete old photos
+			db.Where("project_id = ?", project.ID).Delete(&Photo{})
+			
+			// Scrape new photos
+			apiKey := os.Getenv("GOOGLE_API_KEY")
+			driveAPIUrl := fmt.Sprintf("https://www.googleapis.com/drive/v3/files?q='%s'+in+parents+and+mimeType+contains+'image/'&fields=files(id,name,thumbnailLink)&key=%s", newFolderID, apiKey)
+
+			resp, err := http.Get(driveAPIUrl)
+			if err == nil && resp.StatusCode == 200 {
+				defer resp.Body.Close()
+				body, _ := io.ReadAll(resp.Body)
+				var driveData DriveAPIResponse
+				json.Unmarshal(body, &driveData)
+
+				var photosToInsert []Photo
+				for _, file := range driveData.Files {
+					photosToInsert = append(photosToInsert, Photo{
+						ProjectID:    project.ID,
+						FileName:     file.Name,
+						ThumbnailURL: fmt.Sprintf("https://drive.google.com/thumbnail?id=%s&sz=w800", file.ID),
+					})
+				}
+
+				if len(photosToInsert) > 0 {
+					db.Create(&photosToInsert)
+				}
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Project berhasil diupdate", "data": project})
+	})
+
+	// --- 7. RUTE DELETE PROJECT ---
+	r.DELETE("/api/projects/:id", func(c *gin.Context) {
+		projectID := c.Param("id")
+
+		var project Project
+		if err := db.Where("id = ?", projectID).First(&project).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Project tidak ditemukan"})
+			return
+		}
+
+		// Delete photos associated with the project
+		db.Where("project_id = ?", projectID).Delete(&Photo{})
+
+		if err := db.Delete(&project).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghapus project"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Project berhasil dihapus"})
 	})
 
 	// --- PENGATURAN PORT & START SERVER ---

@@ -233,7 +233,16 @@ export default function AdminLogin() {
                           type="tel"
                           placeholder="WhatsApp (Contoh: 62812...)"
                           value={formData.whatsapp}
-                          onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
+                          onChange={(e) => {
+                            let val = e.target.value;
+                            if (val.startsWith('0')) {
+                              val = '62' + val.substring(1);
+                            } else if (val.startsWith('+62')) {
+                              val = '62' + val.substring(3);
+                            }
+                            val = val.replace(/[^\d+]/g, '');
+                            setFormData({ ...formData, whatsapp: val });
+                          }}
                           required={!isLoginMode}
                         />
                       </motion.div>
