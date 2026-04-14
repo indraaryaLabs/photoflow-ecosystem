@@ -113,15 +113,24 @@ export default function App() {
     }
   }, [isDark]);
 
-  // Dark mode auto listener
+  // Dark mode auto listener (real-time system pref)
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = (e) => {
-      if (localStorage.getItem('theme') === null) {
-        setIsDark(e.matches);
+      setIsDark(e.matches);
+      if (e.matches) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
       }
     };
     mediaQuery.addEventListener('change', handleChange);
+    
+    // Explicit runtime evaluation in case SSR/initial state missed it
+    if (localStorage.getItem('theme') === null) {
+      handleChange(mediaQuery);
+    }
+    
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
@@ -216,11 +225,11 @@ export default function App() {
 
   // Strict Routing Protection (!session && !token)
   if (!isAdminAuthenticated && (isAdminRoute || (isHome && !token))) {
-    return <AdminLogin />;
+    return <AdminLogin isDark={isDark} toggleTheme={toggleTheme} />;
   }
 
   if (isAdminRoute && isAdminAuthenticated) {
-    return <AdminDashboard />;
+    return <AdminDashboard isDark={isDark} toggleTheme={toggleTheme} />;
   }
   if (isLoading) {
     return (
@@ -312,6 +321,7 @@ export default function App() {
       />
 
       <FloatingBar
+        project={project}
         selectedCount={selectedIds.size}
         maxSelections={project.max_selections}
         onSubmit={handleSubmit}

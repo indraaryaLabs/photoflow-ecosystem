@@ -39,16 +39,16 @@ const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 z-10" />
 
       {/* Tombol Preview (Mata) */}
-      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20 pointer-events-none">
+      <div className="absolute inset-0 flex items-end justify-center pb-4 md:items-center md:pb-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 z-20 pointer-events-none">
         <button
           onClick={(e) => {
             e.stopPropagation(); // Mencegah card tertrigger select
             onOpenPreview(index);
           }}
-          className="p-3.5 rounded-full bg-white/20 hover:bg-white/40 backdrop-blur-md text-white shadow-xl border border-white/20 transition-transform hover:scale-110 pointer-events-auto active:scale-95"
+          className="p-3.5 md:p-4 rounded-full bg-black/40 hover:bg-black/60 md:bg-white/20 md:hover:bg-white/40 backdrop-blur-md text-white shadow-xl border border-white/20 transition-transform hover:scale-110 pointer-events-auto active:scale-95"
           title="Lihat Detail"
         >
-          <Eye className="w-6 h-6" />
+          <Eye className="w-5 h-5 md:w-6 md:h-6" />
         </button>
       </div>
 

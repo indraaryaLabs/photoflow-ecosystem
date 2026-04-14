@@ -5,21 +5,13 @@ import { supabase } from '../lib/supabase';
 // Jika Anda menggunakan React Router, uncomment baris di bawah ini:
 // import { useNavigate } from 'react-router-dom';
 
-export default function AdminLogin() {
+export default function AdminLogin({ isDark, toggleTheme }) {
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true);
 
   // State untuk menyimpan sesi login
   const [session, setSession] = useState(null);
-
-  // const navigate = useNavigate(); // Untuk navigasi ke dashboard
-
-  useEffect(() => {
-    if (isDarkMode) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-  }, [isDarkMode]);
 
   // Mengecek apakah user sudah login saat komponen dimuat
   useEffect(() => {
@@ -99,17 +91,17 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className={isDarkMode ? 'dark' : ''}>
+    <div className={isDark ? 'dark' : ''}>
       <div className="relative min-h-screen w-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans selection:bg-indigo-500/30 transition-colors duration-500">
 
         {/* --- THEME TOGGLE BUTTON --- */}
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => setIsDarkMode(!isDarkMode)}
+          onClick={toggleTheme}
           className="absolute top-6 right-6 z-50 p-2.5 rounded-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm text-zinc-500 dark:text-zinc-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
         >
-          {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
         </motion.button>
 
         {/* --- BACKGROUND EFFECTS --- */}

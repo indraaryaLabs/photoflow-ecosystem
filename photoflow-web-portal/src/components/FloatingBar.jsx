@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, Loader2, MessageCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 
-const FloatingBar = ({ selectedCount, maxSelections, onSubmit, isSubmitting, isSubmitted }) => {
+const FloatingBar = ({ project, selectedCount, maxSelections, onSubmit, isSubmitting, isSubmitted }) => {
   const isVisible = selectedCount > 0;
   const progress = (selectedCount / maxSelections) * 100;
   const isFull = selectedCount === maxSelections;
@@ -65,7 +65,11 @@ const FloatingBar = ({ selectedCount, maxSelections, onSubmit, isSubmitting, isS
               whileTap={{ scale: 0.95 }}
               onClick={() => {
                 if (isSubmitted) {
-                  window.open('https://wa.me/6281234567890?text=Halo,%20saya%20sudah%20selesai%20memilih%20foto.%20Silakan%20cek%20sistem%20PhotoFlow.', '_blank');
+                  const clientName = project?.client_name || 'Klien';
+                  const adminWa = project?.admin_whatsapp || '';
+                  const message = `Halo, saya ${clientName} sudah selesai memilih foto untuk proyek ${clientName}. Silakan cek sistem PhotoFlow.`;
+                  const url = `https://wa.me/${adminWa}?text=${encodeURIComponent(message)}`;
+                  window.open(url, '_blank');
                 } else {
                   onSubmit();
                 }

@@ -21,11 +21,13 @@ import (
 // --- MODEL DATABASE ---
 type Project struct {
 	ID             string    `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	UserID         string    `gorm:"type:uuid" json:"user_id"`
 	ClientName     string    `gorm:"type:text;not null" json:"client_name"`
 	MaxSelections  int       `gorm:"default:50" json:"max_selections"`
 	DriveFolderURL string    `gorm:"type:text;not null" json:"drive_folder_url"`
 	DriveFolderID  string    `gorm:"type:text;not null" json:"drive_folder_id"`
 	MagicLinkToken string    `gorm:"type:text;unique;not null" json:"magic_link_token"`
+	AdminWhatsApp  string    `gorm:"type:text" json:"admin_whatsapp"`
 	Status         string    `gorm:"type:text;default:'pending'" json:"status"`
 	CreatedAt      time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt      time.Time `gorm:"autoUpdateTime" json:"updated_at"`
@@ -44,6 +46,7 @@ type CreateProjectInput struct {
 	ClientName     string `json:"client_name" binding:"required"`
 	MaxSelections  int    `json:"max_selections"`
 	DriveFolderURL string `json:"drive_folder_url" binding:"required"`
+	AdminWhatsApp  string `json:"admin_whatsapp"`
 }
 
 type DriveAPIResponse struct {
@@ -70,7 +73,7 @@ func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, ngrok-skip-browser-warning")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, ngrok-skip-browser-warning, X-User-ID")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 
 		// Tangani Preflight Request
@@ -102,6 +105,12 @@ func main() {
 
 	// --- 1. RUTE CREATE PROJECT ---
 	r.POST("/api/projects", func(c *gin.Context) {
+		userID := c.GetHeader("X-User-ID")
+		if userID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
 		var input CreateProjectInput
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Input tidak valid"})
@@ -119,6 +128,8 @@ func main() {
 			MaxSelections:  input.MaxSelections,
 			DriveFolderURL: input.DriveFolderURL,
 			DriveFolderID:  folderID,
+			UserID:         userID,
+			AdminWhatsApp:  input.AdminWhatsApp,
 			MagicLinkToken: generateMagicLink(),
 		}
 		if newProject.MaxSelections == 0 {
@@ -222,9 +233,15 @@ func main() {
 
 	// --- 4. RUTE GET ALL PROJECTS (UNTUK ADMIN DASHBOARD) ---
 	r.GET("/api/projects", func(c *gin.Context) {
+		userID := c.GetHeader("X-User-ID")
+		if userID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
 		var projects []Project
 		// Ambil semua project dari database, urutkan dari yang paling baru dibuat
-		if err := db.Order("created_at desc").Find(&projects).Error; err != nil {
+		if err := db.Where("user_id = ?", userID).Order("created_at desc").Find(&projects).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data project"})
 			return
 		}
@@ -244,6 +261,12 @@ func main() {
 
 	// --- 6. RUTE EDIT PROJECT ---
 	r.PUT("/api/projects/:id", func(c *gin.Context) {
+		userID := c.GetHeader("X-User-ID")
+		if userID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
 		projectID := c.Param("id")
 		var input CreateProjectInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -252,8 +275,8 @@ func main() {
 		}
 
 		var project Project
-		if err := db.Where("id = ?", projectID).First(&project).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Project tidak ditemukan"})
+		if err := db.Where("id = ? AND user_id = ?", projectID, userID).First(&project).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Project tidak ditemukan atau akses ditolak"})
 			return
 		}
 
@@ -275,6 +298,9 @@ func main() {
 		}
 		project.DriveFolderURL = input.DriveFolderURL
 		project.DriveFolderID = newFolderID
+		if input.AdminWhatsApp != "" {
+			project.AdminWhatsApp = input.AdminWhatsApp
+		}
 
 		if err := db.Save(&project).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengupdate project"})
@@ -316,11 +342,17 @@ func main() {
 
 	// --- 7. RUTE DELETE PROJECT ---
 	r.DELETE("/api/projects/:id", func(c *gin.Context) {
+		userID := c.GetHeader("X-User-ID")
+		if userID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
 		projectID := c.Param("id")
 
 		var project Project
-		if err := db.Where("id = ?", projectID).First(&project).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Project tidak ditemukan"})
+		if err := db.Where("id = ? AND user_id = ?", projectID, userID).First(&project).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Project tidak ditemukan atau akses ditolak"})
 			return
 		}
 

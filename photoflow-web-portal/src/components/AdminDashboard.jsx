@@ -3,8 +3,9 @@ import {
   Camera, Sun, Moon, Copy, Check, Plus, 
   FolderOpen, Link as LinkIcon, Clock, ChevronRight, 
   LayoutDashboard, CheckCircle2, Sparkles, Loader2, Download,
-  MoreVertical, Edit, Trash2, X, AlertOctagon
+  MoreVertical, Edit, Trash2, X, AlertOctagon, LogOut
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 // --- STYLES & ANIMATIONS ---
 const globalStyles = `
@@ -29,9 +30,8 @@ const globalStyles = `
   ::-webkit-scrollbar-thumb:hover { background: #71717a; }
 `;
 
-export default function AdminDashboard() {
+export default function AdminDashboard({ isDark, toggleTheme }) {
   // --- STATE MANAGEMENT ---
-  const [isDarkMode, setIsDarkMode] = useState(true);
   const [toast, setToast] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -52,9 +52,13 @@ export default function AdminDashboard() {
   const fetchProjects = async () => {
     try {
       setIsLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+
       const res = await fetch('http://localhost:3000/api/projects', {
         headers: {
-          'ngrok-skip-browser-warning': 'true'
+          'ngrok-skip-browser-warning': 'true',
+          'X-User-ID': userId || ''
         }
       });
       if (!res.ok) throw new Error('Gagal memuat data');
@@ -81,9 +85,15 @@ export default function AdminDashboard() {
     if (!deletingProject) return;
     setActionLoading(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+
       const res = await fetch(`http://localhost:3000/api/projects/${deletingProject.id}`, {
         method: 'DELETE',
-        headers: { 'ngrok-skip-browser-warning': 'true' }
+        headers: { 
+          'ngrok-skip-browser-warning': 'true',
+          'X-User-ID': userId || '' 
+        }
       });
       if (!res.ok) throw new Error('Gagal menghapus project');
       showToast("Project berhasil dihapus!");
@@ -101,16 +111,21 @@ export default function AdminDashboard() {
     if (!editingProject) return;
     setActionLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const adminWa = user?.user_metadata?.whatsapp || '';
+
       const res = await fetch(`http://localhost:3000/api/projects/${editingProject.id}`, {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
+          'ngrok-skip-browser-warning': 'true',
+          'X-User-ID': user?.id || ''
         },
         body: JSON.stringify({
           client_name: editingProject.client_name,
           max_selections: parseInt(editingProject.max_selections),
-          drive_folder_url: editingProject.drive_folder_url
+          drive_folder_url: editingProject.drive_folder_url,
+          admin_whatsapp: adminWa
         })
       });
       if (!res.ok) {
@@ -134,16 +149,21 @@ export default function AdminDashboard() {
     setIsSubmitting(true);
     
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const adminWa = user?.user_metadata?.whatsapp || '';
+
       const res = await fetch('http://localhost:3000/api/projects', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
+          'ngrok-skip-browser-warning': 'true',
+          'X-User-ID': user?.id || ''
         },
         body: JSON.stringify({
           client_name: formData.clientName,
           max_selections: parseInt(formData.maxSelection),
-          drive_folder_url: formData.driveLink
+          drive_folder_url: formData.driveLink,
+          admin_whatsapp: adminWa
         })
       });
 
@@ -180,16 +200,15 @@ export default function AdminDashboard() {
     document.body.removeChild(textArea);
   };
 
-  useEffect(() => {
-    if (isDarkMode) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-  }, [isDarkMode]);
 
-  const toggleTheme = () => setIsDarkMode(!isDarkMode);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
 
   // --- RENDER ---
   return (
-    <div className={`${isDarkMode ? 'dark' : ''} min-h-screen transition-colors duration-500`}>
+    <div className={`${isDark ? 'dark' : ''} min-h-screen transition-colors duration-500`}>
       <style>{globalStyles}</style>
       
       {/* MAIN LAYOUT */}
@@ -208,12 +227,23 @@ export default function AdminDashboard() {
               </div>
             </div>
             
-            <button 
-              onClick={toggleTheme}
-              className="p-2.5 rounded-full bg-zinc-100 dark:bg-white/5 border border-transparent dark:border-white/5 hover:bg-zinc-200 dark:hover:bg-white/10 text-zinc-600 dark:text-zinc-400 transition-all duration-300 hover:scale-105 active:scale-95"
-            >
-              {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={toggleTheme}
+                className="p-2.5 rounded-full bg-zinc-100 dark:bg-white/5 border border-transparent dark:border-white/5 hover:bg-zinc-200 dark:hover:bg-white/10 text-zinc-600 dark:text-zinc-400 transition-all duration-300 hover:scale-105 active:scale-95"
+                title="Toggle Theme"
+              >
+                {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+
+              <button 
+                onClick={handleLogout}
+                className="p-2.5 rounded-full bg-zinc-100 dark:bg-white/5 border border-transparent dark:border-white/5 hover:bg-red-50 dark:hover:bg-red-500/10 text-zinc-600 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-all duration-300 hover:scale-105 active:scale-95"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </header>
 
@@ -232,7 +262,7 @@ export default function AdminDashboard() {
                   <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Create a new gallery selection for your client.</p>
                 </div>
 
-                <div className="bg-white/80 dark:bg-white/[0.03] backdrop-blur-2xl border border-zinc-200 dark:border-white/10 shadow-sm dark:shadow-2xl rounded-2xl p-6 transition-all duration-300 relative overflow-hidden group">
+                <div className="bg-white/80 dark:bg-white/[0.03] backdrop-blur-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm dark:shadow-[0_0_15px_rgba(168,85,247,0.15)] rounded-2xl p-6 transition-all duration-300 relative overflow-hidden group">
                   {/* Subtle Background Glow */}
                   <div className="absolute -top-24 -right-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all duration-500 pointer-events-none hidden dark:block"></div>
 
