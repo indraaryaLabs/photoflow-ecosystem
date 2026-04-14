@@ -69,8 +69,7 @@ const FloatingBar = ({ project, selectedCount, maxSelections, onSubmit, isSubmit
                   const projectName = project?.project_name || project?.client_name || 'Galeri';
                   const adminWa = project?.admin_whatsapp || '';
                   
-                  const message = `Halo,
-Saya ${clientName} menginformasikan bahwa proses pemilihan foto untuk project *${projectName}* telah selesai.
+                  const message = `Halo, Saya ${clientName} menginformasikan bahwa proses pemilihan foto untuk project ${projectName} telah selesai.
 
 Seluruh foto pilihan sudah tersubmit di sistem PhotoFlow dan siap untuk tahapan pengeditan selanjutnya.
 

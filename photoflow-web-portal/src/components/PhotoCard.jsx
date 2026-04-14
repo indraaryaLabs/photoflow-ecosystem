@@ -14,7 +14,8 @@ const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
       }}
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
-      onClick={() => onOpenPreview(index)}
+      onClick={() => onToggle(photo.id)}
+      onDoubleClick={() => onOpenPreview(index)}
       className={cn(
         "group relative cursor-pointer rounded-2xl overflow-hidden aspect-[2/3] bg-zinc-200 dark:bg-zinc-800 select-none shadow-sm hover:shadow-xl transition-all duration-300",
         isSelected && "ring-4 ring-indigo-500 ring-offset-2 ring-offset-zinc-50 dark:ring-offset-zinc-950 shadow-[0_0_25px_rgba(99,102,241,0.3)]"
@@ -38,7 +39,7 @@ const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
       {/* Hover Overlay Gelap */}
       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 z-10" />
 
-      {/* Tombol Preview (Mata) - Hidden di Mobile */}
+      {/* Tombol Preview (Mata) - Desktop Hover */}
       <div className="absolute inset-0 hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20 pointer-events-none">
         <button
           onClick={(e) => {
@@ -63,37 +64,20 @@ const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
         )}
       </AnimatePresence>
 
-      {/* Area Checkmark Select/Deselect */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggle(photo.id);
-        }}
-        className={cn(
-          "absolute top-3 right-3 p-2 rounded-full transition-all duration-300 z-30 pointer-events-auto",
-          isSelected 
-            ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/40" 
-            : "bg-white/50 dark:bg-black/40 backdrop-blur-md text-zinc-500 hover:text-zinc-800 dark:hover:text-white"
+      {/* Area Checkmark Visual */}
+      <AnimatePresence>
+        {isSelected && (
+          <motion.div
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 400, damping: 20 }}
+            className="absolute top-3 right-3 bg-indigo-500 text-white rounded-full p-1.5 shadow-lg shadow-indigo-500/40 z-30 pointer-events-none"
+          >
+            <Check size={16} strokeWidth={3} />
+          </motion.div>
         )}
-      >
-        <AnimatePresence mode="popLayout">
-          {isSelected ? (
-            <motion.div
-              key="selected"
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0 }}
-            >
-              <Check size={16} strokeWidth={3} />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="unselected"
-              className="w-4 h-4 border-2 border-current rounded-full"
-            />
-          )}
-        </AnimatePresence>
-      </button>
+      </AnimatePresence>
     </motion.div>
   );
 };
