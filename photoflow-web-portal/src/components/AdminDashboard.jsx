@@ -445,7 +445,7 @@ function ProjectCard({ project, index, onCopy, onEdit, onDelete }) {
 
   return (
     <div 
-      className="group bg-white dark:bg-white/[0.03] backdrop-blur-md border border-zinc-200 dark:border-white/10 rounded-2xl p-5 hover:shadow-xl dark:hover:shadow-2xl hover:bg-zinc-50 dark:hover:bg-white/[0.05] hover:border-zinc-300 dark:hover:border-white/20 transition-all duration-300 animate-slide-up-fade flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+      className={`group relative bg-white dark:bg-white/[0.03] backdrop-blur-md border border-zinc-200 dark:border-white/10 rounded-2xl p-5 hover:shadow-xl dark:hover:shadow-2xl hover:bg-zinc-50 dark:hover:bg-white/[0.05] hover:border-zinc-300 dark:hover:border-white/20 transition-all duration-300 animate-slide-up-fade flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isMenuOpen ? 'z-50' : 'z-0 hover:z-10'}`}
       style={{ animationDelay: `${index * 0.05}s` }}
     >
       {/* Card Info */}
