@@ -59,6 +59,37 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Idle Auto-Logout Timer (30 Menit)
+  useEffect(() => {
+    if (!isAdminAuthenticated) return;
+    
+    let timeoutId;
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(async () => {
+        // Logout user dari Supabase
+        const { supabase } = await import('./lib/supabase');
+        await supabase.auth.signOut();
+        // Paksa kembali ke halaman root (login)
+        window.location.href = '/'; 
+      }, 1800000); // 30 Menit
+    };
+
+    // Listeners aktivitas
+    window.addEventListener('mousemove', resetTimer);
+    window.addEventListener('keydown', resetTimer);
+    window.addEventListener('click', resetTimer);
+    
+    resetTimer(); // Mulai timer saat komponen dimuat
+
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('mousemove', resetTimer);
+      window.removeEventListener('keydown', resetTimer);
+      window.removeEventListener('click', resetTimer);
+    };
+  }, [isAdminAuthenticated]);
+
   // Fetch Gallery Data
   useEffect(() => {
     if (!token) {
@@ -228,14 +259,24 @@ export default function App() {
     );
   }
 
-  // Strict Routing Protection (!session && !token)
-  if (!isAdminAuthenticated && (isAdminRoute || (isHome && !token))) {
-    return <AdminLogin isDark={isDark} toggleTheme={toggleTheme} />;
+  // Strict Auth Guard Routing
+  if (isAdminRoute) {
+    if (isAdminAuthenticated) {
+      return <AdminDashboard isDark={isDark} toggleTheme={toggleTheme} />;
+    } else {
+      return <AdminLogin isDark={isDark} toggleTheme={toggleTheme} />;
+    }
   }
 
-  if (isAdminRoute && isAdminAuthenticated) {
-    return <AdminDashboard isDark={isDark} toggleTheme={toggleTheme} />;
+  if (isHome) {
+    if (isAdminAuthenticated) {
+      window.location.replace('/admin');
+      return null;
+    } else if (!token) {
+      return <AdminLogin isDark={isDark} toggleTheme={toggleTheme} />;
+    }
   }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300">

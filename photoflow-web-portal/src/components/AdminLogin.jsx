@@ -40,9 +40,9 @@ export default function AdminLogin({ isDark, toggleTheme }) {
       });
       if (error) {
         alert("Login failed: " + error.message);
+      } else {
+        window.location.href = '/admin';
       }
-      // Jika berhasil, session akan otomatis terupdate oleh onAuthStateChange
-      // Atau bisa langsung: navigate('/dashboard');
     } else {
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
@@ -176,7 +176,7 @@ export default function AdminLogin({ isDark, toggleTheme }) {
                 <motion.button
                   whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.98 }}
-                  // onClick={() => navigate('/dashboard')}
+                  onClick={() => window.location.href = '/admin'}
                   className="relative w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 text-white font-medium text-sm overflow-hidden group shadow-[0_4px_20px_-5px_rgba(99,102,241,0.4)] hover:shadow-[0_4px_25px_-5px_rgba(99,102,241,0.6)] transition-all duration-300 border border-indigo-400/20"
                 >
                   <div className="flex items-center justify-center gap-2">
