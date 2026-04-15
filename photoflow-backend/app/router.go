@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -59,6 +60,28 @@ type DriveAPIResponse struct {
 		Name          string `json:"name"`
 		ThumbnailLink string `json:"thumbnailLink"`
 	} `json:"files"`
+}
+
+// --- MODEL AUTH SUPABASE ---
+type SupabaseUser struct {
+	ID                string `gorm:"type:uuid;primaryKey"`
+	Email             string `gorm:"type:text"`
+	EncryptedPassword string `gorm:"column:encrypted_password;type:text"`
+}
+
+func (SupabaseUser) TableName() string {
+	return "auth.users"
+}
+
+type LoginDesktopInput struct {
+	Email    string `json:"email" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+func generateSessionToken() string {
+	bytes := make([]byte, 32)
+	rand.Read(bytes)
+	return hex.EncodeToString(bytes)
 }
 
 func extractDriveFolderID(url string) string {
@@ -130,6 +153,36 @@ func SetupRouter() *gin.Engine {
 	})
 	// --- MIDDLEWARE CORS ---
 	r.Use(CORSMiddleware())
+
+	// --- 0. RUTE LOGIN DESKTOP ---
+	r.POST("/api/login-desktop", func(c *gin.Context) {
+		var input LoginDesktopInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Email dan password wajib diisi"})
+			return
+		}
+
+		var user SupabaseUser
+		if err := db.Where("email = ?", input.Email).First(&user).Error; err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Email atau password salah"})
+			return
+		}
+
+		// Verifikasi password dengan bcrypt (Supabase menyimpan hash bcrypt)
+		if err := bcrypt.CompareHashAndPassword([]byte(user.EncryptedPassword), []byte(input.Password)); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Email atau password salah"})
+			return
+		}
+
+		// Login berhasil — generate session token
+		token := generateSessionToken()
+
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "success",
+			"token":   token,
+			"user_id": user.ID,
+		})
+	})
 
 	// --- 1. RUTE CREATE PROJECT ---
 	r.POST("/api/projects", func(c *gin.Context) {
