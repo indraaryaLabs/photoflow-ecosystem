@@ -123,7 +123,9 @@ func SetupRouter() *gin.Engine {
 	db.AutoMigrate(&Project{}, &Photo{})
 
 	r := gin.Default()
-
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "PhotoFlow API is running perfectly! 🚀"})
+	})
 	// --- MIDDLEWARE CORS ---
 	r.Use(CORSMiddleware())
 
