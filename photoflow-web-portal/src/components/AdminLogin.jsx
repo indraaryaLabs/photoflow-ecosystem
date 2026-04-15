@@ -44,6 +44,14 @@ export default function AdminLogin({ isDark, toggleTheme }) {
         window.location.href = '/admin';
       }
     } else {
+      // Validasi nomor WhatsApp sebelum registrasi
+      const wa = formData.whatsapp || '';
+      if (!wa.startsWith('62') || wa.length < 10 || wa.length > 15 || !/^\d+$/.test(wa)) {
+        alert('Nomor WhatsApp tidak valid. Gunakan format yang benar.');
+        setIsLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,

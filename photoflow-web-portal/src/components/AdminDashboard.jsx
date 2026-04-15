@@ -165,6 +165,14 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
   const handleEdit = async (e) => {
     e.preventDefault();
     if (!editingProject) return;
+
+    // Validasi nomor WhatsApp klien
+    const editWa = editingProject.client_whatsapp || '';
+    if (!editWa.startsWith('62') || editWa.length < 10 || editWa.length > 15 || !/^\d+$/.test(editWa)) {
+      showToast('Nomor WhatsApp tidak valid. Pastikan nomor benar (min. 10 angka).', 'error');
+      return;
+    }
+
     setActionLoading(true);
     try {
       const userId = await getSessionUserId();
@@ -213,6 +221,13 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.clientName || !formData.projectName) return;
+
+    // Validasi nomor WhatsApp klien
+    const clientWa = formData.clientWa || '';
+    if (!clientWa.startsWith('62') || clientWa.length < 10 || clientWa.length > 15 || !/^\d+$/.test(clientWa)) {
+      showToast('Nomor WhatsApp tidak valid. Pastikan nomor benar (min. 10 angka).', 'error');
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -509,9 +524,9 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                       index={index}
                       onCopy={() => handleCopyLink(project.magic_link_token)}
                       onWhatsApp={() => {
-                        const magicLinkUrl = `${window.location.origin}/?token=${project.magic_link_token}`;
-                        const message = `Halo Kak ${project.client_name},\nLink galeri foto untuk project *${project.project_name}* sudah siap! 🎉\nSilakan klik link di bawah ini untuk mulai memilih foto favorit kakak (Maksimal ${project.max_selections} foto):\n${magicLinkUrl}\nTerima kasih!`;
-                        window.open(`https://wa.me/${project.client_whatsapp}?text=${encodeURIComponent(message)}`, '_blank');
+                        const url = `${window.location.origin}/?token=${project.magic_link_token}`;
+                        const text = `Halo Kak ${project.client_name},\n\nBerikut adalah link galeri foto untuk project *${project.project_name}*.\n\nSilakan klik link di bawah ini untuk mulai memilih foto (Maksimal ${project.max_selections} foto):\n${url}\n\nTerima kasih atas kepercayaannya.`;
+                        window.open(`https://wa.me/${project.client_whatsapp}?text=${encodeURIComponent(text)}`, '_blank');
                       }}
                       onEdit={() => setEditingProject({ ...project, drive_folder_url: project.drive_folder_url, project_name: project.project_name })}
                       onDelete={() => setDeletingProject(project)}
