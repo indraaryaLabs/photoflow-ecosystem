@@ -269,10 +269,12 @@ export default function App() {
   }
 
   if (isHome) {
-    if (isAdminAuthenticated) {
+    if (token) {
+      // Biarkan kosong agar proses berlanjut ke bawah (menampilkan galeri klien)
+    } else if (isAdminAuthenticated) {
       window.location.replace('/admin');
       return null;
-    } else if (!token) {
+    } else {
       return <AdminLogin isDark={isDark} toggleTheme={toggleTheme} />;
     }
   }
