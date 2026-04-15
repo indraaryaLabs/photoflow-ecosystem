@@ -92,7 +92,10 @@ func SetupRouter() *gin.Engine {
 	godotenv.Load()
 
 	dsn := os.Getenv("DATABASE_URL")
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.New(postgres.Config{
+		DSN:                  dsn,
+		PreferSimpleProtocol: true, // INI KUNCI UTAMANYA! Menonaktifkan prepared statements
+	}), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Gagal terhubung ke database:", err)
 	}
