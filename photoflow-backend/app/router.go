@@ -75,7 +75,7 @@ func CORSMiddleware() gin.HandlerFunc {
 	// Daftar origin yang diizinkan (Production + Local Dev)
 	allowedOrigins := map[string]bool{
 		"https://photoflow-ecosystem.vercel.app": true,
-		"http://localhost:5173":                   true, // Vite dev server
+		"http://localhost:5173":                  true, // Vite dev server
 	}
 
 	return func(c *gin.Context) {
@@ -104,13 +104,20 @@ func SetupRouter() *gin.Engine {
 	godotenv.Load()
 
 	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		log.Fatal("🔴 FATAL: DATABASE_URL KOSONG! Vercel gagal membaca Environment Variable.")
+	}
+	// ----------------------------------
+
 	db, err := gorm.Open(postgres.New(postgres.Config{
 		DSN:                  dsn,
-		PreferSimpleProtocol: true, // INI KUNCI UTAMANYA! Menonaktifkan prepared statements
+		PreferSimpleProtocol: true,
 	}), &gorm.Config{})
+
 	if err != nil {
-		log.Fatal("Gagal terhubung ke database:", err)
+		log.Fatal("🔴 Gagal terhubung ke database:", err)
 	}
+
 	fmt.Println("🚀 Database Terkoneksi!")
 
 	db.AutoMigrate(&Project{}, &Photo{})
