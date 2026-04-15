@@ -112,6 +112,11 @@ export default function App() {
         const data = await res.json();
         setProject(data.project);
 
+        // Gallery Lock: Jika status sudah 'submitted', kunci UI
+        if (data.project?.status === 'submitted') {
+          setIsSubmittedState(true);
+        }
+
         const folderId = data.project?.drive_folder_id;
         if (folderId) {
           const gDriveRes = await fetch(`${API_BASE}/api/gdrive/${folderId}`, {
@@ -177,6 +182,12 @@ export default function App() {
   }, []);
 
   const handleToggleSelect = useCallback((id) => {
+    // Gallery Lock: Cegah interaksi jika sudah disubmit
+    if (isSubmittedState) {
+      addToast('Galeri telah dikunci karena pilihan sudah disubmit.');
+      return;
+    }
+
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -190,7 +201,7 @@ export default function App() {
       }
       return next;
     });
-  }, [project?.max_selections, addToast]);
+  }, [project?.max_selections, addToast, isSubmittedState]);
 
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;

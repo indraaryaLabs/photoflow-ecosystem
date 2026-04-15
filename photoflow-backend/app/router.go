@@ -20,18 +20,19 @@ import (
 
 // --- MODEL DATABASE ---
 type Project struct {
-	ID             string    `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
-	UserID         string    `gorm:"type:uuid" json:"user_id"`
-	ProjectName    string    `gorm:"type:text;not null" json:"project_name"`
-	ClientName     string    `gorm:"type:text;not null" json:"client_name"`
-	MaxSelections  int       `gorm:"default:50" json:"max_selections"`
-	DriveFolderURL string    `gorm:"type:text;not null" json:"drive_folder_url"`
-	DriveFolderID  string    `gorm:"type:text;not null" json:"drive_folder_id"`
-	MagicLinkToken string    `gorm:"type:text;unique;not null" json:"magic_link_token"`
-	AdminWhatsApp  string    `gorm:"type:text" json:"admin_whatsapp"`
-	Status         string    `gorm:"type:text;default:'pending'" json:"status"`
-	CreatedAt      time.Time `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt      time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	ID              string    `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	UserID          string    `gorm:"type:uuid" json:"user_id"`
+	ProjectName     string    `gorm:"type:text;not null" json:"project_name"`
+	ClientName      string    `gorm:"type:text;not null" json:"client_name"`
+	MaxSelections   int       `gorm:"default:50" json:"max_selections"`
+	DriveFolderURL  string    `gorm:"type:text;not null" json:"drive_folder_url"`
+	DriveFolderID   string    `gorm:"type:text;not null" json:"drive_folder_id"`
+	MagicLinkToken  string    `gorm:"type:text;unique;not null" json:"magic_link_token"`
+	AdminWhatsApp   string    `gorm:"type:text" json:"admin_whatsapp"`
+	ClientWhatsApp  string    `gorm:"type:text" json:"client_whatsapp"`
+	Status          string    `gorm:"type:text;default:'pending'" json:"status"`
+	CreatedAt       time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt       time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 type Photo struct {
@@ -49,6 +50,7 @@ type CreateProjectInput struct {
 	MaxSelections  int    `json:"max_selections"`
 	DriveFolderURL string `json:"drive_folder_url" binding:"required"`
 	AdminWhatsApp  string `json:"admin_whatsapp"`
+	ClientWhatsApp string `json:"client_whatsapp"`
 }
 
 type DriveAPIResponse struct {
@@ -157,6 +159,7 @@ func SetupRouter() *gin.Engine {
 			DriveFolderID:  folderID,
 			UserID:         userID,
 			AdminWhatsApp:  input.AdminWhatsApp,
+			ClientWhatsApp: input.ClientWhatsApp,
 			MagicLinkToken: generateMagicLink(),
 		}
 		if newProject.MaxSelections == 0 {
@@ -246,6 +249,12 @@ func SetupRouter() *gin.Engine {
 		var project Project
 		if err := db.Where("magic_link_token = ?", magicLink).First(&project).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Project tidak valid"})
+			return
+		}
+
+		// --- GALLERY LOCK: Cegah duplikasi submit ---
+		if project.Status == "submitted" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Galeri ini sudah dikunci karena pilihan telah disubmit sebelumnya."})
 			return
 		}
 
@@ -343,6 +352,9 @@ func SetupRouter() *gin.Engine {
 		project.DriveFolderID = newFolderID
 		if input.AdminWhatsApp != "" {
 			project.AdminWhatsApp = input.AdminWhatsApp
+		}
+		if input.ClientWhatsApp != "" {
+			project.ClientWhatsApp = input.ClientWhatsApp
 		}
 
 		if err := db.Save(&project).Error; err != nil {

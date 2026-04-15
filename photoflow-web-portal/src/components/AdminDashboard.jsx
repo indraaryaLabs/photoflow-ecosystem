@@ -3,7 +3,7 @@ import {
   Camera, Sun, Moon, Copy, Check, Plus,
   FolderOpen, Link as LinkIcon, Clock, ChevronRight,
   LayoutDashboard, CheckCircle2, Sparkles, Loader2, Download,
-  MoreVertical, Edit, Trash2, X, AlertOctagon, LogOut
+  MoreVertical, Edit, Trash2, X, AlertOctagon, LogOut, MessageCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -57,7 +57,8 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
     projectName: '',
     clientName: '',
     maxSelection: 50,
-    driveLink: ''
+    driveLink: '',
+    clientWa: ''
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -183,7 +184,8 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
           client_name: editingProject.client_name,
           max_selections: parseInt(editingProject.max_selections),
           drive_folder_url: editingProject.drive_folder_url,
-          admin_whatsapp: adminWa
+          admin_whatsapp: adminWa,
+          client_whatsapp: editingProject.client_whatsapp || ''
         })
       });
 
@@ -232,7 +234,8 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
           client_name: formData.clientName,
           max_selections: parseInt(formData.maxSelection),
           drive_folder_url: formData.driveLink,
-          admin_whatsapp: adminWa
+          admin_whatsapp: adminWa,
+          client_whatsapp: formData.clientWa
         })
       });
 
@@ -245,7 +248,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
       }
 
       await fetchProjects();
-      setFormData({ projectName: '', clientName: '', maxSelection: 50, driveLink: '' });
+      setFormData({ projectName: '', clientName: '', maxSelection: 50, driveLink: '', clientWa: '' });
       showToast("Project berhasil dibuat!");
     } catch (err) {
       if (err.message === 'Failed to fetch') {
@@ -279,7 +282,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
   const handleLogout = async () => {
     // Bersihkan state lokal sebelum logout
     setProjects([]);
-    setFormData({ projectName: '', clientName: '', maxSelection: 50, driveLink: '' });
+    setFormData({ projectName: '', clientName: '', maxSelection: 50, driveLink: '', clientWa: '' });
     setEditingProject(null);
     setDeletingProject(null);
 
@@ -374,20 +377,42 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                       />
                     </div>
 
-                    {/* Input: Max Selections */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Max Selections</label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min="1"
-                          value={formData.maxSelection}
-                          onChange={(e) => setFormData({ ...formData, maxSelection: parseInt(e.target.value) })}
-                          className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-500/20 rounded-xl pl-4 pr-16 py-3 text-sm transition-all duration-300 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        />
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-zinc-400 font-medium">
-                          Photos
+                    {/* Input: Max Selections & Client WhatsApp (Grid 2 kolom) */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Max Selections</label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="1"
+                            value={formData.maxSelection}
+                            onChange={(e) => setFormData({ ...formData, maxSelection: parseInt(e.target.value) })}
+                            className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-500/20 rounded-xl pl-4 pr-16 py-3 text-sm transition-all duration-300 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-zinc-400 font-medium">
+                            Photos
+                          </div>
                         </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Client WhatsApp</label>
+                        <input
+                          type="tel"
+                          required
+                          value={formData.clientWa}
+                          onChange={(e) => {
+                            let val = e.target.value;
+                            if (val.startsWith('0')) {
+                              val = '62' + val.substring(1);
+                            } else if (val.startsWith('+62')) {
+                              val = '62' + val.substring(3);
+                            }
+                            val = val.replace(/[^\d]/g, '');
+                            setFormData({ ...formData, clientWa: val });
+                          }}
+                          placeholder="62812..."
+                          className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm transition-all duration-300 outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
+                        />
                       </div>
                     </div>
 
@@ -483,6 +508,11 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                       project={project}
                       index={index}
                       onCopy={() => handleCopyLink(project.magic_link_token)}
+                      onWhatsApp={() => {
+                        const magicLinkUrl = `${window.location.origin}/?token=${project.magic_link_token}`;
+                        const message = `Halo Kak ${project.client_name},\nLink galeri foto untuk project *${project.project_name}* sudah siap! 🎉\nSilakan klik link di bawah ini untuk mulai memilih foto favorit kakak (Maksimal ${project.max_selections} foto):\n${magicLinkUrl}\nTerima kasih!`;
+                        window.open(`https://wa.me/${project.client_whatsapp}?text=${encodeURIComponent(message)}`, '_blank');
+                      }}
                       onEdit={() => setEditingProject({ ...project, drive_folder_url: project.drive_folder_url, project_name: project.project_name })}
                       onDelete={() => setDeletingProject(project)}
                     />
@@ -510,9 +540,31 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                   <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Client Name</label>
                   <input type="text" required value={editingProject.client_name} onChange={e => setEditingProject({ ...editingProject, client_name: e.target.value })} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none" />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Max Selections</label>
-                  <input type="number" min="1" required value={editingProject.max_selections} onChange={e => setEditingProject({ ...editingProject, max_selections: e.target.value })} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Max Selections</label>
+                    <input type="number" min="1" required value={editingProject.max_selections} onChange={e => setEditingProject({ ...editingProject, max_selections: e.target.value })} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Client WhatsApp</label>
+                    <input
+                      type="tel"
+                      required
+                      value={editingProject.client_whatsapp || ''}
+                      onChange={e => {
+                        let val = e.target.value;
+                        if (val.startsWith('0')) {
+                          val = '62' + val.substring(1);
+                        } else if (val.startsWith('+62')) {
+                          val = '62' + val.substring(3);
+                        }
+                        val = val.replace(/[^\d]/g, '');
+                        setEditingProject({ ...editingProject, client_whatsapp: val });
+                      }}
+                      placeholder="62812..."
+                      className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
+                    />
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Google Drive Link</label>
@@ -573,7 +625,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
 
 // --- SUB-COMPONENTS ---
 
-function ProjectCard({ project, index, onCopy, onEdit, onDelete }) {
+function ProjectCard({ project, index, onCopy, onWhatsApp, onEdit, onDelete }) {
   const [copied, setCopied] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -640,6 +692,15 @@ function ProjectCard({ project, index, onCopy, onEdit, onDelete }) {
           ) : (
             <Copy className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
           )}
+        </button>
+
+        {/* WhatsApp Action */}
+        <button
+          onClick={onWhatsApp}
+          className="p-2 rounded-xl border border-zinc-200 dark:border-white/5 bg-white dark:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:text-emerald-500 dark:hover:text-emerald-400 hover:border-emerald-200 dark:hover:border-emerald-500/20 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all duration-200 active:scale-90 group/wa"
+          title="Send via WhatsApp"
+        >
+          <MessageCircle className="w-4 h-4 group-hover/wa:scale-110 transition-transform" />
         </button>
 
         {/* Kebab Action */}
