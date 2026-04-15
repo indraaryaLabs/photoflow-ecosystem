@@ -352,9 +352,40 @@ func SetupRouter() *gin.Engine {
 		c.JSON(http.StatusOK, projects)
 	})
 
-	// --- 5. RUTE INTEGRASI GDRIVE & FORMAT RAW ---
+	// --- 5. RUTE INTEGRASI GDRIVE & FORMAT RAW + ACCESS TOKEN ---
 	r.GET("/api/gdrive/:folderId", func(c *gin.Context) {
 		folderID := c.Param("folderId")
+
+		// --- 5b. SUB-RUTE: GDRIVE ACCESS TOKEN (UNTUK DESKTOP APP) ---
+		if folderID == "token" {
+			// Cek Authorization header
+			authHeader := c.GetHeader("Authorization")
+			if authHeader == "" || len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Token otorisasi tidak valid"})
+				return
+			}
+
+			bearerToken := authHeader[7:]
+			if bearerToken == "" {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Token otorisasi tidak valid"})
+				return
+			}
+
+			// Generate GDrive Access Token dari Service Account
+			tokenResponse, err := GetAccessToken()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghasilkan access token", "details": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"access_token": tokenResponse.AccessToken,
+				"expiry":       tokenResponse.Expiry,
+			})
+			return
+		}
+
+		// --- 5a. DEFAULT: Baca file dari folder Google Drive ---
 		files, err := GetImagesFromFolder(folderID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membaca folder Google Drive", "details": err.Error()})

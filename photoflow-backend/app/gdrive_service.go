@@ -5,10 +5,44 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 )
+
+// AccessTokenResponse menyimpan access token dan waktu kedaluwarsanya
+type AccessTokenResponse struct {
+	AccessToken string    `json:"access_token"`
+	Expiry      time.Time `json:"expiry"`
+}
+
+// GetAccessToken menghasilkan OAuth2 Access Token dari Service Account Key
+// dengan scope Google Drive. Token ini bersifat sementara (~1 jam).
+func GetAccessToken() (*AccessTokenResponse, error) {
+	credsJSON := os.Getenv("GDRIVE_CREDENTIALS_JSON")
+	if credsJSON == "" {
+		return nil, fmt.Errorf("GDRIVE_CREDENTIALS_JSON env var is missing")
+	}
+
+	// Buat JWT config dari Service Account Key dengan scope Drive
+	config, err := google.JWTConfigFromJSON([]byte(credsJSON), drive.DriveScope)
+	if err != nil {
+		return nil, fmt.Errorf("gagal parsing service account key: %v", err)
+	}
+
+	// Generate token dari JWT config
+	token, err := config.TokenSource(context.Background()).Token()
+	if err != nil {
+		return nil, fmt.Errorf("gagal menghasilkan access token: %v", err)
+	}
+
+	return &AccessTokenResponse{
+		AccessToken: token.AccessToken,
+		Expiry:      token.Expiry,
+	}, nil
+}
 
 type DriveFile struct {
 	ID             string `json:"id"`
