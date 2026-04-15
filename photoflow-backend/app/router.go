@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/oauth2"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -76,6 +77,16 @@ func (SupabaseUser) TableName() string {
 type LoginDesktopInput struct {
 	Email    string `json:"email" binding:"required"`
 	Password string `json:"password" binding:"required"`
+}
+
+// --- MODEL PROFILES (TABEL public.profiles) ---
+type Profile struct {
+	ID                 string `gorm:"type:uuid;primaryKey" json:"id"`
+	GdriveRefreshToken string `gorm:"column:gdrive_refresh_token;type:text" json:"gdrive_refresh_token"`
+}
+
+func (Profile) TableName() string {
+	return "profiles"
 }
 
 func generateSessionToken() string {
@@ -147,12 +158,141 @@ func SetupRouter() *gin.Engine {
 
 	db.AutoMigrate(&Project{}, &Photo{})
 
+	// Pastikan kolom gdrive_refresh_token ada di tabel profiles
+	db.Exec("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS gdrive_refresh_token TEXT")
+
+	// Inisialisasi OAuth2 Config
+	oauthConfig := GetOAuthConfig()
+
 	r := gin.Default()
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "PhotoFlow API is running perfectly! 🚀"})
 	})
 	// --- MIDDLEWARE CORS ---
 	r.Use(CORSMiddleware())
+
+	// --- AUTH: GOOGLE OAUTH2 LOGIN ---
+	r.GET("/api/auth/google/login", func(c *gin.Context) {
+		userID := c.Query("user_id")
+		if userID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "user_id wajib disertakan sebagai query parameter"})
+			return
+		}
+
+		// Encode user_id ke dalam state agar bisa diambil kembali di callback
+		state := userID
+
+		// Generate URL OAuth Google dengan prompt consent & access_type offline
+		url := oauthConfig.AuthCodeURL(state,
+			oauth2.AccessTypeOffline,
+			oauth2.SetAuthURLParam("prompt", "consent"),
+		)
+
+		c.Redirect(http.StatusTemporaryRedirect, url)
+	})
+
+	// --- AUTH: GOOGLE OAUTH2 CALLBACK ---
+	r.GET("/api/auth/google/callback", func(c *gin.Context) {
+		// Ambil authorization code & state (user_id) dari Google
+		code := c.Query("code")
+		state := c.Query("state") // berisi user_id
+
+		if code == "" {
+			c.String(http.StatusBadRequest, "Authorization code tidak ditemukan.")
+			return
+		}
+
+		if state == "" {
+			c.String(http.StatusBadRequest, "State (user_id) tidak valid.")
+			return
+		}
+
+		userID := state
+
+		// Tukar authorization code menjadi Access Token + Refresh Token
+		token, err := oauthConfig.Exchange(c.Request.Context(), code)
+		if err != nil {
+			log.Printf("🔴 OAuth Exchange Error: %v", err)
+			c.String(http.StatusInternalServerError, "Gagal menukar authorization code: %v", err)
+			return
+		}
+
+		refreshToken := token.RefreshToken
+		if refreshToken == "" {
+			c.String(http.StatusInternalServerError, "Refresh Token tidak diterima dari Google. Pastikan prompt=consent.")
+			return
+		}
+
+		// Simpan Refresh Token ke tabel profiles berdasarkan user_id
+		result := db.Model(&Profile{}).Where("id = ?", userID).Update("gdrive_refresh_token", refreshToken)
+		if result.Error != nil {
+			log.Printf("🔴 DB Update Error: %v", result.Error)
+			c.String(http.StatusInternalServerError, "Gagal menyimpan refresh token ke database.")
+			return
+		}
+
+		if result.RowsAffected == 0 {
+			c.String(http.StatusNotFound, "Profile dengan user_id tersebut tidak ditemukan.")
+			return
+		}
+
+		log.Printf("✅ Refresh Token berhasil disimpan untuk user: %s", userID)
+
+		// Tampilkan halaman sukses sederhana
+		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(`
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhotoFlow - Koneksi Berhasil</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0f0f23 100%);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            color: #e0e0e0;
+        }
+        .card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 24px;
+            padding: 48px;
+            text-align: center;
+            max-width: 480px;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+        }
+        .icon { font-size: 64px; margin-bottom: 24px; }
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 12px;
+        }
+        p {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #a0a0b8;
+        }
+        .highlight { color: #6ee7b7; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon">✅</div>
+        <h1>Koneksi Google Drive Berhasil!</h1>
+        <p>Akun Google Anda telah terhubung dengan <span class="highlight">PhotoFlow</span>.</p>
+        <p style="margin-top: 16px;">Silakan kembali ke aplikasi PhotoFlow dan lanjutkan pekerjaan Anda.</p>
+    </div>
+</body>
+</html>
+		`))
+	})
 
 	// --- 0. RUTE LOGIN DESKTOP ---
 	r.POST("/api/login-desktop", func(c *gin.Context) {
@@ -358,29 +498,23 @@ func SetupRouter() *gin.Engine {
 
 		// --- 5b. SUB-RUTE: GDRIVE ACCESS TOKEN (UNTUK DESKTOP APP) ---
 		if folderID == "token" {
-			// Cek Authorization header
-			authHeader := c.GetHeader("Authorization")
-			if authHeader == "" || len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Token otorisasi tidak valid"})
+			// Ambil user_id dari header
+			userID := c.GetHeader("X-User-ID")
+			if userID == "" {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Header X-User-ID wajib disertakan"})
 				return
 			}
 
-			bearerToken := authHeader[7:]
-			if bearerToken == "" {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Token otorisasi tidak valid"})
-				return
-			}
-
-			// Generate GDrive Access Token dari Service Account
-			tokenResponse, err := GetAccessToken()
+			// Generate GDrive Access Token dari Refresh Token milik user
+			accessToken, expiry, err := GetUserAccessToken(userID, db)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghasilkan access token", "details": err.Error()})
 				return
 			}
 
 			c.JSON(http.StatusOK, gin.H{
-				"access_token": tokenResponse.AccessToken,
-				"expiry":       tokenResponse.Expiry,
+				"access_token": accessToken,
+				"expiry":       expiry,
 			})
 			return
 		}

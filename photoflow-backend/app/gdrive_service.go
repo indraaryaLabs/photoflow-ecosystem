@@ -7,41 +7,52 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
+	"gorm.io/gorm"
 )
 
-// AccessTokenResponse menyimpan access token dan waktu kedaluwarsanya
-type AccessTokenResponse struct {
-	AccessToken string    `json:"access_token"`
-	Expiry      time.Time `json:"expiry"`
+// GetOAuthConfig mengembalikan konfigurasi OAuth2 Google untuk alur koneksi Google Drive user.
+// Berbeda dengan Service Account, ini menggunakan OAuth2 Client Credentials (consent dari user).
+func GetOAuthConfig() *oauth2.Config {
+	return &oauth2.Config{
+		ClientID:     os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
+		ClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
+		RedirectURL:  os.Getenv("GOOGLE_OAUTH_REDIRECT_URL"),
+		Scopes:       []string{drive.DriveScope},
+		Endpoint:     google.Endpoint,
+	}
 }
 
-// GetAccessToken menghasilkan OAuth2 Access Token dari Service Account Key
-// dengan scope Google Drive. Token ini bersifat sementara (~1 jam).
-func GetAccessToken() (*AccessTokenResponse, error) {
-	credsJSON := os.Getenv("GDRIVE_CREDENTIALS_JSON")
-	if credsJSON == "" {
-		return nil, fmt.Errorf("GDRIVE_CREDENTIALS_JSON env var is missing")
+// GetUserAccessToken menghasilkan OAuth2 Access Token dari Refresh Token milik user.
+// Refresh Token diambil dari tabel `profiles` berdasarkan userID.
+func GetUserAccessToken(userID string, db *gorm.DB) (string, time.Time, error) {
+	// Query refresh token dari tabel profiles
+	var profile struct {
+		GdriveRefreshToken string `gorm:"column:gdrive_refresh_token"`
+	}
+	if err := db.Table("profiles").Select("gdrive_refresh_token").Where("id = ?", userID).First(&profile).Error; err != nil {
+		return "", time.Time{}, fmt.Errorf("gagal mengambil profil user: %v", err)
 	}
 
-	// Buat JWT config dari Service Account Key dengan scope Drive
-	config, err := google.JWTConfigFromJSON([]byte(credsJSON), drive.DriveScope)
+	if profile.GdriveRefreshToken == "" {
+		return "", time.Time{}, fmt.Errorf("user belum login Google Drive")
+	}
+
+	// Gunakan OAuth2 Config + Refresh Token untuk mendapatkan Access Token fresh
+	oauthConfig := GetOAuthConfig()
+	tokenSource := oauthConfig.TokenSource(context.Background(), &oauth2.Token{
+		RefreshToken: profile.GdriveRefreshToken,
+	})
+
+	token, err := tokenSource.Token()
 	if err != nil {
-		return nil, fmt.Errorf("gagal parsing service account key: %v", err)
+		return "", time.Time{}, fmt.Errorf("gagal me-refresh access token: %v", err)
 	}
 
-	// Generate token dari JWT config
-	token, err := config.TokenSource(context.Background()).Token()
-	if err != nil {
-		return nil, fmt.Errorf("gagal menghasilkan access token: %v", err)
-	}
-
-	return &AccessTokenResponse{
-		AccessToken: token.AccessToken,
-		Expiry:      token.Expiry,
-	}, nil
+	return token.AccessToken, token.Expiry, nil
 }
 
 type DriveFile struct {
