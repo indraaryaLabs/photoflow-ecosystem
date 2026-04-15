@@ -12,7 +12,7 @@ import AdminLogin from './components/AdminLogin';
 import { supabase } from './lib/supabase';
 
 // ─── API Base URL ────────────────────────────────────────────────
-const API_BASE = 'https://disaster-antarctic-regress.ngrok-free.dev';
+const API_BASE = 'https://photoflow-backend.vercel.app';
 
 export default function App() {
   // ─── Variables routing (No hook dependencies) ────────────────
@@ -36,7 +36,7 @@ export default function App() {
     if (saved !== null) return saved === 'dark';
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
-  
+
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [toasts, setToasts] = useState([]);
   const [previewState, setPreviewState] = useState({ index: null, direction: 0 });
@@ -44,7 +44,7 @@ export default function App() {
   const [isSubmittedState, setIsSubmittedState] = useState(false);
 
   // ─── 4. Hooks / Effects ──────────────────────────────────────
-  
+
   // Auth Session Checker
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -62,7 +62,7 @@ export default function App() {
   // Idle Auto-Logout Timer (30 Menit)
   useEffect(() => {
     if (!isAdminAuthenticated) return;
-    
+
     let timeoutId;
     const resetTimer = () => {
       clearTimeout(timeoutId);
@@ -71,7 +71,7 @@ export default function App() {
         const { supabase } = await import('./lib/supabase');
         await supabase.auth.signOut();
         // Paksa kembali ke halaman root (login)
-        window.location.href = '/'; 
+        window.location.href = '/';
       }, 1800000); // 30 Menit
     };
 
@@ -79,7 +79,7 @@ export default function App() {
     window.addEventListener('mousemove', resetTimer);
     window.addEventListener('keydown', resetTimer);
     window.addEventListener('click', resetTimer);
-    
+
     resetTimer(); // Mulai timer saat komponen dimuat
 
     return () => {
@@ -156,12 +156,12 @@ export default function App() {
       }
     };
     mediaQuery.addEventListener('change', handleChange);
-    
+
     // Explicit runtime evaluation in case SSR/initial state missed it
     if (localStorage.getItem('theme') === null) {
       handleChange(mediaQuery);
     }
-    
+
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
@@ -250,7 +250,7 @@ export default function App() {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   //  CONDITIONAL RENDERING — Early Returns
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  
+
   if (isAuthChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">

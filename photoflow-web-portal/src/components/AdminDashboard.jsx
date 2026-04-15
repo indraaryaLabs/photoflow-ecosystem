@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Camera, Sun, Moon, Copy, Check, Plus, 
-  FolderOpen, Link as LinkIcon, Clock, ChevronRight, 
+import {
+  Camera, Sun, Moon, Copy, Check, Plus,
+  FolderOpen, Link as LinkIcon, Clock, ChevronRight,
   LayoutDashboard, CheckCircle2, Sparkles, Loader2, Download,
   MoreVertical, Edit, Trash2, X, AlertOctagon, LogOut
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+
+const API_BASE = 'https://photoflow-backend.vercel.app';
 
 // --- STYLES & ANIMATIONS ---
 const globalStyles = `
@@ -17,11 +19,25 @@ const globalStyles = `
     from { transform: translateY(10px); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
   }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
   .animate-slide-up-fade {
     animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
   .animate-toast {
     animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .skeleton-shimmer {
+    background: linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.08) 50%, transparent 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+  .light .skeleton-shimmer, :not(.dark) .skeleton-shimmer {
+    background: linear-gradient(90deg, transparent 25%, rgba(0,0,0,0.04) 50%, transparent 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
   }
   /* Custom Scrollbar for premium feel */
   ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -34,7 +50,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
   // --- STATE MANAGEMENT ---
   const [toast, setToast] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const [projects, setProjects] = useState([]);
 
   const [formData, setFormData] = useState({
@@ -43,30 +59,66 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
     maxSelection: 50,
     driveLink: ''
   });
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [deletingProject, setDeletingProject] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // --- HELPERS ---
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type, id: Date.now() });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Centralized session getter — returns userId or redirects to login
+  const getSessionUserId = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) {
+      // No valid session found, force logout and redirect
+      await supabase.auth.signOut();
+      window.location.href = '/';
+      return null;
+    }
+    return session.user.id;
+  };
+
+  // Centralized response handler — auto-redirects on 401
+  const handleApiResponse = async (res) => {
+    if (res.status === 401) {
+      showToast('Sesi berakhir. Silakan login kembali.', 'error');
+      await supabase.auth.signOut();
+      setTimeout(() => { window.location.href = '/'; }, 1000);
+      return null;
+    }
+    return res;
+  };
+
   // --- API INTEGRATION ---
   const fetchProjects = async () => {
     try {
       setIsLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
+      const userId = await getSessionUserId();
+      if (!userId) return; // Guard: skip fetch if no session
 
-      const res = await fetch('http://localhost:3000/api/projects', {
+      const res = await fetch(`${API_BASE}/api/projects`, {
         headers: {
-          'ngrok-skip-browser-warning': 'true',
-          'X-User-ID': userId || ''
+          'X-User-ID': userId
         }
       });
-      if (!res.ok) throw new Error('Gagal memuat data');
-      const data = await res.json();
+
+      const checkedRes = await handleApiResponse(res);
+      if (!checkedRes) return;
+
+      if (!checkedRes.ok) throw new Error('Gagal memuat data project');
+      const data = await checkedRes.json();
       setProjects(data || []);
     } catch (err) {
-      showToast(err.message, 'error');
+      if (err.message === 'Failed to fetch') {
+        showToast('Tidak dapat terhubung ke server. Periksa koneksi internet Anda.', 'error');
+      } else {
+        showToast(err.message, 'error');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -77,31 +129,33 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
   }, []);
 
   // --- HANDLERS ---
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type, id: Date.now() });
-    setTimeout(() => setToast(null), 3000);
-  };
-
   const handleDelete = async () => {
     if (!deletingProject) return;
     setActionLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
+      const userId = await getSessionUserId();
+      if (!userId) return;
 
-      const res = await fetch(`http://localhost:3000/api/projects/${deletingProject.id}`, {
+      const res = await fetch(`${API_BASE}/api/projects/${deletingProject.id}`, {
         method: 'DELETE',
-        headers: { 
-          'ngrok-skip-browser-warning': 'true',
-          'X-User-ID': userId || '' 
+        headers: {
+          'X-User-ID': userId
         }
       });
-      if (!res.ok) throw new Error('Gagal menghapus project');
+
+      const checkedRes = await handleApiResponse(res);
+      if (!checkedRes) return;
+      if (!checkedRes.ok) throw new Error('Gagal menghapus project');
+
       showToast("Project berhasil dihapus!");
       setDeletingProject(null);
       fetchProjects();
     } catch (err) {
-      showToast(err.message, 'error');
+      if (err.message === 'Failed to fetch') {
+        showToast('Server tidak merespon. Coba lagi nanti.', 'error');
+      } else {
+        showToast(err.message, 'error');
+      }
     } finally {
       setActionLoading(false);
     }
@@ -112,15 +166,17 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
     if (!editingProject) return;
     setActionLoading(true);
     try {
+      const userId = await getSessionUserId();
+      if (!userId) return;
+
       const { data: { user } } = await supabase.auth.getUser();
       const adminWa = user?.user_metadata?.whatsapp || '';
 
-      const res = await fetch(`http://localhost:3000/api/projects/${editingProject.id}`, {
+      const res = await fetch(`${API_BASE}/api/projects/${editingProject.id}`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-          'X-User-ID': user?.id || ''
+          'X-User-ID': userId
         },
         body: JSON.stringify({
           project_name: editingProject.project_name,
@@ -130,15 +186,23 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
           admin_whatsapp: adminWa
         })
       });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
+
+      const checkedRes = await handleApiResponse(res);
+      if (!checkedRes) return;
+
+      if (!checkedRes.ok) {
+        const errorData = await checkedRes.json().catch(() => null);
         throw new Error(errorData?.error || 'Gagal mengupdate project');
       }
       showToast("Project berhasil diupdate!");
       setEditingProject(null);
       fetchProjects();
     } catch (err) {
-      showToast(err.message, 'error');
+      if (err.message === 'Failed to fetch') {
+        showToast('Server tidak merespon. Coba lagi nanti.', 'error');
+      } else {
+        showToast(err.message, 'error');
+      }
     } finally {
       setActionLoading(false);
     }
@@ -149,17 +213,19 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
     if (!formData.clientName || !formData.projectName) return;
 
     setIsSubmitting(true);
-    
+
     try {
+      const userId = await getSessionUserId();
+      if (!userId) return;
+
       const { data: { user } } = await supabase.auth.getUser();
       const adminWa = user?.user_metadata?.whatsapp || '';
 
-      const res = await fetch('http://localhost:3000/api/projects', {
+      const res = await fetch(`${API_BASE}/api/projects`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-          'X-User-ID': user?.id || ''
+          'X-User-ID': userId
         },
         body: JSON.stringify({
           project_name: formData.projectName,
@@ -170,16 +236,23 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
         })
       });
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
+      const checkedRes = await handleApiResponse(res);
+      if (!checkedRes) return;
+
+      if (!checkedRes.ok) {
+        const errorData = await checkedRes.json().catch(() => null);
         throw new Error(errorData?.error || errorData?.message || 'Gagal membuat project');
       }
 
       await fetchProjects();
       setFormData({ projectName: '', clientName: '', maxSelection: 50, driveLink: '' });
-      showToast("Project successfully created!");
+      showToast("Project berhasil dibuat!");
     } catch (err) {
-      showToast(err.message || "Terjadi kesalahan", 'error');
+      if (err.message === 'Failed to fetch') {
+        showToast('Tidak dapat terhubung ke server. Periksa koneksi internet Anda.', 'error');
+      } else {
+        showToast(err.message || "Terjadi kesalahan", 'error');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -187,7 +260,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
 
   const handleCopyLink = (token) => {
     const url = `${window.location.origin}/?token=${token}`;
-    
+
     // Fallback copy strategy as requested for iFrames
     const textArea = document.createElement("textarea");
     textArea.value = url;
@@ -195,7 +268,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
     textArea.select();
     try {
       document.execCommand('copy');
-      showToast("Magic link copied to clipboard!");
+      showToast("Magic link berhasil disalin!");
     } catch (err) {
       console.error('Failed to copy', err);
       showToast("Gagal menyalin link", 'error');
@@ -203,20 +276,25 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
     document.body.removeChild(textArea);
   };
 
-
-
   const handleLogout = async () => {
+    // Bersihkan state lokal sebelum logout
+    setProjects([]);
+    setFormData({ projectName: '', clientName: '', maxSelection: 50, driveLink: '' });
+    setEditingProject(null);
+    setDeletingProject(null);
+
     await supabase.auth.signOut();
+    window.location.href = '/';
   };
 
   // --- RENDER ---
   return (
     <div className={`${isDark ? 'dark' : ''} min-h-screen transition-colors duration-500`}>
       <style>{globalStyles}</style>
-      
+
       {/* MAIN LAYOUT */}
       <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans selection:bg-indigo-500/30">
-        
+
         {/* HEADER (Sticky, Glassmorphism) */}
         <header className="sticky top-0 z-40 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border-b border-zinc-200 dark:border-white/10 transition-colors duration-300">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -229,9 +307,9 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium tracking-wide">ADMIN DASHBOARD</p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2">
-              <button 
+              <button
                 onClick={toggleTheme}
                 className="p-2.5 rounded-full bg-zinc-100 dark:bg-white/5 border border-transparent dark:border-white/5 hover:bg-zinc-200 dark:hover:bg-white/10 text-zinc-600 dark:text-zinc-400 transition-all duration-300 hover:scale-105 active:scale-95"
                 title="Toggle Theme"
@@ -239,7 +317,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                 {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
 
-              <button 
+              <button
                 onClick={handleLogout}
                 className="p-2.5 rounded-full bg-zinc-100 dark:bg-white/5 border border-transparent dark:border-white/5 hover:bg-red-50 dark:hover:bg-red-500/10 text-zinc-600 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-all duration-300 hover:scale-105 active:scale-95"
                 title="Logout"
@@ -253,7 +331,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
         {/* CONTENT GRID */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
+
             {/* LEFT PANEL: FORM */}
             <div className="col-span-1">
               <div className="sticky top-28">
@@ -273,11 +351,11 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                     {/* Input: Project Name */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Project Name</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         required
                         value={formData.projectName}
-                        onChange={(e) => setFormData({...formData, projectName: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
                         placeholder="e.g. Wedding Session, Maternity"
                         className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm transition-all duration-300 outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
                       />
@@ -286,11 +364,11 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                     {/* Input: Client Name */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Client Name</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         required
                         value={formData.clientName}
-                        onChange={(e) => setFormData({...formData, clientName: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
                         placeholder="e.g. Prewedding Rina & Anton"
                         className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm transition-all duration-300 outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
                       />
@@ -300,11 +378,11 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Max Selections</label>
                       <div className="relative">
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           min="1"
                           value={formData.maxSelection}
-                          onChange={(e) => setFormData({...formData, maxSelection: parseInt(e.target.value)})}
+                          onChange={(e) => setFormData({ ...formData, maxSelection: parseInt(e.target.value) })}
                           className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-500/20 rounded-xl pl-4 pr-16 py-3 text-sm transition-all duration-300 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                         <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-zinc-400 font-medium">
@@ -318,11 +396,11 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                       <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Google Drive Link</label>
                       <div className="relative">
                         <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                        <input 
+                        <input
                           type="url"
                           required
                           value={formData.driveLink}
-                          onChange={(e) => setFormData({...formData, driveLink: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, driveLink: e.target.value })}
                           placeholder="https://drive.google.com/..."
                           className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-500/20 rounded-xl pl-10 pr-4 py-3 text-sm transition-all duration-300 outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
                         />
@@ -330,8 +408,8 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                     </div>
 
                     {/* Submit Button */}
-                    <button 
-                      type="submit" 
+                    <button
+                      type="submit"
                       disabled={!formData.clientName || isSubmitting}
                       className="w-full mt-2 flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white rounded-xl px-4 py-3.5 text-sm font-semibold shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-indigo-500/25"
                     >
@@ -362,16 +440,30 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                   </h2>
                   <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Manage and track your gallery delivery status.</p>
                 </div>
-                
+
                 <div className="text-sm font-medium px-3 py-1 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-full text-zinc-600 dark:text-zinc-300">
                   {projects.length} Active
                 </div>
               </div>
 
               {isLoading ? (
-                <div className="bg-white/50 dark:bg-white/[0.02] border border-dashed border-zinc-300 dark:border-white/10 rounded-2xl p-12 flex flex-col items-center justify-center text-center animate-slide-up-fade">
-                  <Loader2 className="w-8 h-8 text-zinc-400 animate-spin mb-4" />
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading projects...</p>
+                <div className="space-y-4 animate-slide-up-fade">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="bg-white dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className="hidden sm:block w-10 h-10 rounded-full bg-zinc-100 dark:bg-white/5 skeleton-shimmer" />
+                        <div className="space-y-2">
+                          <div className="h-4 w-40 rounded-lg bg-zinc-200 dark:bg-white/10 skeleton-shimmer" />
+                          <div className="h-3 w-28 rounded-lg bg-zinc-100 dark:bg-white/5 skeleton-shimmer" />
+                          <div className="h-3 w-48 rounded-lg bg-zinc-100 dark:bg-white/5 skeleton-shimmer" />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="h-7 w-28 rounded-full bg-zinc-100 dark:bg-white/5 skeleton-shimmer" />
+                        <div className="h-8 w-8 rounded-xl bg-zinc-100 dark:bg-white/5 skeleton-shimmer" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : projects.length === 0 ? (
                 // Empty State
@@ -386,12 +478,12 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                 // List State
                 <div className="space-y-4">
                   {projects.map((project, index) => (
-                    <ProjectCard 
-                      key={project.id} 
-                      project={project} 
-                      index={index} 
-                      onCopy={() => handleCopyLink(project.magic_link_token)} 
-                      onEdit={() => setEditingProject({...project, drive_folder_url: project.drive_folder_url, project_name: project.project_name})}
+                    <ProjectCard
+                      key={project.id}
+                      project={project}
+                      index={index}
+                      onCopy={() => handleCopyLink(project.magic_link_token)}
+                      onEdit={() => setEditingProject({ ...project, drive_folder_url: project.drive_folder_url, project_name: project.project_name })}
                       onDelete={() => setDeletingProject(project)}
                     />
                   ))}
@@ -412,19 +504,19 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
               <form onSubmit={handleEdit} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Project Name</label>
-                  <input type="text" required value={editingProject.project_name || ''} onChange={e => setEditingProject({...editingProject, project_name: e.target.value})} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none" />
+                  <input type="text" required value={editingProject.project_name || ''} onChange={e => setEditingProject({ ...editingProject, project_name: e.target.value })} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Client Name</label>
-                  <input type="text" required value={editingProject.client_name} onChange={e => setEditingProject({...editingProject, client_name: e.target.value})} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none" />
+                  <input type="text" required value={editingProject.client_name} onChange={e => setEditingProject({ ...editingProject, client_name: e.target.value })} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Max Selections</label>
-                  <input type="number" min="1" required value={editingProject.max_selections} onChange={e => setEditingProject({...editingProject, max_selections: e.target.value})} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                  <input type="number" min="1" required value={editingProject.max_selections} onChange={e => setEditingProject({ ...editingProject, max_selections: e.target.value })} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Google Drive Link</label>
-                  <input type="url" required value={editingProject.drive_folder_url} onChange={e => setEditingProject({...editingProject, drive_folder_url: e.target.value})} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none" />
+                  <input type="url" required value={editingProject.drive_folder_url} onChange={e => setEditingProject({ ...editingProject, drive_folder_url: e.target.value })} className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm outline-none" />
                 </div>
                 <div className="pt-4 flex gap-3">
                   <button type="button" onClick={() => setEditingProject(null)} className="flex-1 px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 font-medium text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">Cancel</button>
@@ -494,7 +586,7 @@ function ProjectCard({ project, index, onCopy, onEdit, onDelete }) {
   const isPending = project.status === 'pending';
 
   return (
-    <div 
+    <div
       className={`group relative bg-white dark:bg-white/[0.03] backdrop-blur-md border border-zinc-200 dark:border-white/10 rounded-2xl p-5 hover:shadow-xl dark:hover:shadow-2xl hover:bg-zinc-50 dark:hover:bg-white/[0.05] hover:border-zinc-300 dark:hover:border-white/20 transition-all duration-300 animate-slide-up-fade flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isMenuOpen ? 'z-50' : 'z-0 hover:z-10'}`}
       style={{ animationDelay: `${index * 0.05}s` }}
     >
@@ -504,7 +596,7 @@ function ProjectCard({ project, index, onCopy, onEdit, onDelete }) {
         <div className="hidden sm:flex mt-1 sm:mt-0 items-center justify-center w-10 h-10 rounded-full bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/5 group-hover:scale-110 transition-transform duration-300">
           <FolderOpen className={`w-5 h-5 ${isPending ? 'text-amber-500' : 'text-emerald-500'}`} />
         </div>
-        
+
         <div>
           <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
             {project.project_name || "Untitled Project"}
@@ -525,11 +617,11 @@ function ProjectCard({ project, index, onCopy, onEdit, onDelete }) {
 
       {/* Card Actions & Badges */}
       <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 border-zinc-100 dark:border-white/5 pt-4 sm:pt-0">
-        
+
         {/* Status Badge */}
         <div className={`px-3 py-1.5 rounded-full border text-xs font-medium flex items-center gap-1.5 shadow-sm
-          ${isPending 
-            ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 shadow-amber-500/5 dark:shadow-amber-500/10' 
+          ${isPending
+            ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 shadow-amber-500/5 dark:shadow-amber-500/10'
             : 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 shadow-emerald-500/5 dark:shadow-emerald-500/10'
           }
         `}>
@@ -538,7 +630,7 @@ function ProjectCard({ project, index, onCopy, onEdit, onDelete }) {
         </div>
 
         {/* Copy Action */}
-        <button 
+        <button
           onClick={handleCopyClick}
           className="p-2 rounded-xl border border-zinc-200 dark:border-white/5 bg-white dark:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-white hover:border-indigo-200 dark:hover:border-white/20 hover:bg-indigo-50 dark:hover:bg-white/10 transition-all duration-200 active:scale-90 group/btn"
           title="Copy Magic Link"
@@ -549,16 +641,16 @@ function ProjectCard({ project, index, onCopy, onEdit, onDelete }) {
             <Copy className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
           )}
         </button>
-        
+
         {/* Kebab Action */}
         <div className="relative">
-          <button 
+          <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="p-2 rounded-xl text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/10 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
           >
             <MoreVertical className="w-4 h-4" />
           </button>
-          
+
           {isMenuOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setIsMenuOpen(false)}></div>
