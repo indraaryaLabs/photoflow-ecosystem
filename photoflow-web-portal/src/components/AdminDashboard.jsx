@@ -322,7 +322,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
               </div>
               <div>
                 <h1 className="text-lg font-semibold tracking-tight leading-tight">PhotoFlow Workspace</h1>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium tracking-wide">ADMIN DASHBOARD</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium tracking-wide">PROJECT DASHBOARD</p>
               </div>
             </div>
 
