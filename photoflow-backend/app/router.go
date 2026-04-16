@@ -182,10 +182,12 @@ func SetupRouter() *gin.Engine {
 		// Encode user_id ke dalam state agar bisa diambil kembali di callback
 		state := userID
 
-		// Generate URL OAuth Google dengan prompt consent & access_type offline
+		// Generate URL OAuth Google dengan prompt select_account + consent & access_type offline
+		// select_account = paksa pilih akun (Fast Account Switching)
+		// consent = paksa consent screen agar Google selalu memberikan Refresh Token
 		url := oauthConfig.AuthCodeURL(state,
 			oauth2.AccessTypeOffline,
-			oauth2.SetAuthURLParam("prompt", "consent"),
+			oauth2.SetAuthURLParam("prompt", "select_account consent"),
 		)
 
 		c.Redirect(http.StatusTemporaryRedirect, url)
@@ -218,25 +220,27 @@ func SetupRouter() *gin.Engine {
 		}
 
 		refreshToken := token.RefreshToken
+
+		// Safety: Jika Google tidak memberikan refresh_token (edge case),
+		// biarkan token lama di database tetap utuh, jangan overwrite dengan string kosong.
 		if refreshToken == "" {
-			c.String(http.StatusInternalServerError, "Refresh Token tidak diterima dari Google. Pastikan prompt=consent.")
-			return
-		}
+			log.Printf("⚠️ Refresh Token kosong untuk user %s. Token lama dipertahankan.", userID)
+		} else {
+			// Simpan Refresh Token ke tabel profiles berdasarkan user_id
+			result := db.Model(&Profile{}).Where("id = ?", userID).Update("gdrive_refresh_token", refreshToken)
+			if result.Error != nil {
+				log.Printf("🔴 DB Update Error: %v", result.Error)
+				c.String(http.StatusInternalServerError, "Gagal menyimpan refresh token ke database.")
+				return
+			}
 
-		// Simpan Refresh Token ke tabel profiles berdasarkan user_id
-		result := db.Model(&Profile{}).Where("id = ?", userID).Update("gdrive_refresh_token", refreshToken)
-		if result.Error != nil {
-			log.Printf("🔴 DB Update Error: %v", result.Error)
-			c.String(http.StatusInternalServerError, "Gagal menyimpan refresh token ke database.")
-			return
-		}
+			if result.RowsAffected == 0 {
+				c.String(http.StatusNotFound, "Profile dengan user_id tersebut tidak ditemukan.")
+				return
+			}
 
-		if result.RowsAffected == 0 {
-			c.String(http.StatusNotFound, "Profile dengan user_id tersebut tidak ditemukan.")
-			return
+			log.Printf("✅ Refresh Token berhasil disimpan untuk user: %s", userID)
 		}
-
-		log.Printf("✅ Refresh Token berhasil disimpan untuk user: %s", userID)
 
 		// Tampilkan halaman sukses sederhana
 		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(`
