@@ -244,6 +244,27 @@ transaksi, dan aturan "minimal satu pilihan" paling tepat ditambahkan sekalian.
 
 ---
 
+## F-11 — Tes binding submit menguji salinan struct, bukan struct aslinya
+
+**Ditemukan saat:** Fase 3.3
+**Status:** Diterima sementara — perbaikannya wajar dilakukan di Fase 5
+
+Struct input untuk `POST /api/p/:magic_link/submit` dideklarasikan inline di
+dalam closure handler, sehingga tidak bisa dirujuk dari berkas tes.
+`app/binding_test.go` karena itu menyalin definisinya.
+
+Konsekuensinya nyata: kalau tag binding di handler diubah dan salinan di tes
+tidak ikut diubah, tes tetap hijau sambil menguji struct yang tidak dipakai
+siapa pun. Tes `CreateProjectInput` tidak punya masalah ini karena tipenya
+memang bernama dan diuji langsung.
+
+Perbaikannya: angkat struct itu jadi tipe bernama, lalu arahkan tes ke tipe
+aslinya. Tidak dilakukan sekarang karena berada di luar cakupan Fase 3.3, dan
+Fase 5 memang sudah menjadwalkan pemecahan `router.go` ke paket terpisah — di
+sana pengangkatan tipe ini jadi bagian yang wajar dari pekerjaan.
+
+---
+
 ## F-06 — Middleware auth belum punya test
 
 **Ditemukan saat:** Fase 3.1
