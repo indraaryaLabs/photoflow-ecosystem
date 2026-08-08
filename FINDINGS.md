@@ -11,7 +11,7 @@ variabel dan deskripsi masalah.
 ## F-01 — Kredensial produksi ada di riwayat git (KRITIS)
 
 **Ditemukan saat:** Fase 1
-**Status:** BELUM DITANGANI
+**Status:** Kredensial sudah diamankan — sisa pekerjaan pembersihan riwayat
 
 `photoflow-backend/.env` dan `photoflow-web-portal/.env` ter-commit ke repo dan
 sudah ter-push ke `origin`. Fase 1 hanya melakukan `git rm --cached`, yang
@@ -36,38 +36,90 @@ tetap memuat nilainya selama belum ditulis ulang.
 
 **Langkah yang perlu diambil:**
 
-1. Kredensial Google (`GDRIVE_CREDENTIALS_JSON`, `GOOGLE_OAUTH_CLIENT_SECRET`,
-   `GOOGLE_API_KEY`) **tidak bisa dirotasi** — akun pemiliknya ditangguhkan,
-   console-nya tidak bisa diakses. Penangguhan itu tidak berkaitan dengan
-   kebocoran ini; urutan waktunya tidak cocok. Kunci-kunci itu praktis sudah
-   mati. Penggantinya dibuat di Google Cloud project baru pada Fase 2, bukan
-   dirotasi di tempat.
-2. **Password database Supabase wajib dirotasi.** Ini satu-satunya kredensial
-   bocor yang masih hidup dan masih di bawah kendalimu. Ditangani di Fase 0.
+1. **SELESAI.** Kredensial Google (`GDRIVE_CREDENTIALS_JSON`,
+   `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_API_KEY`) tidak bisa dan tidak perlu
+   dirotasi — akun pemiliknya ditangguhkan, sehingga kunci-kunci itu mati
+   bersama akunnya. Penangguhan itu tidak berkaitan dengan kebocoran ini;
+   urutan waktunya tidak cocok. Penggantinya dibuat di Google Cloud project
+   baru pada Fase 2, bukan dirotasi di tempat.
+2. **SELESAI.** Password database Supabase sudah dirotasi. Ini satu-satunya
+   kredensial bocor yang masih hidup dan masih di bawah kendali pemilik repo,
+   jadi dengan rotasi ini tidak ada lagi kredensial aktif yang terekspos.
 3. Jangan pernah pakai ulang nilai lama mana pun, termasuk di project Google
    yang baru.
-4. Setelah rotasi selesai, pertimbangkan rewrite riwayat git (`git filter-repo`)
-   lalu force push. Ini memaksa setiap clone yang ada dibuat ulang —
-   koordinasikan dulu kalau repo dipakai bersama.
-5. Aktifkan GitHub secret scanning + push protection supaya tidak terulang.
+4. **BELUM.** Rewrite riwayat git (`git filter-repo`) lalu force push. Nilai
+   lama masih terbaca lewat `git log` walau sudah tidak berlaku. Ini memaksa
+   setiap clone yang ada dibuat ulang — koordinasikan kalau repo dipakai
+   bersama.
+5. **BELUM.** Aktifkan GitHub secret scanning + push protection supaya tidak
+   terulang.
 
 Rewrite riwayat saja **tidak cukup** dan bukan pengganti langkah 2. Clone,
 fork, dan cache yang sudah ada bisa tetap menyimpan commit lama.
 
 ---
 
-## F-02 — `VITE_SUPABASE_ANON_KEY` ikut ter-bundle ke klien
+## F-02 — RLS mati di `projects` dan `photos`, dengan anon key yang publik (KRITIS)
 
-**Ditemukan saat:** Fase 1
-**Status:** Kemungkinan besar bukan masalah — dicek di Fase 0
+**Ditemukan saat:** Fase 1, dikonfirmasi di Fase 0
+**Status:** Kerentanannya sudah ditutup — policy RLS masih harus ditulis
 
-Semua variabel berprefix `VITE_` di-inline oleh Vite ke bundle JavaScript yang
-dikirim ke browser, jadi selalu bisa dibaca publik. Untuk anon key Supabase ini
-memang perilaku yang diharapkan.
+Catatan awal temuan ini menyebut "kemungkinan besar bukan masalah". Itu asumsi,
+dan asumsi itu salah. Pemeriksaan di Supabase menemukan Security Advisor
+menandai `public.projects` dan `public.photos` sebagai **CRITICAL — "RLS
+Disabled in Public"**. Hanya `profiles` yang sudah mengaktifkannya.
 
-Yang perlu dipastikan: **Row Level Security aktif di semua tabel Supabase.**
-Tanpa RLS, anon key yang publik itu setara akses baca-tulis terbuka ke seluruh
-database. Belum diverifikasi di fase ini.
+**Kenapa itu kritis.** Semua variabel berprefix `VITE_` di-inline oleh Vite ke
+bundle JavaScript yang dikirim ke browser, jadi `VITE_SUPABASE_ANON_KEY` memang
+publik dan siapa pun bisa membacanya dari devtools. Anon key sendiri bukan
+rahasia — Row Level Security-lah satu-satunya yang membatasi apa yang bisa
+dilakukan dengannya. Dengan RLS mati, kunci publik itu memberi akses baca-tulis
+langsung ke `projects` dan `photos` lewat REST API Supabase.
+
+Artinya seluruh lapisan autentikasi yang dibangun di Fase 3.1 bisa dilewati
+begitu saja. Verifikasi JWT di backend Go tidak relevan bagi penyerang yang
+tidak perlu melewati backend sama sekali: ia cukup memakai anon key dari bundle
+dan berbicara langsung ke Supabase — membaca seluruh project milik semua
+fotografer, mengubahnya, atau menghapusnya.
+
+**Sudah diperbaiki:** RLS kini aktif di `projects`, `photos`, dan `profiles`.
+
+**Sisa yang masih terbuka: policy RLS belum ditulis.** RLS yang aktif tanpa
+policy menolak semua akses lewat anon key secara bawaan. Itu aman, tapi juga
+berarti akses sah dari frontend ikut tertolak.
+
+Satu tempat di frontend menulis langsung ke tabel, bukan lewat backend Go:
+
+    photoflow-web-portal/src/components/AdminLogin.jsx:71
+    await supabase.from('profiles').upsert({ id, full_name, whatsapp, email })
+
+Dipanggil tepat setelah registrasi berhasil, dan **hasilnya tidak diperiksa
+sama sekali** — tidak ada `error` yang dibaca, tidak ada pesan ke pengguna.
+Karena `profiles` sudah mengaktifkan RLS sejak sebelum pemeriksaan ini, upsert
+tersebut kemungkinan besar sudah gagal diam-diam selama ini kecuali ada policy
+yang mengizinkannya.
+
+Kalau benar gagal, akibatnya berantai: baris `profiles` tidak pernah dibuat,
+sehingga callback OAuth Google (`app/router.go`, `db.Model(&Profile{}).Where("id = ?", userID)`)
+tidak menemukan baris untuk diperbarui dan membalas
+"Profile dengan user_id tersebut tidak ditemukan". Pengguna baru bisa mendaftar
+tapi tidak pernah bisa menghubungkan Google Drive-nya.
+
+Yang perlu dilakukan:
+
+1. Periksa di Supabase apakah `profiles` punya policy yang mengizinkan
+   `insert`/`update` oleh peran `authenticated` untuk barisnya sendiri
+   (`auth.uid() = id`). Kalau tidak ada, tulis.
+2. Putuskan apakah `projects` dan `photos` perlu diakses langsung dari frontend
+   sama sekali. Saat ini tidak ada kode frontend yang menyentuhnya — semuanya
+   lewat backend Go — jadi keduanya bisa dibiarkan tanpa policy, dan itu justru
+   posisi paling aman.
+3. Perbaiki pembuangan error pada upsert di `AdminLogin.jsx:71` supaya kegagalan
+   serupa tidak lagi tak terlihat.
+
+Poin 3 menyentuh frontend dan berada di luar cakupan fase mana pun yang sudah
+dikerjakan; paling wajar dikerjakan bersama pekerjaan OAuth di Fase 2, yang
+memang menyentuh alur profil yang sama.
 
 ---
 
@@ -175,21 +227,21 @@ statusnya.
 ## F-08 — Magic link lama tetap 8 karakter
 
 **Ditemukan saat:** Fase 3.2
-**Status:** Diterima secara sadar
+**Status:** SELESAI — tidak ada token lama yang beredar
 
 Fase 3.2 menaikkan entropi magic link dari 4 byte ke 16 byte, tapi hanya untuk
 token yang dibuat setelahnya. Token lama tetap berlaku karena pencarian memakai
 perbandingan nilai pada kolom `text` tanpa asumsi panjang, jadi tidak ada link
 yang patah dan tidak ada migrasi yang wajib.
 
-Konsekuensinya project lama tetap pada 2^32 kemungkinan, bukan 2^128. Dengan
-pembatasan 20 kegagalan per 10 menit per IP, menjelajahi ruang sebesar itu dari
-satu alamat tidak realistis, tapi angkanya tetap jauh di bawah token baru.
+Kekhawatirannya adalah project lama tertinggal pada 2^32 kemungkinan. Itu tidak
+terjadi: pemilik repo mengonfirmasi satu-satunya project di database adalah data
+dummy, bukan data klien, jadi tidak pernah ada link 8 karakter di tangan siapa
+pun. Tidak ada yang perlu diregenerasi.
 
-Saat temuan ini ditulis, satu-satunya project di database adalah data uji yang
-akan dihapus manual oleh pemilik repo (memuat nomor telepon asli), sehingga
-tidak ada link nyata di tangan klien. Artinya begitu data uji itu hilang, tidak
-akan ada lagi token 8 karakter yang tersisa dan temuan ini otomatis selesai.
+Catatan awal temuan ini menyebut data uji tersebut memuat nomor telepon asli.
+Itu keliru dan sudah dikoreksi di sini supaya tidak terbawa ke SECURITY-NOTES.md
+nanti: datanya dummy.
 
 Kalau di kemudian hari ternyata masih ada token lama yang beredar, opsinya
 adalah regenerasi selektif untuk project yang belum `submitted`. Itu mematikan
@@ -197,24 +249,31 @@ link yang sudah dikirim ke klien, jadi perlu pengiriman ulang manual.
 
 ---
 
-## F-09 — Sumber IP untuk rate limiting belum dibuktikan di produksi
+## F-09 — Sumber IP untuk rate limiting
 
 **Ditemukan saat:** Fase 3.2
-**Status:** PERLU PEMBUKTIAN setelah deploy
+**Status:** SELESAI — terbukti di produksi
 
 Rate limiting pada `GET /api/p/:magic_link` mengunci penghitung pada IP klien.
 Kekuatannya sepenuhnya bergantung pada apakah header sumber IP benar-benar
 diset oleh platform dan tidak bisa dikirim sendiri oleh pemanggil.
 
 Urutan bawaannya `x-vercel-forwarded-for` lalu `x-real-ip`, dan
-`x-forwarded-for` sengaja TIDAK dipercaya. Urutan itu **belum diverifikasi
-terhadap perilaku Vercel yang sebenarnya** — dokumentasinya tidak dapat diakses
-dari lingkungan tempat perubahan ini dikerjakan.
+`x-forwarded-for` sengaja TIDAK dipercaya. Urutan itu tidak dapat diverifikasi
+saat kodenya ditulis karena dokumentasi Vercel tidak bisa diakses dari
+lingkungan tersebut, sehingga sengaja dibuat mudah dibuktikan lewat
+`GET /api/debug/client-ip` dan dapat dikoreksi lewat `CLIENT_IP_HEADER` tanpa
+mengubah kode.
 
-Cara membuktikannya ada di `GET /api/debug/client-ip` (aktif hanya bila
-`DEBUG_CLIENT_IP=1`). Yang harus dipastikan: `resolved` bernilai true, dan
-`resolved_ip` TIDAK berubah ketika pemanggil mengirim `x-forwarded-for` sendiri.
-Kalau berubah, limiternya bisa dilewati dan `CLIENT_IP_HEADER` harus disetel.
+Hasil pembuktian di produksi (`DEBUG_CLIENT_IP` sudah dimatikan kembali):
+
+- 20 request berturut-turut membalas 404, request ke-21 membalas 429 — limiter
+  aktif dan ambangnya sesuai.
+- `X-Forwarded-For` palsu TIDAK mengubah `resolved_ip` — bucket tidak bisa
+  diperbarui dengan mengganti header, jadi limiternya tidak dapat dilewati
+  dengan cara itu.
+
+Urutan header bawaan terbukti benar; `CLIENT_IP_HEADER` tidak perlu disetel.
 
 Batas yang tetap ada walau header sudah benar: pembatasan per IP bisa dilewati
 penyerang yang punya banyak alamat. Pertahanan utama terhadap penebakan token
