@@ -61,13 +61,13 @@ fork, dan cache yang sudah ada bisa tetap menyimpan commit lama.
 
 ## F-02 — RLS mati di `projects` dan `photos`, dengan anon key yang publik (KRITIS)
 
-**Ditemukan saat:** Fase 1, dikonfirmasi di Fase 0
-**Status:** Kerentanannya sudah ditutup — policy RLS masih harus ditulis
+**Ditemukan saat:** Fase 1, dikonfirmasi lewat pemeriksaan langsung ke Supabase
+**Status:** Kerentanannya sudah ditutup — policy `profiles` masih perlu ditinjau
 
 Catatan awal temuan ini menyebut "kemungkinan besar bukan masalah". Itu asumsi,
-dan asumsi itu salah. Pemeriksaan di Supabase menemukan Security Advisor
-menandai `public.projects` dan `public.photos` sebagai **CRITICAL — "RLS
-Disabled in Public"**. Hanya `profiles` yang sudah mengaktifkannya.
+dan asumsi itu salah. Supabase Security Advisor menandai `public.projects` dan
+`public.photos` sebagai **CRITICAL — "RLS Disabled in Public"**. Hanya
+`profiles` yang sudah mengaktifkannya.
 
 **Kenapa itu kritis.** Semua variabel berprefix `VITE_` di-inline oleh Vite ke
 bundle JavaScript yang dikirim ke browser, jadi `VITE_SUPABASE_ANON_KEY` memang
@@ -82,46 +82,32 @@ tidak perlu melewati backend sama sekali: ia cukup memakai anon key dari bundle
 dan berbicara langsung ke Supabase — membaca seluruh project milik semua
 fotografer, mengubahnya, atau menghapusnya.
 
-**Sudah diperbaiki:** RLS kini aktif di `projects`, `photos`, dan `profiles`.
+**Sudah diperbaiki:** RLS kini aktif di `projects`, `photos`, `profiles`, dan
+`rate_limits`. Advisor tidak lagi melaporkan satu pun tabel tanpa RLS.
 
-**Sisa yang masih terbuka: policy RLS belum ditulis.** RLS yang aktif tanpa
-policy menolak semua akses lewat anon key secara bawaan. Itu aman, tapi juga
-berarti akses sah dari frontend ikut tertolak.
+`projects`, `photos`, dan `rate_limits` sengaja dibiarkan **tanpa policy**. RLS
+aktif tanpa policy menolak seluruh akses lewat anon key, dan itu memang yang
+diinginkan: tidak ada kode frontend yang menyentuh ketiganya. Backend Go
+terhubung sebagai pemilik tabel lewat connection string Postgres, dan pemilik
+tabel tidak tunduk pada RLS kecuali tabelnya disetel `FORCE ROW LEVEL SECURITY`,
+jadi backend tidak terpengaruh. Advisor melaporkan ketiganya sebagai INFO
+"RLS Enabled No Policy"; untuk tabel-tabel ini status itu benar dan disengaja.
 
-Satu tempat di frontend menulis langsung ke tabel, bukan lewat backend Go:
+**Koreksi atas dugaan sebelumnya.** Catatan versi lama menduga RLS memblokir
+`supabase.from('profiles').upsert(...)` di frontend dan karenanya registrasi
+gagal membuat baris profil. Dugaan itu **gugur** setelah diperiksa langsung:
+`auth.users` berisi 3 baris dan `profiles` juga 3, dan dua di antaranya punya
+`gdrive_refresh_token` terisi — artinya alur OAuth Google pernah berjalan sampai
+selesai. Baris profil tetap terbentuk, kemungkinan besar lewat trigger
+`handle_new_user()` yang berjalan sebagai `SECURITY DEFINER`, bukan lewat upsert
+dari frontend.
 
-    photoflow-web-portal/src/components/AdminLogin.jsx:71
-    await supabase.from('profiles').upsert({ id, full_name, whatsapp, email })
+Penyebab sebenarnya upsert itu gagal ada di F-17: kolom yang dikirim tidak ada
+di skema. Kegagalannya tidak pernah terlihat karena hasilnya tidak diperiksa.
 
-Dipanggil tepat setelah registrasi berhasil, dan **hasilnya tidak diperiksa
-sama sekali** — tidak ada `error` yang dibaca, tidak ada pesan ke pengguna.
-Karena `profiles` sudah mengaktifkan RLS sejak sebelum pemeriksaan ini, upsert
-tersebut kemungkinan besar sudah gagal diam-diam selama ini kecuali ada policy
-yang mengizinkannya.
+Sisa yang masih perlu ditinjau ada di F-16 (policy `profiles` memakai peran
+`public`, dan tidak ada policy INSERT).
 
-Kalau benar gagal, akibatnya berantai: baris `profiles` tidak pernah dibuat,
-sehingga callback OAuth Google (`app/router.go`, `db.Model(&Profile{}).Where("id = ?", userID)`)
-tidak menemukan baris untuk diperbarui dan membalas
-"Profile dengan user_id tersebut tidak ditemukan". Pengguna baru bisa mendaftar
-tapi tidak pernah bisa menghubungkan Google Drive-nya.
-
-Yang perlu dilakukan:
-
-1. Periksa di Supabase apakah `profiles` punya policy yang mengizinkan
-   `insert`/`update` oleh peran `authenticated` untuk barisnya sendiri
-   (`auth.uid() = id`). Kalau tidak ada, tulis.
-2. Putuskan apakah `projects` dan `photos` perlu diakses langsung dari frontend
-   sama sekali. Saat ini tidak ada kode frontend yang menyentuhnya — semuanya
-   lewat backend Go — jadi keduanya bisa dibiarkan tanpa policy, dan itu justru
-   posisi paling aman.
-3. Perbaiki pembuangan error pada upsert di `AdminLogin.jsx:71` supaya kegagalan
-   serupa tidak lagi tak terlihat.
-
-Poin 3 menyentuh frontend dan berada di luar cakupan fase mana pun yang sudah
-dikerjakan; paling wajar dikerjakan bersama pekerjaan OAuth di Fase 2, yang
-memang menyentuh alur profil yang sama.
-
----
 
 ## F-04 — Desktop harvester perlu diperbarui: `/api/login-desktop` dihapus
 
@@ -379,6 +365,153 @@ dipertahankan apa adanya.
 Fase 5 memecah `router.go` menjadi paket terpisah dan memindahkan handler keluar
 dari closure. Setelah itu bagian ini bisa diuji dengan pola yang sama seperti
 `submitSelection`.
+
+---
+
+## F-14 — AutoMigrate membuat `rate_limits` tanpa RLS, limiter jadi bisa dilewati (KRITIS)
+
+**Ditemukan saat:** pemeriksaan Supabase setelah Fase 4
+**Status:** Tabelnya sudah diperbaiki manual — penjagaan ada di perintah migrasi
+
+Tabel `rate_limits` yang ditambahkan di Fase 3.2 dibuat lewat `AutoMigrate`
+GORM. GORM membuat tabel dengan `CREATE TABLE` biasa, dan Postgres membuat tabel
+baru **tanpa RLS secara bawaan**. Supabase menandainya CRITICAL.
+
+Dampaknya membatalkan seluruh gunanya limiter itu. Anon key ada di bundle
+JavaScript frontend, dan dengan RLS mati siapa pun yang memilikinya bisa
+menghapus baris penghitungnya sendiri lewat REST API Supabase, lalu mengulang
+percobaan dari nol. Pembatasan 20 kegagalan per 10 menit yang sudah dibuktikan
+bekerja di produksi (F-09) bisa dilewati **tanpa menyentuh backend sama sekali**.
+
+Ini pelajaran yang lebih besar dari satu tabel: setiap tabel yang dibuat
+`AutoMigrate` di project Supabase akan lahir tanpa RLS, dan tidak ada yang
+memberi tahu selain advisor. Perbaikan satu kali tidak cukup — yang dibutuhkan
+adalah jalur migrasi yang tidak bisa meninggalkan tabel tanpa RLS.
+
+Sudah dikerjakan di Fase 5:
+
+1. Migrasi dipindahkan keluar dari jalur startup ke perintah tersendiri
+   (`cmd/migrate`), sehingga pembuatan skema jadi tindakan yang disengaja dan
+   bisa diperiksa, bukan efek samping setiap cold start.
+2. Perintah itu menyalakan RLS pada setiap tabel yang dikelolanya, tepat setelah
+   `AutoMigrate`.
+3. Perintah itu kemudian **memverifikasi seluruh tabel di skema `public`** dan
+   berhenti dengan error kalau ada satu saja yang RLS-nya mati — termasuk tabel
+   yang ditambahkan orang lain di kemudian hari. Menyalakan saja tidak cukup:
+   tanpa verifikasi, tabel berikutnya akan lolos dengan cara yang persis sama.
+
+---
+
+## F-15 — `handle_new_user()` SECURITY DEFINER bisa dieksekusi lewat REST API
+
+**Ditemukan saat:** pemeriksaan Supabase setelah Fase 4
+**Status:** BELUM DITANGANI
+
+Advisor melaporkan dua peringatan untuk fungsi yang sama:
+
+> Function `public.handle_new_user()` can be executed by the `anon` role as a
+> `SECURITY DEFINER` function via `/rest/v1/rpc/handle_new_user`.
+
+Peringatan kedua sama persis untuk peran `authenticated`.
+
+Fungsi ini kemungkinan besar trigger yang membuat baris `profiles` saat user
+baru mendaftar — dan itulah yang menjelaskan kenapa baris profil tetap terbentuk
+walau upsert dari frontend gagal (lihat F-02).
+
+Masalahnya bukan fungsinya, melainkan fungsi itu ikut terekspos sebagai endpoint
+RPC. `SECURITY DEFINER` berarti ia berjalan dengan hak pembuatnya, bukan hak
+pemanggilnya, jadi siapa pun yang memegang anon key bisa memanggilnya dengan hak
+yang lebih tinggi dari haknya sendiri. Apa yang terjadi kalau dipanggil di luar
+konteks trigger bergantung pada isi fungsinya, yang belum diperiksa.
+
+Yang perlu dilakukan: baca isi fungsinya, lalu cabut hak eksekusinya dari peran
+`anon` dan `authenticated`. Fungsi trigger tidak perlu dapat dipanggil lewat
+REST:
+
+```sql
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM anon, authenticated;
+```
+
+Trigger tetap berjalan seperti biasa setelah pencabutan ini, karena trigger
+dieksekusi oleh pemilik tabel, bukan oleh peran pemanggil REST.
+
+---
+
+## F-16 — Policy `profiles` memakai peran `public` dan tidak punya INSERT
+
+**Ditemukan saat:** pemeriksaan Supabase setelah Fase 4
+**Status:** BELUM DITANGANI
+
+`profiles` punya policy untuk SELECT dan UPDATE, keduanya menyasar peran
+`public`, dan tidak ada policy untuk INSERT.
+
+Dua hal yang perlu ditinjau:
+
+1. **Peran `public` mencakup `anon`**, yaitu pengunjung yang belum login sama
+   sekali. Kalau maksudnya "pengguna yang sudah masuk boleh membaca dan mengubah
+   barisnya sendiri", peran yang tepat adalah `authenticated`. Perlu dipastikan
+   pula klausa `USING`/`WITH CHECK`-nya benar-benar membatasi ke baris sendiri
+   lewat `auth.uid() = id`; tanpa itu, satu pengguna bisa membaca atau mengubah
+   profil pengguna lain — termasuk `gdrive_refresh_token` milik orang lain, yang
+   memberi akses ke Google Drive mereka.
+2. **Tidak adanya policy INSERT** konsisten dengan temuan bahwa baris profil
+   dibuat oleh trigger, bukan oleh klien. Itu justru desain yang baik dan
+   sebaiknya dipertahankan — asal frontend berhenti mencoba melakukan upsert
+   sendiri (F-17).
+
+Isi policy-nya belum dibaca, jadi butir 1 masih dugaan yang perlu diperiksa,
+bukan kesimpulan.
+
+---
+
+## F-17 — Upsert profil di frontend mengirim kolom yang tidak ada, hasilnya dibuang
+
+**Ditemukan saat:** pemeriksaan Supabase setelah Fase 4
+**Status:** BELUM DITANGANI — frontend, wajar dikerjakan bersama Fase 2
+
+`photoflow-web-portal/src/components/AdminLogin.jsx:71`:
+
+```js
+await supabase.from('profiles').upsert({ id, full_name, whatsapp, email })
+```
+
+Skema `profiles` hanya punya empat kolom: `id`, `full_name`,
+`gdrive_refresh_token`, `updated_at`. `whatsapp` dan `email` tidak ada di sana,
+jadi upsert ini **selalu gagal** karena ketidakcocokan skema.
+
+Kegagalannya tidak pernah terlihat karena hasilnya tidak diperiksa sama sekali:
+tidak ada `error` yang dibaca, tidak ada pesan ke pengguna. Kode berjalan
+seolah-olah berhasil.
+
+Kebetulan tidak ada kerusakan yang terjadi, karena baris profil sudah dibuat
+oleh trigger `handle_new_user()`. Jadi panggilan ini bukan cuma salah — ia juga
+tidak dibutuhkan.
+
+Nomor WhatsApp yang coba disimpan di sini sebenarnya sudah disimpan di tempat
+lain: kolom `admin_whats_app` dan `client_whats_app` pada tabel `projects`, yang
+diisi lewat backend. Jadi perbaikannya adalah **menghapus panggilan upsert ini**,
+bukan menambah kolom ke `profiles`.
+
+Pelajaran yang lebih umum dan layak dijaga: pemanggilan Supabase dari frontend
+yang hasilnya tidak diperiksa akan gagal tanpa suara. Kegagalan ini bertahan
+cukup lama untuk sempat memunculkan dua dugaan keliru sebelum diperiksa
+langsung ke database.
+
+---
+
+## F-18 — Perlindungan password bocor tidak aktif di Supabase Auth
+
+**Ditemukan saat:** pemeriksaan Supabase setelah Fase 4
+**Status:** BELUM DITANGANI — satu saklar, bukan perubahan kode
+
+Advisor melaporkan `auth_leaked_password_protection` dalam keadaan mati.
+Supabase Auth dapat memeriksa password baru terhadap basis data kebocoran
+HaveIBeenPwned dan menolak yang sudah pernah bocor.
+
+Tidak menuntut perubahan kode sama sekali, hanya saklar di Dashboard → Auth.
+Dicatat karena akun admin di sini memegang akses ke seluruh project fotografer
+dan ke refresh token Google Drive mereka, sehingga password yang bisa ditebak
+lebih berbahaya dari biasanya.
 
 ---
 
