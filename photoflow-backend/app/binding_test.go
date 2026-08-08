@@ -126,13 +126,12 @@ func TestSubmitSelectionInputLimits(t *testing.T) {
 		{"drive_id 201 char lewat batas", map[string]any{
 			"selected_photos": []any{photo(strings.Repeat("a", 201), "foto.jpg")}}, false},
 
-		// Mengunci perilaku yang ADA SEKARANG, bukan yang diinginkan: `required`
-		// tidak menolak array kosong. Handler akan menghapus seluruh foto lalu
-		// mengunci galeri tanpa menyisakan satu pun pilihan. Lihat F-10 di
-		// FINDINGS.md; perbaikannya masuk Fase 4 bersama pembungkusan transaksi.
-		// Kalau tes ini mulai gagal, kemungkinan besar itu justru perbaikannya —
-		// perbarui ekspektasi di sini.
-		{"array kosong diterima (perilaku lama, lihat F-10)", map[string]any{"selected_photos": []any{}}, true},
+		// `required` pada slice tidak menolak array kosong, jadi binding tetap
+		// meloloskannya. Penolakannya ada satu lapis di atas: handler submit
+		// membalas 400 sebelum menyentuh database. Kasus ini mengunci pembagian
+		// tugas itu — kalau mulai gagal, artinya perilaku binding berubah dan
+		// penjagaan di handler perlu ditinjau ulang. Lihat F-10 di FINDINGS.md.
+		{"array kosong lolos binding, ditolak handler (lihat F-10)", map[string]any{"selected_photos": []any{}}, true},
 	}
 
 	for _, tc := range cases {
