@@ -73,42 +73,58 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
   };
 
   // Centralized session getter — returns userId or redirects to login
-  const getSessionUserId = async () => {
+  // Access token JWT yang dikirim ke backend sebagai Bearer. Backend
+  // memverifikasi signature-nya ke JWKS Supabase dan mengambil user id dari
+  // klaim `sub`, jadi identitas tidak lagi ditentukan oleh apa yang dikirim
+  // browser.
+  const getAccessToken = async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.id) {
+    if (!session?.access_token) {
       // No valid session found, force logout and redirect
       await supabase.auth.signOut();
       window.location.href = '/';
       return null;
     }
-    return session.user.id;
+    return session.access_token;
   };
 
-  // Centralized response handler — auto-redirects on 401
-  const handleApiResponse = async (res) => {
-    if (res.status === 401) {
-      showToast('Sesi berakhir. Silakan login kembali.', 'error');
-      await supabase.auth.signOut();
-      setTimeout(() => { window.location.href = '/'; }, 1000);
-      return null;
+  // Centralized response handler — auto-redirects on 401.
+  // Kalau backend menandai token sudah kedaluwarsa, sesi di-refresh sekali dan
+  // request diulang; supabase-js biasanya sudah me-refresh sendiri, ini jaring
+  // pengaman untuk token yang lewat batas tepat saat request terbang.
+  const handleApiResponse = async (res, retry) => {
+    if (res.status !== 401) return res;
+
+    if (retry) {
+      const body = await res.clone().json().catch(() => null);
+      if (body?.code === 'token_expired') {
+        const { data, error } = await supabase.auth.refreshSession();
+        if (!error && data?.session?.access_token) {
+          return handleApiResponse(await retry(data.session.access_token));
+        }
+      }
     }
-    return res;
+
+    showToast('Sesi berakhir. Silakan login kembali.', 'error');
+    await supabase.auth.signOut();
+    setTimeout(() => { window.location.href = '/'; }, 1000);
+    return null;
   };
 
   // --- API INTEGRATION ---
   const fetchProjects = async () => {
     try {
       setIsLoading(true);
-      const userId = await getSessionUserId();
-      if (!userId) return; // Guard: skip fetch if no session
+      const token = await getAccessToken();
+      if (!token) return; // Guard: skip fetch if no session
 
-      const res = await fetch(`${API_BASE}/api/projects`, {
+      const sendRequest = (accessToken) => fetch(`${API_BASE}/api/projects`, {
         headers: {
-          'X-User-ID': userId
+          'Authorization': `Bearer ${accessToken}`
         }
       });
 
-      const checkedRes = await handleApiResponse(res);
+      const checkedRes = await handleApiResponse(await sendRequest(token), sendRequest);
       if (!checkedRes) return;
 
       if (!checkedRes.ok) throw new Error('Gagal memuat data project');
@@ -134,17 +150,17 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
     if (!deletingProject) return;
     setActionLoading(true);
     try {
-      const userId = await getSessionUserId();
-      if (!userId) return;
+      const token = await getAccessToken();
+      if (!token) return;
 
-      const res = await fetch(`${API_BASE}/api/projects/${deletingProject.id}`, {
+      const sendRequest = (accessToken) => fetch(`${API_BASE}/api/projects/${deletingProject.id}`, {
         method: 'DELETE',
         headers: {
-          'X-User-ID': userId
+          'Authorization': `Bearer ${accessToken}`
         }
       });
 
-      const checkedRes = await handleApiResponse(res);
+      const checkedRes = await handleApiResponse(await sendRequest(token), sendRequest);
       if (!checkedRes) return;
       if (!checkedRes.ok) throw new Error('Gagal menghapus project');
 
@@ -175,17 +191,17 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
 
     setActionLoading(true);
     try {
-      const userId = await getSessionUserId();
-      if (!userId) return;
+      const token = await getAccessToken();
+      if (!token) return;
 
       const { data: { user } } = await supabase.auth.getUser();
       const adminWa = user?.user_metadata?.whatsapp || '';
 
-      const res = await fetch(`${API_BASE}/api/projects/${editingProject.id}`, {
+      const sendRequest = (accessToken) => fetch(`${API_BASE}/api/projects/${editingProject.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'X-User-ID': userId
+          'Authorization': `Bearer ${accessToken}`
         },
         body: JSON.stringify({
           project_name: editingProject.project_name,
@@ -197,7 +213,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
         })
       });
 
-      const checkedRes = await handleApiResponse(res);
+      const checkedRes = await handleApiResponse(await sendRequest(token), sendRequest);
       if (!checkedRes) return;
 
       if (!checkedRes.ok) {
@@ -232,17 +248,17 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
     setIsSubmitting(true);
 
     try {
-      const userId = await getSessionUserId();
-      if (!userId) return;
+      const token = await getAccessToken();
+      if (!token) return;
 
       const { data: { user } } = await supabase.auth.getUser();
       const adminWa = user?.user_metadata?.whatsapp || '';
 
-      const res = await fetch(`${API_BASE}/api/projects`, {
+      const sendRequest = (accessToken) => fetch(`${API_BASE}/api/projects`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-User-ID': userId
+          'Authorization': `Bearer ${accessToken}`
         },
         body: JSON.stringify({
           project_name: formData.projectName,
@@ -254,7 +270,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
         })
       });
 
-      const checkedRes = await handleApiResponse(res);
+      const checkedRes = await handleApiResponse(await sendRequest(token), sendRequest);
       if (!checkedRes) return;
 
       if (!checkedRes.ok) {
