@@ -19,6 +19,10 @@ menghapus file dari commit berikutnya tapi **tidak menghapusnya dari riwayat**.
 Nilai-nilainya masih bisa diambil siapa pun yang punya akses repo lewat
 `git log` / `git show`.
 
+Catatan: seluruh nilai yang terekspos kini sudah tidak berlaku — password
+Supabase dirotasi, kredensial Google mati bersama akunnya. Rewrite riwayat
+tetap dilakukan untuk kebersihan, bukan karena nilainya masih berbahaya.
+
 Kredensial yang terekspos:
 
 | Variabel | Jenis | Dampak kalau disalahgunakan |
