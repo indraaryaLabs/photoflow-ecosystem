@@ -8,10 +8,10 @@ variabel dan deskripsi masalah.
 
 ---
 
-## F-01 — Kredensial produksi ada di riwayat git (KRITIS)
 
-**Ditemukan saat:** Fase 1
-**Status:** BELUM DITANGANI
+## F-01 — Kredensial produksi ada di riwayat git (DITANGANI SEBAGIAN)
+**Status:** Password Supabase sudah dirotasi. Kredensial Google mati bersama
+akun yang ditangguhkan, diganti di Fase 2. Sisa: rewrite riwayat git.
 
 `photoflow-backend/.env` dan `photoflow-web-portal/.env` ter-commit ke repo dan
 sudah ter-push ke `origin`. Fase 1 hanya melakukan `git rm --cached`, yang
