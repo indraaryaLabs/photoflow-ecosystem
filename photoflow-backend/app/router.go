@@ -47,13 +47,16 @@ type Photo struct {
 	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
 }
 
+// CreateProjectInput dibatasi panjangnya di tingkat binding supaya nilai yang
+// tidak masuk akal ditolak sebelum menyentuh database. MaxSelections memakai
+// omitempty karena nilai 0 berarti "pakai default", bukan nilai di luar batas.
 type CreateProjectInput struct {
-	ProjectName    string `json:"project_name" binding:"required"`
-	ClientName     string `json:"client_name" binding:"required"`
-	MaxSelections  int    `json:"max_selections"`
-	DriveFolderURL string `json:"drive_folder_url" binding:"required"`
-	AdminWhatsApp  string `json:"admin_whatsapp"`
-	ClientWhatsApp string `json:"client_whatsapp"`
+	ProjectName    string `json:"project_name" binding:"required,max=200"`
+	ClientName     string `json:"client_name" binding:"required,max=200"`
+	MaxSelections  int    `json:"max_selections" binding:"omitempty,min=1,max=1000"`
+	DriveFolderURL string `json:"drive_folder_url" binding:"required,max=500"`
+	AdminWhatsApp  string `json:"admin_whatsapp" binding:"omitempty,min=10,max=15,numeric"`
+	ClientWhatsApp string `json:"client_whatsapp" binding:"omitempty,min=10,max=15,numeric"`
 }
 
 type DriveAPIResponse struct {
@@ -80,10 +83,27 @@ func extractDriveFolderID(url string) string {
 	return matches
 }
 
-func generateMagicLink() string {
-	bytes := make([]byte, 4)
-	rand.Read(bytes)
-	return hex.EncodeToString(bytes)
+// magicLinkBytes menentukan entropi token galeri. Nilai lama 4 byte hanya
+// memberi 2^32 kemungkinan — cukup kecil untuk dienumerasi, dan cukup kecil pula
+// untuk bertabrakan pada kolom unique. 16 byte menaikkannya ke 2^128.
+//
+// Token yang sudah terlanjur dibuat tetap berlaku: pencarian memakai
+// perbandingan nilai pada kolom text, tanpa asumsi panjang di mana pun.
+const magicLinkBytes = 16
+
+// generateMagicLink membangkitkan token galeri yang tidak dapat ditebak.
+//
+// Catatan: sejak Go 1.24 crypto/rand.Read tidak pernah mengembalikan error — ia
+// menjatuhkan proses kalau sumber acak sistem gagal. Error tetap diteruskan di
+// sini supaya kegagalan itu eksplisit dan tidak bergantung pada janji versi Go
+// tertentu, bukan karena ada jalur kegagalan yang diam-diam menghasilkan token
+// lemah.
+func generateMagicLink() (string, error) {
+	buf := make([]byte, magicLinkBytes)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("gagal membangkitkan magic link: %w", err)
+	}
+	return hex.EncodeToString(buf), nil
 }
 
 func CORSMiddleware() gin.HandlerFunc {
@@ -143,7 +163,12 @@ func SetupRouter() *gin.Engine {
 	}
 	requireAuth := authVerifier.RequireAuth()
 
-	db.AutoMigrate(&Project{}, &Photo{})
+	db.AutoMigrate(&Project{}, &Photo{}, &middleware.RateLimit{})
+
+	// Batas percobaan gagal pada pencarian magic link. Ini lapis kedua: yang
+	// benar-benar membuat token tidak dapat ditebak adalah entropinya, dan
+	// pembatasan per IP tetap bisa dilewati penyerang yang punya banyak IP.
+	magicLinkLimiter := middleware.NewLimiter(db, 10*time.Minute, 20)
 
 	// Pastikan kolom gdrive_refresh_token ada di tabel profiles
 	db.Exec("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS gdrive_refresh_token TEXT")
@@ -152,11 +177,26 @@ func SetupRouter() *gin.Engine {
 	oauthConfig := GetOAuthConfig()
 
 	r := gin.Default()
+
+	// Jangan percayai header proxy secara otomatis. Penentuan IP klien untuk
+	// rate limiting dilakukan eksplisit di middleware.Limiter, dari header yang
+	// diset platform saja.
+	if err := r.SetTrustedProxies(nil); err != nil {
+		log.Fatal("🔴 FATAL: Gagal menyetel trusted proxies: ", err)
+	}
+
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "PhotoFlow API is running perfectly! 🚀"})
 	})
 	// --- MIDDLEWARE CORS ---
 	r.Use(CORSMiddleware())
+
+	// Batas ukuran body. Dipasang global; rute tanpa body tidak terpengaruh.
+	r.Use(middleware.MaxBodySize(1 << 20))
+
+	// Diagnostik untuk membuktikan header sumber IP di lingkungan nyata.
+	// Mengembalikan 404 kecuali DEBUG_CLIENT_IP=1.
+	r.GET("/api/debug/client-ip", magicLinkLimiter.DebugClientIP)
 
 	// --- AUTH: GOOGLE OAUTH2 LOGIN ---
 	r.GET("/api/auth/google/login", func(c *gin.Context) {
@@ -301,6 +341,13 @@ func SetupRouter() *gin.Engine {
 			return
 		}
 
+		magicLink, err := generateMagicLink()
+		if err != nil {
+			log.Printf("🔴 %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat project"})
+			return
+		}
+
 		newProject := Project{
 			ProjectName:    input.ProjectName,
 			ClientName:     input.ClientName,
@@ -310,7 +357,7 @@ func SetupRouter() *gin.Engine {
 			UserID:         userID,
 			AdminWhatsApp:  input.AdminWhatsApp,
 			ClientWhatsApp: input.ClientWhatsApp,
-			MagicLinkToken: generateMagicLink(),
+			MagicLinkToken: magicLink,
 		}
 		if newProject.MaxSelections == 0 {
 			newProject.MaxSelections = 50
@@ -364,6 +411,12 @@ func SetupRouter() *gin.Engine {
 
 		var project Project
 		if err := db.Where("magic_link_token = ?", magicLink).First(&project).Error; err != nil {
+			// Hanya pencarian yang GAGAL yang dihitung, sehingga klien sah yang
+			// membuka galerinya berulang kali tidak pernah tersentuh limiter.
+			if magicLinkLimiter.TooManyFailures(c) {
+				c.JSON(http.StatusTooManyRequests, gin.H{"error": "Terlalu banyak percobaan. Coba lagi nanti."})
+				return
+			}
 			c.JSON(http.StatusNotFound, gin.H{"error": "Galeri tidak ditemukan atau link tidak valid"})
 			return
 		}
@@ -384,11 +437,13 @@ func SetupRouter() *gin.Engine {
 	r.POST("/api/p/:magic_link/submit", func(c *gin.Context) {
 		magicLink := c.Param("magic_link")
 
+		// Batas jumlah elemen adalah yang paling penting di sini: tanpa itu, satu
+		// request bisa memerintahkan insert sebanyak apa pun.
 		var input struct {
 			SelectedPhotos []struct {
-				DriveID  string `json:"drive_id"`
-				FileName string `json:"file_name"`
-			} `json:"selected_photos" binding:"required"`
+				DriveID  string `json:"drive_id" binding:"max=200"`
+				FileName string `json:"file_name" binding:"max=500"`
+			} `json:"selected_photos" binding:"required,max=5000,dive"`
 		}
 
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -455,7 +510,8 @@ func SetupRouter() *gin.Engine {
 		// Generate GDrive Access Token dari Refresh Token milik user
 		accessToken, expiry, err := GetUserAccessToken(userID, db)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghasilkan access token", "details": err.Error()})
+			log.Printf("🔴 GDrive access token untuk user %s: %v", userID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghasilkan access token"})
 			return
 		}
 
@@ -473,7 +529,10 @@ func SetupRouter() *gin.Engine {
 
 		files, err := GetImagesFromFolder(folderID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membaca folder Google Drive", "details": err.Error()})
+			// Rute ini publik: pesan error mentah dari Google API tidak boleh
+			// sampai ke pemanggil.
+			log.Printf("🔴 Baca folder Drive %s: %v", folderID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membaca folder Google Drive"})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"files": files})

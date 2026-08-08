@@ -176,6 +176,99 @@ statusnya.
 
 ---
 
+## F-08 — Magic link lama tetap 8 karakter
+
+**Ditemukan saat:** Fase 3.2
+**Status:** Diterima secara sadar
+
+Fase 3.2 menaikkan entropi magic link dari 4 byte ke 16 byte, tapi hanya untuk
+token yang dibuat setelahnya. Token lama tetap berlaku karena pencarian memakai
+perbandingan nilai pada kolom `text` tanpa asumsi panjang, jadi tidak ada link
+yang patah dan tidak ada migrasi yang wajib.
+
+Konsekuensinya project lama tetap pada 2^32 kemungkinan, bukan 2^128. Dengan
+pembatasan 20 kegagalan per 10 menit per IP, menjelajahi ruang sebesar itu dari
+satu alamat tidak realistis, tapi angkanya tetap jauh di bawah token baru.
+
+Saat temuan ini ditulis, satu-satunya project di database adalah data uji yang
+akan dihapus manual oleh pemilik repo (memuat nomor telepon asli), sehingga
+tidak ada link nyata di tangan klien. Artinya begitu data uji itu hilang, tidak
+akan ada lagi token 8 karakter yang tersisa dan temuan ini otomatis selesai.
+
+Kalau di kemudian hari ternyata masih ada token lama yang beredar, opsinya
+adalah regenerasi selektif untuk project yang belum `submitted`. Itu mematikan
+link yang sudah dikirim ke klien, jadi perlu pengiriman ulang manual.
+
+---
+
+## F-09 — Sumber IP untuk rate limiting belum dibuktikan di produksi
+
+**Ditemukan saat:** Fase 3.2
+**Status:** PERLU PEMBUKTIAN setelah deploy
+
+Rate limiting pada `GET /api/p/:magic_link` mengunci penghitung pada IP klien.
+Kekuatannya sepenuhnya bergantung pada apakah header sumber IP benar-benar
+diset oleh platform dan tidak bisa dikirim sendiri oleh pemanggil.
+
+Urutan bawaannya `x-vercel-forwarded-for` lalu `x-real-ip`, dan
+`x-forwarded-for` sengaja TIDAK dipercaya. Urutan itu **belum diverifikasi
+terhadap perilaku Vercel yang sebenarnya** — dokumentasinya tidak dapat diakses
+dari lingkungan tempat perubahan ini dikerjakan.
+
+Cara membuktikannya ada di `GET /api/debug/client-ip` (aktif hanya bila
+`DEBUG_CLIENT_IP=1`). Yang harus dipastikan: `resolved` bernilai true, dan
+`resolved_ip` TIDAK berubah ketika pemanggil mengirim `x-forwarded-for` sendiri.
+Kalau berubah, limiternya bisa dilewati dan `CLIENT_IP_HEADER` harus disetel.
+
+Batas yang tetap ada walau header sudah benar: pembatasan per IP bisa dilewati
+penyerang yang punya banyak alamat. Pertahanan utama terhadap penebakan token
+adalah entropi 16 byte; pembatasan ini lapis kedua.
+
+Kalau IP tidak dapat ditentukan, limiter sengaja DILEWATI dan dicatat keras di
+log, bukan memakai satu bucket bersama. Bucket bersama berarti 20 percobaan
+dari siapa pun akan mengunci galeri untuk seluruh klien — salah konfigurasi
+tidak boleh berubah jadi pemadaman.
+
+---
+
+## F-10 — `selected_photos` kosong diterima oleh endpoint submit
+
+**Ditemukan saat:** Fase 3.3
+**Status:** BELUM DITANGANI — perilaku lama, relevan untuk Fase 4
+
+Tag `required` pada `selected_photos` tidak menolak array kosong. Akibatnya
+`POST /api/p/:magic_link/submit` dengan `{"selected_photos": []}` akan menghapus
+seluruh foto milik project lalu mengunci galerinya dengan status `submitted`,
+tanpa menyisakan satu pun pilihan.
+
+Ini perilaku yang sudah ada sebelum Fase 3.3 dan tidak berubah karenanya.
+Diperbaiki bersama Fase 4, yang memang menyentuh handler submit untuk urusan
+transaksi dan gallery lock — di sana penghapusan-lalu-insert itu akan dibungkus
+transaksi, dan aturan "minimal satu pilihan" paling tepat ditambahkan sekalian.
+
+---
+
+## F-11 — Tes binding submit menguji salinan struct, bukan struct aslinya
+
+**Ditemukan saat:** Fase 3.3
+**Status:** Diterima sementara — perbaikannya wajar dilakukan di Fase 5
+
+Struct input untuk `POST /api/p/:magic_link/submit` dideklarasikan inline di
+dalam closure handler, sehingga tidak bisa dirujuk dari berkas tes.
+`app/binding_test.go` karena itu menyalin definisinya.
+
+Konsekuensinya nyata: kalau tag binding di handler diubah dan salinan di tes
+tidak ikut diubah, tes tetap hijau sambil menguji struct yang tidak dipakai
+siapa pun. Tes `CreateProjectInput` tidak punya masalah ini karena tipenya
+memang bernama dan diuji langsung.
+
+Perbaikannya: angkat struct itu jadi tipe bernama, lalu arahkan tes ke tipe
+aslinya. Tidak dilakukan sekarang karena berada di luar cakupan Fase 3.3, dan
+Fase 5 memang sudah menjadwalkan pemecahan `router.go` ke paket terpisah — di
+sana pengangkatan tipe ini jadi bagian yang wajar dari pekerjaan.
+
+---
+
 ## F-06 — Middleware auth belum punya test
 
 **Ditemukan saat:** Fase 3.1
