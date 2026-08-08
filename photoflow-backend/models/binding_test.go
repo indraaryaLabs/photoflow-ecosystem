@@ -1,4 +1,4 @@
-package app
+package models_test
 
 import (
 	"bytes"
@@ -8,25 +8,9 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-)
 
-// submitSelectionInput MENYALIN struct anonim di dalam handler
-// POST /api/p/:magic_link/submit.
-//
-// Salinan ini adalah kelemahan tes ini dan perlu disebut terang-terangan:
-// struct aslinya dideklarasikan inline di dalam closure handler, sehingga tidak
-// bisa dirujuk dari luar. Kalau tag di handler berubah dan salinan ini tidak,
-// tes tetap hijau sambil menguji sesuatu yang sudah tidak dipakai lagi.
-//
-// Fase 5 memecah router menjadi paket terpisah; saat itu struct ini sebaiknya
-// diangkat jadi tipe bernama dan tes ini diarahkan ke tipe aslinya. Lihat F-11
-// di FINDINGS.md.
-type submitSelectionInput struct {
-	SelectedPhotos []struct {
-		DriveID  string `json:"drive_id" binding:"max=200"`
-		FileName string `json:"file_name" binding:"max=500"`
-	} `json:"selected_photos" binding:"required,max=5000,dive"`
-}
+	"photoflow-backend/models"
+)
 
 // bindJSON menjalankan body melalui binding gin persis seperti handler, lalu
 // melaporkan apakah input diterima.
@@ -101,7 +85,7 @@ func TestCreateProjectInputLimits(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var input CreateProjectInput
+			var input models.CreateProjectInput
 			if got := bindJSON(t, &input, tc.body); got != tc.accepted {
 				t.Fatalf("diterima=%v, seharusnya %v", got, tc.accepted)
 			}
@@ -136,7 +120,7 @@ func TestSubmitSelectionInputLimits(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var input submitSelectionInput
+			var input models.SubmitSelectionInput
 			if got := bindJSON(t, &input, tc.body); got != tc.accepted {
 				t.Fatalf("diterima=%v, seharusnya %v", got, tc.accepted)
 			}

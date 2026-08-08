@@ -1,0 +1,107 @@
+// Package models berisi struct yang dipetakan ke tabel database dan struct
+// input yang diikat dari body request. Paket ini sengaja tidak memuat logika:
+// isinya hanya bentuk data, sehingga bisa dipakai handler, middleware, maupun
+// perintah migrasi tanpa menyeret ketergantungan lain.
+package models
+
+import "time"
+
+type Project struct {
+	ID             string    `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	UserID         string    `gorm:"type:uuid" json:"user_id"`
+	ProjectName    string    `gorm:"type:text;not null" json:"project_name"`
+	ClientName     string    `gorm:"type:text;not null" json:"client_name"`
+	MaxSelections  int       `gorm:"default:50" json:"max_selections"`
+	DriveFolderURL string    `gorm:"type:text;not null" json:"drive_folder_url"`
+	DriveFolderID  string    `gorm:"type:text;not null" json:"drive_folder_id"`
+	MagicLinkToken string    `gorm:"type:text;unique;not null" json:"magic_link_token"`
+	AdminWhatsApp  string    `gorm:"type:text" json:"admin_whatsapp"`
+	ClientWhatsApp string    `gorm:"type:text" json:"client_whatsapp"`
+	Status         string    `gorm:"type:text;default:'pending'" json:"status"`
+	CreatedAt      time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt      time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+type Photo struct {
+	ID           string    `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	ProjectID    string    `gorm:"type:uuid;not null" json:"project_id"`
+	FileName     string    `gorm:"type:text;not null" json:"file_name"`
+	ThumbnailURL string    `gorm:"type:text;not null" json:"thumbnail_url"`
+	IsSelected   bool      `gorm:"default:false" json:"is_selected"`
+	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
+}
+
+// Profile memetakan tabel public.profiles. Barisnya dibuat oleh trigger
+// handle_new_user() saat user mendaftar, bukan oleh backend ini.
+type Profile struct {
+	ID                 string `gorm:"type:uuid;primaryKey" json:"id"`
+	GdriveRefreshToken string `gorm:"column:gdrive_refresh_token;type:text" json:"gdrive_refresh_token"`
+}
+
+func (Profile) TableName() string {
+	return "profiles"
+}
+
+// RateLimit adalah satu penghitung fixed-window. Satu baris per bucket, bukan
+// satu baris per request, sehingga tabel tumbuh sebesar jumlah IP unik dan
+// bukan sebesar jumlah trafik.
+//
+// Penghitung sengaja disimpan di Postgres, bukan di memori proses. Backend ini
+// berjalan sebagai fungsi serverless: memori tidak bertahan antar invocation
+// dan beberapa instance berjalan berdampingan, jadi penghitung in-memory bukan
+// hanya tidak persisten — ia memberi kesan terlindungi sambil praktis tidak
+// menahan apa pun.
+type RateLimit struct {
+	BucketKey   string    `gorm:"column:bucket_key;type:text;primaryKey"`
+	WindowStart time.Time `gorm:"column:window_start;not null;index"`
+	HitCount    int       `gorm:"column:hit_count;not null"`
+}
+
+func (RateLimit) TableName() string {
+	return "rate_limits"
+}
+
+// StatusSubmitted adalah status project setelah klien mengirim pilihannya.
+// Setelah itu galeri terkunci dan tidak menerima submit lagi.
+const StatusSubmitted = "submitted"
+
+// CreateProjectInput dibatasi panjangnya di tingkat binding supaya nilai yang
+// tidak masuk akal ditolak sebelum menyentuh database. MaxSelections memakai
+// omitempty karena nilai 0 berarti "pakai default", bukan nilai di luar batas.
+type CreateProjectInput struct {
+	ProjectName    string `json:"project_name" binding:"required,max=200"`
+	ClientName     string `json:"client_name" binding:"required,max=200"`
+	MaxSelections  int    `json:"max_selections" binding:"omitempty,min=1,max=1000"`
+	DriveFolderURL string `json:"drive_folder_url" binding:"required,max=500"`
+	AdminWhatsApp  string `json:"admin_whatsapp" binding:"omitempty,min=10,max=15,numeric"`
+	ClientWhatsApp string `json:"client_whatsapp" binding:"omitempty,min=10,max=15,numeric"`
+}
+
+// SelectedPhotoInput adalah satu foto dalam kiriman pilihan klien.
+type SelectedPhotoInput struct {
+	DriveID  string `json:"drive_id" binding:"max=200"`
+	FileName string `json:"file_name" binding:"max=500"`
+}
+
+// SubmitSelectionInput adalah body dari POST /api/p/:magic_link/submit.
+//
+// Sebelumnya struct ini dideklarasikan inline di dalam closure handler dan
+// karenanya tidak bisa dirujuk dari berkas tes, sehingga tesnya terpaksa
+// menguji salinan yang bisa menyimpang tanpa ketahuan. Diangkat jadi tipe
+// bernama supaya tes mengikat struct yang benar-benar dipakai.
+//
+// Batas jumlah elemen adalah yang paling penting di sini: tanpa itu, satu
+// request bisa memerintahkan insert sebanyak apa pun. Perlu dicatat bahwa
+// `required` pada slice TIDAK menolak array kosong; penolakannya ada di handler.
+type SubmitSelectionInput struct {
+	SelectedPhotos []SelectedPhotoInput `json:"selected_photos" binding:"required,max=5000,dive"`
+}
+
+// DriveAPIResponse adalah bentuk respons Google Drive API yang dipakai backend.
+type DriveAPIResponse struct {
+	Files []struct {
+		ID            string `json:"id"`
+		Name          string `json:"name"`
+		ThumbnailLink string `json:"thumbnailLink"`
+	} `json:"files"`
+}

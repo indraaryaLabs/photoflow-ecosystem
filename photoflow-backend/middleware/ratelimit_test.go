@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"photoflow-backend/middleware"
+	"photoflow-backend/models"
 )
 
 // Tes di berkas ini butuh PostgreSQL sungguhan: yang diuji adalah perilaku satu
@@ -45,7 +46,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 	}
 
 	db.Exec("DROP TABLE IF EXISTS rate_limits")
-	if err := db.AutoMigrate(&middleware.RateLimit{}); err != nil {
+	if err := db.AutoMigrate(&models.RateLimit{}); err != nil {
 		t.Fatalf("gagal menyiapkan tabel rate_limits: %v", err)
 	}
 	return db
