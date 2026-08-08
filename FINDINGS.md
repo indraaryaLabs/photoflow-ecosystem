@@ -108,6 +108,7 @@ di skema. Kegagalannya tidak pernah terlihat karena hasilnya tidak diperiksa.
 Sisa yang masih perlu ditinjau ada di F-16 (policy `profiles` memakai peran
 `public`, dan tidak ada policy INSERT).
 
+---
 
 ## F-04 — Desktop harvester perlu diperbarui: `/api/login-desktop` dihapus
 
@@ -295,7 +296,7 @@ F-12.
 ## F-11 — Tes binding submit menguji salinan struct, bukan struct aslinya
 
 **Ditemukan saat:** Fase 3.3
-**Status:** Diterima sementara — perbaikannya wajar dilakukan di Fase 5
+**Status:** SELESAI di Fase 5
 
 Struct input untuk `POST /api/p/:magic_link/submit` dideklarasikan inline di
 dalam closure handler, sehingga tidak bisa dirujuk dari berkas tes.
@@ -306,10 +307,9 @@ tidak ikut diubah, tes tetap hijau sambil menguji struct yang tidak dipakai
 siapa pun. Tes `CreateProjectInput` tidak punya masalah ini karena tipenya
 memang bernama dan diuji langsung.
 
-Perbaikannya: angkat struct itu jadi tipe bernama, lalu arahkan tes ke tipe
-aslinya. Tidak dilakukan sekarang karena berada di luar cakupan Fase 3.3, dan
-Fase 5 memang sudah menjadwalkan pemecahan `router.go` ke paket terpisah — di
-sana pengangkatan tipe ini jadi bagian yang wajar dari pekerjaan.
+Struct itu kini menjadi `models.SubmitSelectionInput`, dan tesnya mengikat tipe
+tersebut langsung. Salinannya dihapus, sehingga tag binding tidak lagi bisa
+berubah di handler tanpa tesnya ikut menyadari.
 
 ---
 
@@ -351,10 +351,10 @@ dengan repo tersebut — sama seperti F-04.
 ## F-13 — Transaksi pada PUT /api/projects/:id belum punya test
 
 **Ditemukan saat:** Fase 4
-**Status:** Dijadwalkan bersama Fase 5
+**Status:** MASIH TERBUKA — penghalangnya sudah hilang, tesnya belum ditulis
 
 Handler submit diuji lewat `submitSelection`, fungsi yang bisa dipanggil
-langsung. Bagian transaksional pada `PUT /api/projects/:id` masih berupa closure
+langsung. Bagian transaksional pada `PUT /api/projects/:id` dulu berupa closure
 di dalam pendaftaran rute, sehingga tidak bisa dipanggil dari tes tanpa
 membangun seluruh router beserta koneksi database dan konfigurasi auth-nya.
 
@@ -362,9 +362,12 @@ Perilaku yang belum terjaga tes: kalau insert foto baru gagal, penghapusan foto
 lama harus ikut dibatalkan; dan kalau penarikan dari Drive gagal, foto lama harus
 dipertahankan apa adanya.
 
-Fase 5 memecah `router.go` menjadi paket terpisah dan memindahkan handler keluar
-dari closure. Setelah itu bagian ini bisa diuji dengan pola yang sama seperti
-`submitSelection`.
+Fase 5 sudah memindahkannya keluar: sekarang berupa method
+`handlers.Handler.UpdateProject`, dan bisa diuji dengan pola yang sama seperti
+`submitSelection`. Tesnya sendiri belum ditulis karena berada di luar cakupan
+Fase 5, yang refactor murni. Yang menyulitkan tinggal satu hal: handler itu
+memanggil Google Drive lewat `http.Get` langsung, jadi pengujiannya menuntut
+titik sisip untuk mengganti pemanggilan jaringan itu.
 
 ---
 
