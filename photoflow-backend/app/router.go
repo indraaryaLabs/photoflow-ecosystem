@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -75,6 +76,50 @@ type Profile struct {
 
 func (Profile) TableName() string {
 	return "profiles"
+}
+
+// statusSubmitted adalah status project setelah klien mengirim pilihannya.
+// Setelah itu galeri terkunci dan tidak menerima submit lagi.
+const statusSubmitted = "submitted"
+
+// errGalleryLocked dikembalikan ketika galeri sudah disubmit sebelumnya.
+var errGalleryLocked = errors.New("galeri sudah dikunci")
+
+// submitSelection menyimpan pilihan klien dan mengunci galeri dalam satu
+// transaksi. Mengembalikan errGalleryLocked kalau galeri sudah pernah disubmit.
+//
+// Urutannya penting: kunci diklaim LEBIH DULU, sebelum foto lama disentuh.
+// Kalau klaim gagal, tidak ada satu pun baris foto yang berubah.
+//
+// Klaim itu berupa satu perintah UPDATE dengan syarat status di dalam WHERE,
+// bukan SELECT untuk memeriksa lalu UPDATE terpisah. Pemeriksaan dan perubahan
+// harus terjadi dalam satu operasi yang sama, karena di antara dua perintah
+// terpisah selalu ada celah untuk transaksi lain menyelinap: keduanya membaca
+// status yang masih "pending", keduanya menyimpulkan boleh lanjut, dan keduanya
+// menghapus lalu menulis ulang daftar foto.
+//
+// Dengan syaratnya berada di dalam UPDATE, database yang menengahi. Perintah
+// pertama mengunci baris project; perintah kedua menunggu. Setelah yang pertama
+// commit, yang kedua menilai ulang syaratnya terhadap versi baris yang baru,
+// menemukan status sudah "submitted", dan mengubah nol baris. RowsAffected == 0
+// itulah tanda kalah, dan pemanggilnya berhenti tanpa merusak apa pun.
+func submitSelection(db *gorm.DB, projectID string, photos []Photo) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		lock := tx.Model(&Project{}).
+			Where("id = ? AND status <> ?", projectID, statusSubmitted).
+			Update("status", statusSubmitted)
+		if lock.Error != nil {
+			return lock.Error
+		}
+		if lock.RowsAffected == 0 {
+			return errGalleryLocked
+		}
+
+		if err := tx.Where("project_id = ?", projectID).Delete(&Photo{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&photos).Error
+	})
 }
 
 func extractDriveFolderID(url string) string {
@@ -451,35 +496,44 @@ func SetupRouter() *gin.Engine {
 			return
 		}
 
+		// Submit menggantikan seluruh daftar foto project. Dengan daftar kosong,
+		// penggantinya tidak ada: semua foto terhapus dan galeri terkunci tanpa
+		// menyisakan satu pun pilihan, sehingga pekerjaan klien hilang permanen
+		// dan tidak bisa diulang. Antarmuka klien sendiri tidak pernah mengirim
+		// keadaan ini — tombol kirimnya baru muncul setelah ada foto terpilih.
+		if len(input.SelectedPhotos) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Pilih minimal satu foto sebelum mengirim."})
+			return
+		}
+
 		var project Project
 		if err := db.Where("magic_link_token = ?", magicLink).First(&project).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Project tidak valid"})
 			return
 		}
 
-		// --- GALLERY LOCK: Cegah duplikasi submit ---
-		if project.Status == "submitted" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Galeri ini sudah dikunci karena pilihan telah disubmit sebelumnya."})
+		photosToInsert := make([]Photo, 0, len(input.SelectedPhotos))
+		for _, sp := range input.SelectedPhotos {
+			photosToInsert = append(photosToInsert, Photo{
+				ProjectID:    project.ID,
+				FileName:     sp.FileName,
+				ThumbnailURL: "", // tidak diperlukan untuk desktop harvester
+				IsSelected:   true,
+			})
+		}
+
+		// Status TIDAK diperiksa di sini. Membacanya lebih dulu lalu mengubahnya
+		// belakangan justru menciptakan celah yang hendak ditutup; satu-satunya
+		// penentu ada di dalam submitSelection.
+		if err := submitSelection(db, project.ID, photosToInsert); err != nil {
+			if errors.Is(err, errGalleryLocked) {
+				c.JSON(http.StatusConflict, gin.H{"error": "Galeri ini sudah dikunci karena pilihan telah disubmit sebelumnya."})
+				return
+			}
+			log.Printf("🔴 Submit pilihan project %s: %v", project.ID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan pilihan"})
 			return
 		}
-
-		// Hapus semua foto lama untuk project ini, lalu insert yang baru
-		db.Where("project_id = ?", project.ID).Delete(&Photo{})
-
-		if len(input.SelectedPhotos) > 0 {
-			var photosToInsert []Photo
-			for _, sp := range input.SelectedPhotos {
-				photosToInsert = append(photosToInsert, Photo{
-					ProjectID:    project.ID,
-					FileName:     sp.FileName,
-					ThumbnailURL: "", // tidak diperlukan untuk desktop harvester
-					IsSelected:   true,
-				})
-			}
-			db.Create(&photosToInsert)
-		}
-
-		db.Model(&project).Update("status", "submitted")
 
 		c.JSON(http.StatusOK, gin.H{
 			"message":      "Pilihan berhasil disimpan!",
@@ -581,16 +635,12 @@ func SetupRouter() *gin.Engine {
 			project.ClientWhatsApp = input.ClientWhatsApp
 		}
 
-		if err := db.Save(&project).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengupdate project"})
-			return
-		}
-
+		// Daftar foto baru ditarik dari Drive SEBELUM transaksi dibuka. Panggilan
+		// jaringan di dalam transaksi akan menahan lock baris selama permintaan
+		// HTTP berlangsung, dan lamanya ditentukan pihak lain.
+		var newPhotos []Photo
+		photosRefreshed := false
 		if driveChanged {
-			// Delete old photos
-			db.Where("project_id = ?", project.ID).Delete(&Photo{})
-
-			// Scrape new photos
 			apiKey := os.Getenv("GOOGLE_API_KEY")
 			driveAPIUrl := fmt.Sprintf("https://www.googleapis.com/drive/v3/files?q='%s'+in+parents+and+mimeType+contains+'image/'&fields=files(id,name,thumbnailLink)&key=%s", newFolderID, apiKey)
 
@@ -601,22 +651,47 @@ func SetupRouter() *gin.Engine {
 				var driveData DriveAPIResponse
 				json.Unmarshal(body, &driveData)
 
-				var photosToInsert []Photo
 				for _, file := range driveData.Files {
-					photosToInsert = append(photosToInsert, Photo{
+					newPhotos = append(newPhotos, Photo{
 						ProjectID:    project.ID,
 						FileName:     file.Name,
 						ThumbnailURL: fmt.Sprintf("https://drive.google.com/thumbnail?id=%s&sz=w800", file.ID),
 					})
 				}
-
-				if len(photosToInsert) > 0 {
-					db.Create(&photosToInsert)
-				}
+				photosRefreshed = true
+			} else {
+				// Foto lama SENGAJA dipertahankan. Menghapusnya tanpa punya
+				// pengganti membuat galeri kosong permanen hanya karena Drive
+				// sedang tidak bisa dihubungi.
+				log.Printf("⚠️ Gagal menarik foto dari Drive untuk folder %s, foto lama dipertahankan", newFolderID)
 			}
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "Project berhasil diupdate", "data": project})
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Save(&project).Error; err != nil {
+				return err
+			}
+			if !photosRefreshed {
+				return nil
+			}
+			if err := tx.Where("project_id = ?", project.ID).Delete(&Photo{}).Error; err != nil {
+				return err
+			}
+			if len(newPhotos) == 0 {
+				return nil
+			}
+			return tx.Create(&newPhotos).Error
+		}); err != nil {
+			log.Printf("🔴 Update project %s: %v", project.ID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengupdate project"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":          "Project berhasil diupdate",
+			"data":             project,
+			"photos_refreshed": !driveChanged || photosRefreshed,
+		})
 	})
 
 	// --- 7. RUTE DELETE PROJECT ---
