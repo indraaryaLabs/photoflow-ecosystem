@@ -230,17 +230,20 @@ tidak boleh berubah jadi pemadaman.
 ## F-10 — `selected_photos` kosong diterima oleh endpoint submit
 
 **Ditemukan saat:** Fase 3.3
-**Status:** BELUM DITANGANI — perilaku lama, relevan untuk Fase 4
+**Status:** SELESAI di Fase 4
 
 Tag `required` pada `selected_photos` tidak menolak array kosong. Akibatnya
-`POST /api/p/:magic_link/submit` dengan `{"selected_photos": []}` akan menghapus
+`POST /api/p/:magic_link/submit` dengan `{"selected_photos": []}` menghapus
 seluruh foto milik project lalu mengunci galerinya dengan status `submitted`,
 tanpa menyisakan satu pun pilihan.
 
-Ini perilaku yang sudah ada sebelum Fase 3.3 dan tidak berubah karenanya.
-Diperbaiki bersama Fase 4, yang memang menyentuh handler submit untuk urusan
-transaksi dan gallery lock — di sana penghapusan-lalu-insert itu akan dibungkus
-transaksi, dan aturan "minimal satu pilihan" paling tepat ditambahkan sekalian.
+Handler sekarang menolak daftar kosong dengan 400 sebelum menyentuh database.
+Penolakannya sengaja ditaruh di handler, bukan di tag binding: `required` pada
+slice memang tidak berarti "tidak boleh kosong", dan menaruhnya di handler
+membuat alasannya bisa dijelaskan di tempat kejadian.
+
+Perbaikan ini menutup jalur kerusakannya, bukan penyebabnya. Penyebabnya ada di
+F-12.
 
 ---
 
@@ -262,6 +265,61 @@ Perbaikannya: angkat struct itu jadi tipe bernama, lalu arahkan tes ke tipe
 aslinya. Tidak dilakukan sekarang karena berada di luar cakupan Fase 3.3, dan
 Fase 5 memang sudah menjadwalkan pemecahan `router.go` ke paket terpisah — di
 sana pengangkatan tipe ini jadi bagian yang wajar dari pekerjaan.
+
+---
+
+## F-12 — Submit menghapus katalog foto, padahal kolom untuk menandai sudah ada
+
+**Ditemukan saat:** Fase 4
+**Status:** USULAN — perubahan lintas repo, belum dikerjakan
+
+Tabel `photos` dipakai untuk dua hal yang berbeda pada dua fase hidup project:
+
+- sebelum submit, ia adalah katalog lengkap galeri, dengan `thumbnail_url` yang
+  dipakai klien untuk melihat foto;
+- setelah submit, ia hanya berisi baris hasil pilihan, dengan `thumbnail_url`
+  kosong, untuk dibaca desktop harvester.
+
+Peralihan antar keduanya dilakukan dengan menghapus seluruh baris lalu menulis
+ulang. Karena itulah daftar kosong bisa menghapus segalanya, dan karena itu pula
+katalog aslinya hilang begitu klien submit: tidak ada lagi catatan foto apa saja
+yang pernah ditawarkan, dan galeri tidak bisa ditampilkan ulang.
+
+Kolom `is_selected` sudah ada di tabel dan praktis tidak dipakai. Alur yang tidak
+menghapus apa pun:
+
+```sql
+UPDATE photos SET is_selected = (file_name = ANY(?)) WHERE project_id = ?;
+```
+
+Katalog dan thumbnail tetap utuh, pilihan menjadi atribut alih-alih keberadaan
+baris, "tidak memilih apa pun" jadi keadaan yang bisa diwakili tanpa kehilangan
+data, dan submit ulang tidak lagi merusak.
+
+Belum dikerjakan karena desktop harvester membaca endpoint ini dan saat ini
+mengasumsikan setiap baris yang ada adalah baris terpilih. Mengubahnya menuntut
+harvester ikut memfilter `is_selected`, jadi perubahan ini perlu dikoordinasikan
+dengan repo tersebut — sama seperti F-04.
+
+---
+
+## F-13 — Transaksi pada PUT /api/projects/:id belum punya test
+
+**Ditemukan saat:** Fase 4
+**Status:** Dijadwalkan bersama Fase 5
+
+Handler submit diuji lewat `submitSelection`, fungsi yang bisa dipanggil
+langsung. Bagian transaksional pada `PUT /api/projects/:id` masih berupa closure
+di dalam pendaftaran rute, sehingga tidak bisa dipanggil dari tes tanpa
+membangun seluruh router beserta koneksi database dan konfigurasi auth-nya.
+
+Perilaku yang belum terjaga tes: kalau insert foto baru gagal, penghapusan foto
+lama harus ikut dibatalkan; dan kalau penarikan dari Drive gagal, foto lama harus
+dipertahankan apa adanya.
+
+Fase 5 memecah `router.go` menjadi paket terpisah dan memindahkan handler keluar
+dari closure. Setelah itu bagian ini bisa diuji dengan pola yang sama seperti
+`submitSelection`.
 
 ---
 
