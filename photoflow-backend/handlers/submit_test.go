@@ -1,4 +1,4 @@
-package app
+package handlers
 
 import (
 	"errors"
@@ -10,6 +10,8 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	"photoflow-backend/models"
 )
 
 // Tes di berkas ini butuh PostgreSQL sungguhan. Yang diuji adalah perilaku
@@ -38,7 +40,7 @@ func newSubmitTestDB(t *testing.T) *gorm.DB {
 
 	db.Exec("DROP TABLE IF EXISTS photos")
 	db.Exec("DROP TABLE IF EXISTS projects")
-	if err := db.AutoMigrate(&Project{}, &Photo{}); err != nil {
+	if err := db.AutoMigrate(&models.Project{}, &models.Photo{}); err != nil {
 		t.Fatalf("gagal menyiapkan skema tes: %v", err)
 	}
 	return db
@@ -46,10 +48,10 @@ func newSubmitTestDB(t *testing.T) *gorm.DB {
 
 // seedProject membuat satu project beserta foto awalnya, meniru galeri yang
 // sudah ditarik dari Drive tapi belum disubmit klien.
-func seedProject(t *testing.T, db *gorm.DB, photoCount int) Project {
+func seedProject(t *testing.T, db *gorm.DB, photoCount int) models.Project {
 	t.Helper()
 
-	project := Project{
+	project := models.Project{
 		// user_id bertipe uuid di database, jadi harus berupa UUID yang sah.
 		// Handler produksi mengisinya dari klaim `sub` token.
 		UserID:         uuid.NewString(),
@@ -65,7 +67,7 @@ func seedProject(t *testing.T, db *gorm.DB, photoCount int) Project {
 	}
 
 	for i := 0; i < photoCount; i++ {
-		photo := Photo{
+		photo := models.Photo{
 			ProjectID:    project.ID,
 			FileName:     "asli.jpg",
 			ThumbnailURL: "https://contoh/thumb.jpg",
@@ -80,14 +82,14 @@ func seedProject(t *testing.T, db *gorm.DB, photoCount int) Project {
 func countPhotos(t *testing.T, db *gorm.DB, projectID string) int64 {
 	t.Helper()
 	var n int64
-	db.Model(&Photo{}).Where("project_id = ?", projectID).Count(&n)
+	db.Model(&models.Photo{}).Where("project_id = ?", projectID).Count(&n)
 	return n
 }
 
 func projectStatus(t *testing.T, db *gorm.DB, projectID string) string {
 	t.Helper()
 	var status string
-	db.Model(&Project{}).Where("id = ?", projectID).Select("status").Scan(&status)
+	db.Model(&models.Project{}).Where("id = ?", projectID).Select("status").Scan(&status)
 	return status
 }
 
@@ -95,7 +97,7 @@ func TestSubmitSelectionReplacesPhotosAndLocks(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 3)
 
-	err := submitSelection(db, project.ID, []Photo{
+	err := submitSelection(db, project.ID, []models.Photo{
 		{ProjectID: project.ID, FileName: "pilihan.jpg", IsSelected: true},
 	})
 	if err != nil {
@@ -105,8 +107,8 @@ func TestSubmitSelectionReplacesPhotosAndLocks(t *testing.T) {
 	if got := countPhotos(t, db, project.ID); got != 1 {
 		t.Fatalf("foto tersisa %d, seharusnya 1", got)
 	}
-	if got := projectStatus(t, db, project.ID); got != statusSubmitted {
-		t.Fatalf("status %q, seharusnya %q", got, statusSubmitted)
+	if got := projectStatus(t, db, project.ID); got != models.StatusSubmitted {
+		t.Fatalf("status %q, seharusnya %q", got, models.StatusSubmitted)
 	}
 }
 
@@ -120,7 +122,7 @@ func TestSubmitSelectionRollsBackOnInsertFailure(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 3)
 
-	err := submitSelection(db, project.ID, []Photo{
+	err := submitSelection(db, project.ID, []models.Photo{
 		{ProjectID: project.ID, FileName: "sah.jpg", IsSelected: true},
 		{ProjectID: "bukan-uuid", FileName: "rusak.jpg", IsSelected: true},
 	})
@@ -145,13 +147,13 @@ func TestSubmitSelectionRejectsSecondSubmit(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 3)
 
-	if err := submitSelection(db, project.ID, []Photo{
+	if err := submitSelection(db, project.ID, []models.Photo{
 		{ProjectID: project.ID, FileName: "pertama.jpg", IsSelected: true},
 	}); err != nil {
 		t.Fatalf("submit pertama seharusnya berhasil: %v", err)
 	}
 
-	err := submitSelection(db, project.ID, []Photo{
+	err := submitSelection(db, project.ID, []models.Photo{
 		{ProjectID: project.ID, FileName: "kedua.jpg", IsSelected: true},
 		{ProjectID: project.ID, FileName: "ketiga.jpg", IsSelected: true},
 	})
@@ -191,7 +193,7 @@ func TestSubmitSelectionConcurrentSubmitsOnlyOneWins(t *testing.T) {
 			defer done.Done()
 			start.Wait() // tembakkan sedekat mungkin
 
-			err := submitSelection(db, project.ID, []Photo{
+			err := submitSelection(db, project.ID, []models.Photo{
 				{ProjectID: project.ID, FileName: "pilihan.jpg", IsSelected: true},
 			})
 			mu.Lock()
