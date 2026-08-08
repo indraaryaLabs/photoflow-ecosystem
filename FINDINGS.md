@@ -75,6 +75,121 @@ database. Belum diverifikasi di fase ini.
 
 ---
 
+## F-04 — Desktop harvester perlu diperbarui: `/api/login-desktop` dihapus
+
+**Ditemukan saat:** Fase 3.1
+**Status:** Perlu tindakan di repo desktop app (di luar repo ini)
+
+Fase 3.1 menghapus `POST /api/login-desktop`. Rute itu query langsung ke tabel
+`auth.users` milik Supabase dan membandingkan hash bcrypt sendiri — menembus
+lapisan Auth yang seharusnya jadi satu-satunya pintu. Rute itu juga
+mengembalikan token dari `generateSessionToken()` yang tidak pernah
+diverifikasi di mana pun, jadi tokennya dekoratif.
+
+Tidak ada pemanggil rute ini di dalam repo. Konsumennya adalah desktop
+harvester yang tinggal di repo terpisah, dan **login-nya akan gagal sampai
+aplikasi itu diperbarui.**
+
+Alur pengganti, tanpa backend sebagai perantara:
+
+1. Desktop app login langsung ke Supabase Auth:
+   `POST <SUPABASE_URL>/auth/v1/token?grant_type=password`
+   dengan header `apikey: <anon key>` dan body JSON `{email, password}`.
+2. Responsnya memuat `access_token` (JWT) dan `refresh_token`. Simpan keduanya
+   di penyimpanan aman milik OS, bukan di file polos.
+3. Panggil `GET /api/gdrive/token` dengan header
+   `Authorization: Bearer <access_token>`.
+4. Saat backend membalas 401 berkode `token_expired`, tukar refresh token lewat
+   `POST <SUPABASE_URL>/auth/v1/token?grant_type=refresh_token`, lalu ulangi.
+
+Keuntungannya: password tidak pernah melewati backend PhotoFlow sama sekali,
+dan backend tidak lagi butuh akses baca ke `auth.users`.
+
+---
+
+## F-05 — Alur OAuth Google memakai `user_id` mentah sebagai `state`
+
+**Ditemukan saat:** Fase 3.1
+**Status:** BELUM DITANGANI — di luar cakupan 3.1, relevan untuk Fase 2
+
+`GET /api/auth/google/login` menerima `user_id` sebagai query parameter dan
+meneruskannya apa adanya sebagai parameter `state` OAuth. Callback lalu
+mempercayai `state` itu sebagai identitas dan menyimpan refresh token Google ke
+baris `profiles` dengan id tersebut.
+
+Dua akibatnya:
+
+1. **Account linking paksa.** Penyerang yang tahu user_id korban bisa membuka
+   alur OAuth dengan `user_id` korban, menyetujui dengan akun Google miliknya
+   sendiri, dan refresh token miliknya tersimpan di profil korban. Setelah itu
+   project korban menarik foto dari Drive penyerang.
+2. **`state` kehilangan fungsi aslinya.** Parameter `state` ada untuk mencegah
+   CSRF pada alur OAuth; dipakai sebagai pembawa data, perlindungan itu hilang.
+
+Perbaikan yang disarankan (kerjakan di Fase 2, bukan sekarang): jangan terima
+`user_id` dari query. Ambil identitas dari JWT terverifikasi seperti rute admin
+lain, lalu isi `state` dengan nilai acak sekali-pakai yang disimpan server-side
+dan dicocokkan saat callback.
+
+---
+
+## F-07 — Perilaku JWKS yang perlu diketahui saat mengubah middleware auth
+
+**Ditemukan saat:** Fase 3.1
+**Status:** Sudah ditangani — dicatat supaya tidak diregresikan
+
+Perilaku `keyfunc/v3` + `jwkset` di bawah ini diverifikasi lewat percobaan,
+bukan dibaca dari dokumentasi. Siapa pun yang menyentuh `middleware/auth.go`
+perlu tahu, karena beberapa di antaranya tidak terlihat dari kodenya sendiri.
+
+1. **`kid` tak dikenal ditolak, bukan dicoba dengan kunci lain.** Kalau `kid`
+   hadir tapi tidak ada di JWKS, verifikasi gagal. Memakai `kid` yang sah pun
+   tidak menolong kalau signature-nya tidak cocok.
+2. **Token tanpa `kid` dicoba terhadap semua kunci.** Ini perilaku bawaan
+   library. Bukan bypass — tetap wajib ada signature sah dari kunci di JWKS —
+   tapi perlu diketahui. Supabase selalu mengirim `kid`.
+3. **`kid` tak dikenal memicu penarikan ulang JWKS, dibatasi 1 kali per 5
+   menit** (`RefreshUnknownKID`), dan permintaan berlebih gagal seketika alih
+   alih menggantung. Jangan longgarkan batas ini: itu yang mencegah token
+   dengan `kid` acak dipakai memancing banjir permintaan ke Supabase.
+4. **CURRENT KEY dan PREVIOUS KEY dua-duanya terverifikasi**, karena keduanya
+   ada di dokumen JWKS yang sama. Rotasi kunci Supabase tidak memutus sesi yang
+   tokennya masih ditandatangani kunci lama.
+5. **Constructor tetap sukses walau penarikan JWKS pertama gagal**
+   (`NoErrorReturnFirstHTTPReq`). Jadi konstruksi yang berhasil BUKAN jaminan
+   ada kunci. Yang tersisa adalah storage kosong, dan itu harus ditangani
+   terpisah.
+6. **Pemulihan setelah gangguan datang dari goroutine refresh latar, bukan dari
+   limiter `kid` tak dikenal.** Bawaannya 1 jam; di sini disetel 30 detik lewat
+   `jwksRefreshInterval` supaya jendela tanpa kunci tetap pendek.
+7. **Penarikan ulang yang gagal tidak mengosongkan storage.** Fungsi refresh
+   keluar lebih dulu pada error jaringan, status non-200, maupun decode gagal —
+   `KeyReplaceAll` baru dipanggil setelah key set berhasil di-parse. Inilah yang
+   membuat pembeda "storage kosong" tidak bisa dibalik dari luar, dan karena itu
+   token palsu selalu mendapat 401 selama backend punya kunci.
+
+Konsekuensi yang diterima secara sadar: **selama storage kosong, token palsu
+ikut mendapat 503, bukan 401.** Saat backend tidak punya satu pun kunci publik,
+token sah dan token palsu memang tidak bisa dibedakan. Request tetap ditolak dan
+handler tetap tidak dijalankan, jadi tidak ada bypass — yang berbeda hanya kode
+statusnya.
+
+---
+
+## F-06 — Middleware auth belum punya test
+
+**Ditemukan saat:** Fase 3.1
+**Status:** Dijadwalkan di Fase 6
+
+`middleware/auth.go` menentukan siapa yang boleh menyentuh data siapa, tapi
+belum punya satu test pun. Kasus yang paling berharga untuk diuji: token
+kedaluwarsa ditolak, token bersignature asal ditolak, token dari issuer lain
+ditolak, token HS256 ditolak walaupun signature-nya cocok, dan `sub` benar-benar
+sampai ke context. Fase 6 sudah mengagendakan test isolasi antar-user, yang
+bertumpu langsung pada middleware ini.
+
+---
+
 ## F-03 — `gdrive-key.json` disebut di .gitignore
 
 **Ditemukan saat:** Fase 1
