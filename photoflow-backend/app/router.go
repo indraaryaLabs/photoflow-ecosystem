@@ -14,10 +14,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	"photoflow-backend/middleware"
 )
 
 // --- MODEL DATABASE ---
@@ -63,22 +64,6 @@ type DriveAPIResponse struct {
 	} `json:"files"`
 }
 
-// --- MODEL AUTH SUPABASE ---
-type SupabaseUser struct {
-	ID                string `gorm:"type:uuid;primaryKey"`
-	Email             string `gorm:"type:text"`
-	EncryptedPassword string `gorm:"column:encrypted_password;type:text"`
-}
-
-func (SupabaseUser) TableName() string {
-	return "auth.users"
-}
-
-type LoginDesktopInput struct {
-	Email    string `json:"email" binding:"required"`
-	Password string `json:"password" binding:"required"`
-}
-
 // --- MODEL PROFILES (TABEL public.profiles) ---
 type Profile struct {
 	ID                 string `gorm:"type:uuid;primaryKey" json:"id"`
@@ -87,12 +72,6 @@ type Profile struct {
 
 func (Profile) TableName() string {
 	return "profiles"
-}
-
-func generateSessionToken() string {
-	bytes := make([]byte, 32)
-	rand.Read(bytes)
-	return hex.EncodeToString(bytes)
 }
 
 func extractDriveFolderID(url string) string {
@@ -122,7 +101,7 @@ func CORSMiddleware() gin.HandlerFunc {
 		}
 
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, ngrok-skip-browser-warning, X-User-ID")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, ngrok-skip-browser-warning")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 		c.Writer.Header().Set("Vary", "Origin")
 
@@ -155,6 +134,14 @@ func SetupRouter() *gin.Engine {
 	}
 
 	fmt.Println("🚀 Database Terkoneksi!")
+
+	// Verifier JWT Supabase. Konfigurasi yang salah dihentikan di sini supaya
+	// server tidak pernah menyala dengan rute admin yang tidak terlindungi.
+	authVerifier, err := middleware.NewVerifier(os.Getenv("SUPABASE_URL"))
+	if err != nil {
+		log.Fatal("🔴 FATAL: Konfigurasi auth tidak valid: ", err)
+	}
+	requireAuth := authVerifier.RequireAuth()
 
 	db.AutoMigrate(&Project{}, &Photo{})
 
@@ -298,43 +285,9 @@ func SetupRouter() *gin.Engine {
 		`))
 	})
 
-	// --- 0. RUTE LOGIN DESKTOP ---
-	r.POST("/api/login-desktop", func(c *gin.Context) {
-		var input LoginDesktopInput
-		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Email dan password wajib diisi"})
-			return
-		}
-
-		var user SupabaseUser
-		if err := db.Where("email = ?", input.Email).First(&user).Error; err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Email atau password salah"})
-			return
-		}
-
-		// Verifikasi password dengan bcrypt (Supabase menyimpan hash bcrypt)
-		if err := bcrypt.CompareHashAndPassword([]byte(user.EncryptedPassword), []byte(input.Password)); err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Email atau password salah"})
-			return
-		}
-
-		// Login berhasil — generate session token
-		token := generateSessionToken()
-
-		c.JSON(http.StatusOK, gin.H{
-			"status":  "success",
-			"token":   token,
-			"user_id": user.ID,
-		})
-	})
-
 	// --- 1. RUTE CREATE PROJECT ---
-	r.POST("/api/projects", func(c *gin.Context) {
-		userID := c.GetHeader("X-User-ID")
-		if userID == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-			return
-		}
+	r.POST("/api/projects", requireAuth, func(c *gin.Context) {
+		userID := c.GetString(middleware.ContextUserIDKey)
 
 		var input CreateProjectInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -480,12 +433,8 @@ func SetupRouter() *gin.Engine {
 	})
 
 	// --- 4. RUTE GET ALL PROJECTS (UNTUK ADMIN DASHBOARD) ---
-	r.GET("/api/projects", func(c *gin.Context) {
-		userID := c.GetHeader("X-User-ID")
-		if userID == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-			return
-		}
+	r.GET("/api/projects", requireAuth, func(c *gin.Context) {
+		userID := c.GetString(middleware.ContextUserIDKey)
 
 		var projects []Project
 		// Ambil semua project dari database, urutkan dari yang paling baru dibuat
@@ -496,34 +445,32 @@ func SetupRouter() *gin.Engine {
 		c.JSON(http.StatusOK, projects)
 	})
 
-	// --- 5. RUTE INTEGRASI GDRIVE & FORMAT RAW + ACCESS TOKEN ---
-	r.GET("/api/gdrive/:folderId", func(c *gin.Context) {
-		folderID := c.Param("folderId")
+	// --- 5a. RUTE GDRIVE ACCESS TOKEN (UNTUK DESKTOP APP) ---
+	// Rute terautentikasi, didaftarkan terpisah dari 5b. Sebelumnya keduanya
+	// berbagi satu path dan dibedakan lewat `if folderId == "token"`, sehingga
+	// auth tidak bisa dipasang tanpa ikut mengunci 5b yang memang publik.
+	r.GET("/api/gdrive/token", requireAuth, func(c *gin.Context) {
+		userID := c.GetString(middleware.ContextUserIDKey)
 
-		// --- 5b. SUB-RUTE: GDRIVE ACCESS TOKEN (UNTUK DESKTOP APP) ---
-		if folderID == "token" {
-			// Ambil user_id dari header
-			userID := c.GetHeader("X-User-ID")
-			if userID == "" {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Header X-User-ID wajib disertakan"})
-				return
-			}
-
-			// Generate GDrive Access Token dari Refresh Token milik user
-			accessToken, expiry, err := GetUserAccessToken(userID, db)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghasilkan access token", "details": err.Error()})
-				return
-			}
-
-			c.JSON(http.StatusOK, gin.H{
-				"access_token": accessToken,
-				"expiry":       expiry,
-			})
+		// Generate GDrive Access Token dari Refresh Token milik user
+		accessToken, expiry, err := GetUserAccessToken(userID, db)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghasilkan access token", "details": err.Error()})
 			return
 		}
 
-		// --- 5a. DEFAULT: Baca file dari folder Google Drive ---
+		c.JSON(http.StatusOK, gin.H{
+			"access_token": accessToken,
+			"expiry":       expiry,
+		})
+	})
+
+	// --- 5b. RUTE INTEGRASI GDRIVE & FORMAT RAW ---
+	// Sengaja tetap publik: dipanggil galeri klien yang diakses lewat magic link
+	// tanpa login.
+	r.GET("/api/gdrive/:folderId", func(c *gin.Context) {
+		folderID := c.Param("folderId")
+
 		files, err := GetImagesFromFolder(folderID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membaca folder Google Drive", "details": err.Error()})
@@ -533,12 +480,8 @@ func SetupRouter() *gin.Engine {
 	})
 
 	// --- 6. RUTE EDIT PROJECT ---
-	r.PUT("/api/projects/:id", func(c *gin.Context) {
-		userID := c.GetHeader("X-User-ID")
-		if userID == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-			return
-		}
+	r.PUT("/api/projects/:id", requireAuth, func(c *gin.Context) {
+		userID := c.GetString(middleware.ContextUserIDKey)
 
 		projectID := c.Param("id")
 		var input CreateProjectInput
@@ -618,12 +561,8 @@ func SetupRouter() *gin.Engine {
 	})
 
 	// --- 7. RUTE DELETE PROJECT ---
-	r.DELETE("/api/projects/:id", func(c *gin.Context) {
-		userID := c.GetHeader("X-User-ID")
-		if userID == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-			return
-		}
+	r.DELETE("/api/projects/:id", requireAuth, func(c *gin.Context) {
+		userID := c.GetString(middleware.ContextUserIDKey)
 
 		projectID := c.Param("id")
 
