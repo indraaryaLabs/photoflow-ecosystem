@@ -61,6 +61,29 @@ func (RateLimit) TableName() string {
 	return "rate_limits"
 }
 
+// OAuthState adalah satu permintaan koneksi Google Drive yang sedang berjalan.
+//
+// Parameter `state` OAuth dulunya berisi user_id mentah dari query string,
+// sehingga penyerang yang tahu user_id korban bisa membuka alur koneksi atas
+// nama korban, menyetujuinya dengan akun Google miliknya sendiri, dan refresh
+// token miliknya tersimpan di profil korban. Sekarang `state` adalah nilai acak
+// yang tidak dapat ditebak, dan pemetaan state ke user disimpan di sini —
+// bukan dititipkan ke pihak yang sedang diautentikasi.
+//
+// Disimpan di Postgres, bukan memori proses, karena backend berjalan sebagai
+// fungsi serverless: permintaan yang memulai alur dan callback yang
+// menyelesaikannya hampir pasti dilayani instance berbeda.
+type OAuthState struct {
+	State     string    `gorm:"column:state;type:text;primaryKey"`
+	UserID    string    `gorm:"column:user_id;type:uuid;not null"`
+	ExpiresAt time.Time `gorm:"column:expires_at;not null;index"`
+	CreatedAt time.Time `gorm:"autoCreateTime"`
+}
+
+func (OAuthState) TableName() string {
+	return "oauth_states"
+}
+
 // StatusSubmitted adalah status project setelah klien mengirim pilihannya.
 // Setelah itu galeri terkunci dan tidak menerima submit lagi.
 const StatusSubmitted = "submitted"

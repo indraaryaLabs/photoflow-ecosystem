@@ -26,7 +26,7 @@ import (
 // managedTables adalah tabel yang skemanya dikelola perintah ini. Setiap
 // penambahan model baru harus ikut didaftarkan di sini, dan kalau terlupa,
 // verifyRLS di bawah yang akan menangkapnya.
-var managedTables = []string{"projects", "photos", "profiles", "rate_limits"}
+var managedTables = []string{"projects", "photos", "profiles", "rate_limits", "oauth_states"}
 
 func main() {
 	if err := run(); err != nil {
@@ -43,7 +43,7 @@ func run() error {
 		return err
 	}
 
-	if err := conn.AutoMigrate(&models.Project{}, &models.Photo{}, &models.RateLimit{}); err != nil {
+	if err := conn.AutoMigrate(&models.Project{}, &models.Photo{}, &models.RateLimit{}, &models.OAuthState{}); err != nil {
 		return fmt.Errorf("automigrate: %w", err)
 	}
 
