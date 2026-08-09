@@ -52,6 +52,7 @@ import concurrent.futures
 import rawpy
 import sentry_sdk
 import urllib.request
+import urllib.error
 import json
 import webbrowser
 import requests
@@ -1130,6 +1131,16 @@ def check_for_updates():
         )
         with urllib.request.urlopen(req, timeout=5) as response:
             data = json.loads(response.read().decode())
+    except urllib.error.HTTPError as e:
+        # 404 dari API release GitHub berarti repo-nya belum punya rilis sama
+        # sekali — keadaan yang normal, bukan kegagalan. Melaporkannya sebagai
+        # error membuat setiap kali aplikasi dibuka terlihat seperti ada yang
+        # rusak.
+        if e.code == 404:
+            print("[PhotoFlow] Belum ada rilis yang dipublikasikan.")
+        else:
+            print(f"[PhotoFlow] Update check failed: HTTP {e.code}")
+        return None
     except Exception as e:
         print(f"[PhotoFlow] Update check failed: {e}")
         return None
