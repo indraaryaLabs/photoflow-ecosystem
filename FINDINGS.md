@@ -27,7 +27,7 @@ Yang TIDAK ikut diturunkan, walau terdengar seperti urusan produk publik:
 
 ---
 
-## F-01 — Kredensial produksi ada di riwayat git (KRITIS)
+## F-01 — Kredensial produksi ada di riwayat git (DITANGANI SEBAGIAN)
 
 **Ditemukan saat:** Fase 1
 **Status:** Kredensial sudah diamankan — sisa pekerjaan pembersihan riwayat
@@ -37,6 +37,10 @@ sudah ter-push ke `origin`. Fase 1 hanya melakukan `git rm --cached`, yang
 menghapus file dari commit berikutnya tapi **tidak menghapusnya dari riwayat**.
 Nilai-nilainya masih bisa diambil siapa pun yang punya akses repo lewat
 `git log` / `git show`.
+
+Catatan: seluruh nilai yang terekspos kini sudah tidak berlaku — password
+Supabase dirotasi, kredensial Google mati bersama akunnya. Rewrite riwayat
+tetap dilakukan untuk kebersihan, bukan karena nilainya masih berbahaya.
 
 Kredensial yang terekspos:
 
