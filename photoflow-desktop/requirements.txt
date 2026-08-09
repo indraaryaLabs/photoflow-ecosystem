@@ -1,0 +1,23 @@
+# Jembatan Python ↔ JavaScript dan server web lokalnya.
+eel>=0.16.0,<0.19
+
+# Pembacaan gambar dan decode RAW untuk thumbnail dan pratinjau.
+Pillow>=10.0.0,<12
+rawpy>=0.20.0,<0.26
+imageio>=2.30.0,<3
+
+# Sesi login. keyring menyimpan refresh token di Keychain (macOS) atau
+# Credential Manager (Windows); tanpanya auth.py jatuh ke berkas 0600 di home
+# directory dan mengumumkannya di log.
+keyring>=24.0.0,<26
+requests>=2.31.0,<3
+
+# Query langsung ke Postgres Supabase, tunduk pada Row Level Security.
+supabase>=2.3.0,<3
+
+# Google Drive API.
+google-api-python-client>=2.0.0,<3
+google-auth>=2.0.0,<3
+
+# Pelaporan crash. Dimatikan dengan PHOTOFLOW_SENTRY_DSN kosong.
+sentry-sdk>=2.0.0,<3
