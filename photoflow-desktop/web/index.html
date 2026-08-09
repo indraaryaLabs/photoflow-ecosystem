@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Eel Python-JS Bridge -->
+    <script type="text/javascript" src="/eel.js"></script>
+    <title>PhotoFlow - Studio Photography Sorter</title>
+    <link rel="icon" type="image/x-icon" href="assets/icon.ico?v=3">
+    <link rel="shortcut icon" type="image/x-icon" href="assets/icon.ico?v=3">
+    <!-- Font dan ikon dibundel lokal: aplikasi ini punya mode offline, jadi
+         tidak boleh ada aset yang diambil dari jaringan saat dibuka. -->
+    <link rel="stylesheet" href="assets/vendor/inter.css">
+    <script src="assets/vendor/lucide.min.js"></script>
+
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+
+<body>
+
+    <!-- LOGIN OVERLAY (Hybrid SaaS) -->
+    <div class="login-overlay" id="login-overlay">
+        <div class="login-card">
+            <div class="login-brand">
+                <i data-lucide="aperture"></i>
+                <span>PhotoFlow</span>
+            </div>
+            <p class="login-subtitle">Sign in to your account</p>
+
+            <div class="login-form">
+                <div class="login-field">
+                    <label for="login-email">Email</label>
+                    <input type="email" id="login-email" placeholder="your@email.com" autocomplete="email">
+                </div>
+                <div class="login-field">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+                </div>
+                <div class="login-error" id="login-error" style="display: none;"></div>
+                <button class="login-btn" id="btn-login">
+                    <i data-lucide="log-in" style="width: 18px; height: 18px;"></i>
+                    <span id="login-btn-text">Sign In</span>
+                </button>
+
+                <div style="text-align: center; margin-top: 16px;">
+                    <p style="color: #9ca3af; font-size: 0.85em; margin-bottom: 8px;">Tidak ada koneksi internet?</p>
+                    <button type="button" id="btn-offline-mode"
+                        style="background: transparent; border: 1px solid #4b5563; color: #d1d5db; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.9em; transition: all 0.2s;">
+                        Gunakan Mode Offline (Lokal)
+                    </button>
+                </div>
+            </div>
+
+            <p class="login-footer">Powered by PhotoFlow Cloud</p>
+        </div>
+    </div>
+
+    <!-- OFFLINE MODE BADGE (hidden, kept for applyOfflineMode compatibility) -->
+    <div id="offline-badge" style="display: none;"></div>
+
+    <!-- SIDEBAR NAVIGATION & ACTIONS -->
+    <aside class="sidebar">
+        <div class="brand">
+            <i data-lucide="aperture"></i>
+            <span>PhotoFlow</span>
+        </div>
+
+        <div class="section">
+            <div class="section-title">1. DATA SOURCES</div>
+
+            <button class="nav-item active" id="nav-local-workspace">
+                <i data-lucide="monitor" style="width: 18px; height: 18px;"></i> Local Workspace
+            </button>
+
+            <button class="folder-btn sub-nav-item" id="btn-source-folder">
+                <div class="folder-label">
+                    <i data-lucide="folder-search-2"></i> Source Path
+                </div>
+                <div class="folder-path" id="source-path" title="Not selected">Select folder...</div>
+            </button>
+
+            <button class="nav-item" id="nav-cloud-workspace" style="margin-top: 8px;">
+                <i data-lucide="cloud" style="color: #60a5fa; width: 18px; height: 18px;"></i> Cloud Workspace
+            </button>
+        </div>
+
+        <div class="section">
+            <div class="section-title">2. AUTOMATION</div>
+            <!-- SYNC CLIENT SELECTIONS BUTTON -->
+            <button class="folder-btn" id="btn-fetch-selections" data-requires-online="true" data-requires-pro="true">
+                <div class="folder-label" style="color: var(--text-main);">
+                    <i data-lucide="cloud-download"></i> Fetch Client Selections
+                </div>
+                <div class="folder-path" style="color: var(--text-muted); padding-left: 24px; white-space: normal;">
+                    Fetch from Supabase</div>
+            </button>
+            <!-- WEB ADMIN PORTAL SHORTCUT -->
+            <button class="folder-btn" id="btn-open-web-admin" data-requires-online="true" data-requires-pro="true">
+                <div class="folder-label" style="color: var(--accent-hover, #818cf8);">
+                    <i data-lucide="external-link"></i> Manage Client Projects
+                </div>
+                <div class="folder-path" style="color: var(--text-muted); padding-left: 24px; white-space: normal;">Open
+                    in browser</div>
+            </button>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="section" style="margin-bottom: 0;">
+            <div class="section-title" id="selection-counter">3. ACTIONS (0 Selected)</div>
+
+            <button class="folder-btn" id="btn-dest-folder" style="margin-bottom: 12px;">
+                <div class="folder-label">
+                    <i data-lucide="folder-output"></i> Destination
+                </div>
+                <div class="folder-path" id="dest-path" title="Not selected">Select folder...</div>
+            </button>
+
+            <!-- VERTICAL ACTION GROUP -->
+            <div style="display: flex; gap: 8px; flex-direction: column;">
+                <div class="action-row-horizontal" style="display: flex; gap: 8px; width: 100%; margin-bottom: 8px;">
+                    <button class="action-btn primary" id="btn-copy" disabled
+                        style="display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 8px !important; flex: 1;">
+                        <i data-lucide="copy" style="width: 16px; height: 16px; flex-shrink: 0;"></i>
+                        <div
+                            style="display: flex; flex-direction: column; text-align: left; line-height: 1.1; font-size: 0.7rem; white-space: normal !important;">
+                            <span id="copy-text-main">Copy</span>
+                            <span id="copy-text-sub">Selected</span>
+                        </div>
+                    </button>
+                    <button class="action-btn secondary" id="btn-move" disabled
+                        style="display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 8px !important; flex: 1;">
+                        <i data-lucide="arrow-right-left" style="width: 16px; height: 16px; flex-shrink: 0;"></i>
+                        <div
+                            style="display: flex; flex-direction: column; text-align: left; line-height: 1.1; font-size: 0.7rem; white-space: normal !important;">
+                            <span id="move-text-main">Move</span>
+                            <span id="move-text-sub">Selected</span>
+                        </div>
+                    </button>
+                </div>
+
+                <button class="action-btn danger" id="btn-cancel" style="display: none;">
+                    <i data-lucide="x-circle"></i> Cancel Process
+                </button>
+
+                <button class="action-btn drive" id="btn-drive-upload" disabled>
+                    <i id="btn-sync-icon" data-lucide="cloud-upload"></i> <span id="btn-sync-text">Upload to
+                        Cloud</span>
+                </button>
+                <button class="action-btn danger" id="btn-trash-selected" disabled style="display: none;">
+                    <i data-lucide="trash-2"></i> Move to Trash
+                </button>
+            </div>
+        </div>
+
+    </aside>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="main-content">
+
+        <!-- TOP APP BAR -->
+        <header class="header">
+            <div class="search-bar">
+                <i data-lucide="search"></i>
+                <input type="text" id="main-search-input" placeholder="Search filenames...">
+            </div>
+
+            <div class="header-controls">
+                <div class="filter-dropdown" id="format-filter-container">
+                    <button class="dropdown-btn" id="btn-format-filter">
+                        <i data-lucide="filter" style="width: 16px; height: 16px;"></i>
+                        Format Filter
+                        <i data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>
+                    </button>
+                    <div class="filter-panel" id="format-filter-panel">
+                        <div class="filter-panel-header">
+                            <i data-lucide="camera" style="width: 18px; height: 18px;"></i>
+                            <span>Pilih tipe file RAW:</span>
+                        </div>
+                        <div class="filter-grid" id="format-checkboxes">
+                            <label class="checkbox-label"><input type="checkbox" value="ARW" checked><span
+                                    class="checkmark"></span>Sony (.ARW)</label>
+                            <label class="checkbox-label"><input type="checkbox" value="CR2" checked><span
+                                    class="checkmark"></span>Canon (.CR2)</label>
+                            <label class="checkbox-label"><input type="checkbox" value="CR3" checked><span
+                                    class="checkmark"></span>Canon (baru) (.CR3)</label>
+                            <label class="checkbox-label"><input type="checkbox" value="NEF" checked><span
+                                    class="checkmark"></span>Nikon (.NEF)</label>
+                            <label class="checkbox-label"><input type="checkbox" value="NRW" checked><span
+                                    class="checkmark"></span>Nikon (alt) (.NRW)</label>
+                            <label class="checkbox-label"><input type="checkbox" value="RAF" checked><span
+                                    class="checkmark"></span>Fujifilm (.RAF)</label>
+                            <label class="checkbox-label"><input type="checkbox" value="RW2" checked><span
+                                    class="checkmark"></span>Panasonic (.RW2)</label>
+                            <label class="checkbox-label"><input type="checkbox" value="ORF" checked><span
+                                    class="checkmark"></span>Olympus (.ORF)</label>
+                            <label class="checkbox-label"><input type="checkbox" value="PEF" checked><span
+                                    class="checkmark"></span>Pentax (.PEF)</label>
+                            <label class="checkbox-label"><input type="checkbox" value="DNG" checked><span
+                                    class="checkmark"></span>Leica / Umum (.DNG)</label>
+                            <label class="checkbox-label"><input type="checkbox" value="JPG" checked><span
+                                    class="checkmark"></span>JPEG (.JPG)</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="zoom-control" title="Adjust Thumbnail Size">
+                    <i data-lucide="image"></i>
+                    <input type="range" class="zoom-slider" id="zoom-slider" min="120" max="400" value="120">
+                    <i data-lucide="image" class="large"></i>
+                </div>
+            </div>
+
+            <div class="header-tools">
+                <div class="tooltip-container" style="position: relative; display: inline-block;">
+                    <button id="btn-drive-account" class="icon-btn" data-requires-online="true"
+                        style="display: flex; gap: 8px; width: auto; padding: 6px 12px;"
+                        title="Manage Google Drive Account">
+                        <i id="drive-auth-icon" data-lucide="cloud-off"></i> <span id="drive-auth-text"
+                            style="font-size: 13px; font-weight: 600;">Disconnected</span>
+                    </button>
+                    <div class="feature-tooltip tooltip-header">This feature requires an internet connection.</div>
+                </div>
+                <button class="icon-btn" id="btn-theme-toggle" title="Toggle Light/Dark Mode">
+                    <i data-lucide="moon"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- TABS HEADER -->
+        <div class="tabs-header">
+            <button class="tab-btn active" data-target="tab-visual">
+                <i data-lucide="grid"></i> Visual Select
+            </button>
+            <button class="tab-btn" data-target="tab-bulk">
+                <i data-lucide="list"></i> Bulk List Input
+            </button>
+        </div>
+
+        <div class="tab-content active" id="tab-visual" style="flex: 1; display: flex; flex-direction: column;">
+            <div id="empty-state"
+                style="display: none; height: 100%; flex-direction: column; align-items: center; justify-content: center; opacity: 0.5; color: var(--text-muted); text-align: center;">
+                <i data-lucide="folder-open" style="width: 64px; height: 64px; margin-bottom: 16px;"></i>
+                <p style="font-size: 1rem; font-weight: 500;">No workspace selected. Please choose a Local Source Path
+                    to begin.</p>
+            </div>
+
+            <div class="content-wrapper photo-grid-container" style="display: flex; flex-direction: column; flex: 1;">
+                <div class="grid-header">
+                    <div>
+                        <h1 class="grid-title">Workspace Gallery</h1>
+                        <div class="grid-subtitle" id="grid-subtitle">Displaying valid media files from the selected
+                            path.</div>
+                    </div>
+                    <button class="select-all-btn" id="btn-select-all">Select All</button>
+                </div>
+
+                <div class="photo-grid" id="photo-grid">
+                    <!-- JavaScript will inject photo cards here -->
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-bulk">
+            <div class="bulk-input-container" style="display: flex; flex-direction: column; height: 100%;">
+                <div class="bulk-header-actions">
+                    <div>
+                        <h1 class="grid-title">Bulk List Input</h1>
+                        <div class="grid-subtitle">Paste a list of exact filenames separated by commas or newlines
+                            (e.g., DSC_001.RAW, DSC_002.JPG).</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 16px; flex: 1; min-height: 0; margin-top: 12px;">
+                    <!-- KOLOM KIRI: Input 60% -->
+                    <div style="flex: 6; display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div class="validation-text" id="bulk-validation">Waiting for input...</div>
+                            <button class="select-all-btn" id="btn-clear-bulk"
+                                style="display: flex; align-items: center; gap: 4px;">
+                                <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i> Clear
+                            </button>
+                        </div>
+                        <textarea class="bulk-textarea" id="bulk-textarea" placeholder="Paste your filenames here..."
+                            style="margin: 0; flex: 1;"></textarea>
+                    </div>
+
+                    <!-- KOLOM KANAN: Status Log 40% -->
+                    <div class="status-panel-container" style="flex: 4;">
+                        <div class="status-panel-header"
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span
+                                style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Execution
+                                Status</span>
+                            <button id="btn-clear-log"
+                                style="background: transparent; border: none; color: #818cf8; display: flex; align-items: center; gap: 4px; font-size: 0.75rem; cursor: pointer; padding: 0; outline: none;">
+                                <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i> Clear
+                            </button>
+                        </div>
+                        <div id="bulk-status-list" class="status-list-content">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NEW DRIVE EXPLORER VIEW -->
+        <div id="drive-explorer-view" class="tab-content"
+            style="display: none; height: 100%; overflow-y: auto; width: 100%; padding-right: 16px;">
+            <div style="padding: 24px 32px 0 32px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px;">
+                    <h1 class="grid-title" style="display: flex; align-items: center; gap: 10px; margin-bottom: 0;">
+                        <i data-lucide="cloud" style="color: #60a5fa;"></i> Google Drive
+                    </h1>
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <span id="drive-new-folder"
+                            style="cursor: pointer; color: var(--primary-color); font-weight: 500; font-size: 13px; transition: opacity 0.2s; display: flex; align-items: center; gap: 4px;"><i
+                                data-lucide="folder-plus" style="width: 14px; height: 14px;"></i> New Folder</span>
+                        <span id="drive-select-all-text"
+                            style="cursor: pointer; color: var(--primary-color); font-weight: 500; font-size: 13px; transition: opacity 0.2s;">Select
+                            All</span>
+                    </div>
+                </div>
+                <div class="drive-breadcrumbs" id="drive-breadcrumbs">
+                    <!-- Breadcrumbs will be injected here -->
+                </div>
+            </div>
+
+            <div id="drive-grid" style="padding: 24px 32px;">
+                <!-- Drive items will be injected here -->
+            </div>
+        </div>
+    </main>
+
+    <!-- ADVANCED TOAST NOTIFICATION -->
+    <div class="toast" id="toast">
+        <div class="toast-header" id="toast-header">
+            <i data-lucide="info" id="toast-icon"></i>
+            <span id="toast-message">Action completed.</span>
+            <button class="close-toast" id="btn-close-toast"><i data-lucide="x"
+                    style="width: 16px; height: 16px;"></i></button>
+        </div>
+        <div class="toast-body" id="toast-body">
+            <ul id="toast-list"></ul>
+        </div>
+    </div>
+
+    <!-- LIGHTBOX OVERLAY -->
+    <div class="lightbox-overlay" id="lightbox-overlay">
+        <button class="lightbox-close" id="lightbox-close" title="Close (Esc)">
+            <i data-lucide="x" style="width:24px;height:24px;"></i>
+        </button>
+
+        <!-- Zoom viewport (handles pan/scroll) -->
+        <div class="lightbox-viewport" id="lightbox-viewport">
+            <img class="lightbox-image" id="lightbox-image" alt="High-res preview" draggable="false">
+        </div>
+
+        <div class="lightbox-spinner" id="lightbox-spinner">
+            <div class="spinner-ring"></div>
+        </div>
+
+        <div class="lightbox-toolbar" id="lightbox-toolbar">
+            <span class="lightbox-filename" id="lightbox-filename"></span>
+
+            <div class="lightbox-zoom-controls">
+                <button class="lightbox-tool-btn" id="lightbox-zoom-out" title="Zoom Out (-)">
+                    <i data-lucide="zoom-out" style="width:16px;height:16px;"></i>
+                </button>
+                <span class="lightbox-zoom-level" id="lightbox-zoom-level">100%</span>
+                <button class="lightbox-tool-btn" id="lightbox-zoom-in" title="Zoom In (+)">
+                    <i data-lucide="zoom-in" style="width:16px;height:16px;"></i>
+                </button>
+                <button class="lightbox-tool-btn" id="lightbox-zoom-reset" title="Reset Zoom (0)">
+                    <i data-lucide="maximize-2" style="width:16px;height:16px;"></i>
+                </button>
+            </div>
+
+            <button class="lightbox-open-os" id="lightbox-open-os" title="Open in system viewer">
+                <i data-lucide="external-link" style="width:16px;height:16px;"></i>
+                <span>Open in App</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- UPLOAD PROGRESS MODAL -->
+    <div class="upload-modal" id="upload-modal">
+        <div class="upload-modal-card">
+            <div class="upload-modal-icon">
+                <i data-lucide="cloud-upload" style="width:40px;height:40px;"></i>
+            </div>
+            <h2 class="upload-modal-title">Uploading to Google Drive</h2>
+            <div class="upload-progress-track">
+                <div class="upload-progress-bar" id="upload-progress-bar"></div>
+            </div>
+            <p class="upload-status-text" id="upload-status-text">Preparing upload...</p>
+            <p class="upload-counter" id="upload-counter">0 / 0 files</p>
+        </div>
+    </div>
+
+    <!-- DRIVE MOVE MODAL -->
+    <div class="upload-modal" id="drive-move-modal" style="display: none;">
+        <div class="upload-modal-card"
+            style="max-width: 500px; width: 90%; max-height: 80vh; display: flex; flex-direction: column; text-align: left; padding: 0;">
+            <div style="padding: 24px; border-bottom: 1px solid var(--border-light);">
+                <h2 style="font-size: 1.25rem; font-weight: 500; margin: 0 0 12px 0;">Select Destination</h2>
+                <div class="drive-breadcrumbs" id="modal-breadcrumbs" style="margin-top: 0;">
+                    <!-- Modal Breadcrumbs injected here -->
+                </div>
+            </div>
+
+            <div id="modal-folder-list" style="flex: 1; overflow-y: auto; padding: 12px;">
+                <!-- Folder items injected here -->
+            </div>
+
+            <div
+                style="padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; gap: 12px; background: rgba(0,0,0,0.2);">
+                <button class="action-btn secondary" id="btn-modal-cancel">Cancel</button>
+                <button class="action-btn primary" id="btn-modal-move">Move Here</button>
+                <button class="action-btn secondary" id="btn-modal-preview" style="display: none;">Quick Preview
+                    (Kompres)</button>
+                <button class="action-btn primary" id="btn-modal-backup" style="display: none;">Full Backup
+                    (RAW)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PROJECT SYNC MODAL -->
+    <div class="upload-modal" id="project-sync-modal" style="display: none;">
+        <div class="upload-modal-card"
+            style="max-width: 500px; width: 90%; max-height: 80vh; display: flex; flex-direction: column; text-align: left; padding: 0;">
+            <div style="padding: 24px; border-bottom: 1px solid var(--border-light);">
+                <h2 style="font-size: 1.25rem; font-weight: 500; margin: 0 0 12px 0;"><i data-lucide="database"
+                        style="vertical-align: middle; margin-right: 8px; width: 20px; height: 20px;"></i>Select Project
+                    Workspace</h2>
+            </div>
+
+            <div id="project-list-container"
+                style="flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                <!-- Project cards injected here -->
+            </div>
+
+            <div
+                style="padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; gap: 12px; background: rgba(0,0,0,0.2);">
+                <button class="action-btn secondary" id="btn-project-sync-cancel">Close</button>
+                <button class="action-btn primary" id="btn-consolidate-raws" disabled>Consolidate RAW Files</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script src="assets/js/script.js"></script>
+    <!-- OFFLINE FLOATING WIDGET -->
+    <div id="offline-widget" class="hidden glass-widget">
+        <div id="offline-widget-header"
+            style="padding: 12px 16px 8px; cursor: grab; display: flex; align-items: center; justify-content: space-between;">
+            <span
+                style="font-size: 0.75em; text-transform: uppercase; letter-spacing: 1.5px; color: #fbbf24; display: flex; align-items: center; gap: 6px; font-weight: 700;">
+                <i data-lucide="wifi-off" style="width: 14px; height: 14px;"></i> Offline Mode
+            </span>
+            <button id="btn-close-offline-widget"
+                style="background: transparent; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background 0.2s;">
+                <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+            </button>
+        </div>
+        <div style="padding: 0 16px 16px; text-align: left;">
+            <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5;">This
+                feature is disabled. You can only sort local files.</p>
+            <button id="btn-relogin-offline"
+                style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.4); padding: 10px; border-radius: 8px; font-size: 0.85em; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; transition: all 0.2s; backdrop-filter: blur(4px);">
+                <i data-lucide="log-in" style="width: 16px; height: 16px;"></i> Connect Account
+            </button>
+        </div>
+    </div>
+
+</body>
+
+</html>

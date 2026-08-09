@@ -144,7 +144,7 @@ Sisa yang masih perlu ditinjau ada di F-16 (policy `profiles` memakai peran
 ## F-04 — Desktop harvester perlu diperbarui: `/api/login-desktop` dihapus
 
 **Ditemukan saat:** Fase 3.1
-**Status:** Perlu tindakan di repo desktop app (di luar repo ini)
+**Status:** SELESAI — aplikasi desktop kini ada di repo ini
 
 Fase 3.1 menghapus `POST /api/login-desktop`. Rute itu query langsung ke tabel
 `auth.users` milik Supabase dan membandingkan hash bcrypt sendiri — menembus
@@ -170,6 +170,23 @@ Alur pengganti, tanpa backend sebagai perantara:
 
 Keuntungannya: password tidak pernah melewati backend PhotoFlow sama sekali,
 dan backend tidak lagi butuh akses baca ke `auth.users`.
+
+**Penutupan.** Aplikasi desktop digabung ke repo ini sebagai `photoflow-desktop/`
+dan alur di atas diterapkan persis. Login ada di `photoflow-desktop/auth.py`:
+`SupabaseSession.sign_in()` menukar email dan password lewat
+`grant_type=password`, `refresh()` memakai `grant_type=refresh_token`, dan
+`access_token()` memperbarui sendiri saat sisa umurnya di bawah dua menit.
+Refresh token disimpan di keyring OS; pada sistem tanpa backend keyring ia
+jatuh ke berkas 0600 dan mengumumkan hal itu di log alih-alih diam.
+
+Satu hal yang tidak disebut resep aslinya tapi muncul saat menerapkannya:
+Supabase memutar refresh token setiap kali dipakai. Karena Eel melayani tiap
+panggilan frontend di worker-nya sendiri, dua permintaan Drive yang berbarengan
+bisa sama-sama mendapati token kedaluwarsa dan sama-sama menukar refresh token
+yang sama — yang kalah cepat lalu memegang token yang sudah dibatalkan, dan
+kegagalannya baru muncul jauh setelahnya. Pembaruan token karena itu dijaga satu
+kunci, dan ada tesnya di
+`photoflow-desktop/tests/test_auth.py::test_refresh_bersamaan_hanya_sekali`.
 
 ---
 
@@ -628,7 +645,7 @@ frontend menyelaraskan bentuk pada jalur cadangan terakhirnya.
 ## F-21 — Pemanggil luar `/api/auth/google/login` akan patah
 
 **Ditemukan saat:** Fase 2
-**Status:** Perlu tindakan di luar repo ini
+**Status:** SELESAI — pemanggilnya kini ada di repo ini
 
 `GET /api/auth/google/login?user_id=...` diganti `POST /api/auth/google/url`
 yang menuntut JWT Supabase. Grep di web portal tidak menemukan satu pun
@@ -645,6 +662,22 @@ Pemanggil itu akan berhenti bekerja. Alur penggantinya:
 Perlu diperiksa juga apakah desktop app menangani `409` berkode
 `drive_not_connected` dan `drive_reconnect_required` dari `/api/gdrive/token`,
 yang kini menggantikan error mentah.
+
+**Penutupan.** Pemanggil yang dimaksud memang aplikasi desktop, dan sekarang ia
+ada di repo ini. `open_google_login()` di `photoflow-desktop/main.py` memanggil
+`POST /api/auth/google/url` dengan Bearer JWT lalu membuka `auth_url` dari
+responsnya; tidak ada lagi `user_id` yang dikirim sebagai data.
+
+Header `X-User-ID` yang dulu ikut pada setiap permintaan ke `/api/gdrive/token`
+juga dihapus. Backend sudah lama mengabaikannya, tapi selama masih dikirim ia
+membuat pembaca kode mengira identitas masih ditentukan pengirim. Ada tes yang
+menjaga itu:
+`photoflow-desktop/tests/test_gdrive.py::test_hanya_authorization_yang_dikirim`.
+
+Kedua kode 409 ditangani: `gdrive._fetch_access_token()` mengubahnya jadi
+`DriveNotConnected` yang membawa kodenya sendiri, dibedakan dari kegagalan sesi
+karena tindakan yang diminta ke user berbeda — yang satu perlu menghubungkan
+Drive, yang lain perlu login ulang.
 
 ---
 

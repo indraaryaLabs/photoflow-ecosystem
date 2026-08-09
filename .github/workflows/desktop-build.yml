@@ -1,0 +1,96 @@
+name: Desktop Build
+
+# Aplikasi desktop dibangun untuk dua sistem dari satu sumber. Sebelumnya
+# Windows dan macOS tinggal di dua repo terpisah yang isinya 99% sama, dan
+# perbaikan yang masuk ke salah satunya tidak pernah sampai ke yang lain.
+# Matrix di bawah ini menggantikan pemisahan itu: yang berbeda antar sistem
+# tinggal ikon, pemisah --add-data, dan cara hasilnya dikemas.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'photoflow-desktop/**'
+      - '.github/workflows/desktop-build.yml'
+  pull_request:
+    paths:
+      - 'photoflow-desktop/**'
+      - '.github/workflows/desktop-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      # Kegagalan di satu sistem tidak membatalkan yang lain: saat sebuah
+      # perubahan hanya merusak salah satunya, hasil yang satu lagi justru
+      # informasi yang dibutuhkan untuk menemukan sebabnya.
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macOS
+            icon: web/assets/icon.icns
+            # PyInstaller memakai ':' sebagai pemisah --add-data di POSIX dan
+            # ';' di Windows.
+            add_data: 'web:web'
+            artifact: PhotoFlow-macOS
+          - os: windows-latest
+            label: Windows
+            icon: web/assets/icon.ico
+            add_data: 'web;web'
+            artifact: PhotoFlow-Windows
+
+    defaults:
+      run:
+        working-directory: photoflow-desktop
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: photoflow-desktop/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build
+        shell: bash
+        # --onefile sengaja TIDAK dipakai. Bundle onefile mengekstrak dirinya
+        # ke direktori sementara setiap kali dijalankan, dan dengan aset web
+        # plus pustaka RAW di dalamnya itu berarti jeda beberapa detik pada
+        # setiap kali aplikasi dibuka.
+        run: |
+          pyinstaller main.py \
+            --noconfirm \
+            --windowed \
+            --name PhotoFlow \
+            --icon "${{ matrix.icon }}" \
+            --add-data "${{ matrix.add_data }}" \
+            --hidden-import bottle \
+            --hidden-import engineio.async_drivers.gevent
+
+      - name: Package macOS bundle
+        if: runner.os == 'macOS'
+        # .app adalah direktori berisi symlink dan berkas dengan bit eksekusi.
+        # upload-artifact meratakan keduanya, jadi bundle-nya dikemas lebih dulu
+        # dengan ditto — hasil unduhannya tetap bisa dijalankan.
+        run: ditto -c -k --keepParent dist/PhotoFlow.app dist/PhotoFlow-macOS.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            photoflow-desktop/dist/PhotoFlow-macOS.zip
+            photoflow-desktop/dist/PhotoFlow/
+          if-no-files-found: error
+          retention-days: 14
