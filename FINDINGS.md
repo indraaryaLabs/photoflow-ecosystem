@@ -6,6 +6,25 @@ Tidak diperbaiki di sini — hanya dicatat.
 Aturan file ini: **tidak boleh berisi nilai kredensial apa pun.** Hanya nama
 variabel dan deskripsi masalah.
 
+## Cara membaca daftar ini
+
+Project ini masih tahap pengembangan, bukan produk berlangganan. Dua hal yang
+sedang dikejar: **aplikasi berjalan benar dari ujung ke ujung**, dan **repo yang
+layak dibaca**. Temuan yang alasannya semata "tidak layak untuk produk publik"
+sengaja diturunkan prioritasnya, dan penurunan itu ditulis di entri
+masing-masing supaya alasannya bisa ditinjau ulang kalau keadaan berubah.
+
+Yang TIDAK ikut diturunkan, walau terdengar seperti urusan produk publik:
+
+- **Isolasi antar pengguna.** Satu pengguna membaca atau mengubah data pengguna
+  lain adalah aplikasi yang berjalan salah, bukan kekurangan pengerasan. Dengan
+  tiga akun pun tetap salah.
+- **Kehilangan data.** Pekerjaan klien yang hilang permanen tidak jadi lebih
+  ringan karena penggunanya sedikit.
+- **Apa yang terbaca pembaca repo.** Repo ini publik dan ditujukan untuk dibaca
+  peninjau teknis, jadi hal yang memalukan saat dibaca tetap perlu dibereskan
+  walau tidak lagi berbahaya.
+
 ---
 
 ## F-01 — Kredensial produksi ada di riwayat git (KRITIS)
@@ -56,6 +75,14 @@ tetap memuat nilainya selama belum ditulis ulang.
 
 Rewrite riwayat saja **tidak cukup** dan bukan pengganti langkah 2. Clone,
 fork, dan cache yang sudah ada bisa tetap menyimpan commit lama.
+
+**Prioritas.** Setelah langkah 1 dan 2 selesai, tidak ada lagi kredensial hidup
+di riwayat, jadi alasan keamanannya sudah habis. Yang tersisa adalah alasan
+presentasi, dan itu justru relevan dengan tujuan repo ini: repo-nya publik dan
+ditujukan untuk dibaca peninjau teknis, dan `git log` masih memperlihatkan
+private key service account di dalam `.env` yang ter-commit. Peninjau yang
+menemukannya tidak akan tahu kunci itu sudah mati. Kerjakan sebelum repo
+disodorkan ke siapa pun, bukan karena mendesak secara teknis.
 
 ---
 
@@ -145,7 +172,13 @@ dan backend tidak lagi butuh akses baca ke `auth.users`.
 ## F-05 — Alur OAuth Google memakai `user_id` mentah sebagai `state`
 
 **Ditemukan saat:** Fase 3.1
-**Status:** BELUM DITANGANI — di luar cakupan 3.1, relevan untuk Fase 2
+**Status:** BELUM DITANGANI — dikerjakan bersama Fase 2
+
+**Prioritas diturunkan.** Serangannya menuntut penyerang mengetahui user_id
+korban dan memancing korban menyelesaikan alur OAuth, pada aplikasi yang saat
+ini punya tiga akun dan belum dipakai siapa pun di luar pengembangnya. Bukan
+diabaikan: alur OAuth memang dibangun ulang di Fase 2, dan perbaikannya paling
+murah dikerjakan di sana sekalian, bukan sebagai tambalan terpisah sekarang.
 
 `GET /api/auth/google/login` menerima `user_id` sebagai query parameter dan
 meneruskannya apa adanya sebagai parameter `state` OAuth. Callback lalu
@@ -408,7 +441,12 @@ Sudah dikerjakan di Fase 5:
 ## F-15 — `handle_new_user()` SECURITY DEFINER bisa dieksekusi lewat REST API
 
 **Ditemukan saat:** pemeriksaan Supabase setelah Fase 4
-**Status:** BELUM DITANGANI
+**Status:** BELUM DITANGANI — prioritas rendah, perbaikannya satu baris
+
+**Prioritas diturunkan.** Dampaknya bergantung pada isi fungsinya, dan pada
+tahap ini fungsi itu hanya membuat baris profil untuk user yang memang baru
+mendaftar. Tetap dicatat karena perbaikannya satu perintah `REVOKE`, jadi
+mengerjakannya nanti tidak akan lebih mahal daripada sekarang.
 
 Advisor melaporkan dua peringatan untuk fungsi yang sama:
 
@@ -443,7 +481,14 @@ dieksekusi oleh pemilik tabel, bukan oleh peran pemanggil REST.
 ## F-16 — Policy `profiles` memakai peran `public` dan tidak punya INSERT
 
 **Ditemukan saat:** pemeriksaan Supabase setelah Fase 4
-**Status:** BELUM DITANGANI
+**Status:** BELUM DITANGANI — TIDAK diturunkan prioritasnya
+
+**Kenapa tidak diturunkan.** Ini bukan pengerasan untuk produk publik, melainkan
+pertanyaan apakah aplikasinya berjalan benar: kalau klausa `USING` policy-nya
+tidak membatasi ke baris sendiri, satu pengguna bisa membaca
+`gdrive_refresh_token` milik pengguna lain — dan token itu memberi akses ke
+Google Drive orang tersebut. Dengan tiga akun pun itu tetap salah. Menyelesaikan
+pertanyaan ini butuh satu query untuk membaca isi policy-nya.
 
 `profiles` punya policy untuk SELECT dan UPDATE, keduanya menyasar peran
 `public`, dan tidak ada policy untuk INSERT.
@@ -505,16 +550,18 @@ langsung ke database.
 ## F-18 — Perlindungan password bocor tidak aktif di Supabase Auth
 
 **Ditemukan saat:** pemeriksaan Supabase setelah Fase 4
-**Status:** BELUM DITANGANI — satu saklar, bukan perubahan kode
+**Status:** DITUTUP — tidak tersedia di paket yang dipakai
 
 Advisor melaporkan `auth_leaked_password_protection` dalam keadaan mati.
-Supabase Auth dapat memeriksa password baru terhadap basis data kebocoran
-HaveIBeenPwned dan menolak yang sudah pernah bocor.
+Ternyata fitur itu hanya tersedia di Supabase Pro Plan, jadi tidak bisa
+dinyalakan pada project ini.
 
-Tidak menuntut perubahan kode sama sekali, hanya saklar di Dashboard → Auth.
-Dicatat karena akun admin di sini memegang akses ke seluruh project fotografer
-dan ke refresh token Google Drive mereka, sehingga password yang bisa ditebak
-lebih berbahaya dari biasanya.
+Sebagai gantinya, panjang minimum password dinaikkan dari bawaan Supabase (6)
+menjadi 8. Itu bukan pengganti setara — pemeriksaan terhadap basis data
+kebocoran menangkap password yang panjang tapi sudah pernah bocor — tapi ini
+yang tersedia tanpa berpindah paket.
+
+Dibuka lagi kalau project berpindah ke Pro.
 
 ---
 
