@@ -1,4 +1,4 @@
-package app
+package models_test
 
 import (
 	"bytes"
@@ -8,25 +8,9 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-)
 
-// submitSelectionInput MENYALIN struct anonim di dalam handler
-// POST /api/p/:magic_link/submit.
-//
-// Salinan ini adalah kelemahan tes ini dan perlu disebut terang-terangan:
-// struct aslinya dideklarasikan inline di dalam closure handler, sehingga tidak
-// bisa dirujuk dari luar. Kalau tag di handler berubah dan salinan ini tidak,
-// tes tetap hijau sambil menguji sesuatu yang sudah tidak dipakai lagi.
-//
-// Fase 5 memecah router menjadi paket terpisah; saat itu struct ini sebaiknya
-// diangkat jadi tipe bernama dan tes ini diarahkan ke tipe aslinya. Lihat F-11
-// di FINDINGS.md.
-type submitSelectionInput struct {
-	SelectedPhotos []struct {
-		DriveID  string `json:"drive_id" binding:"max=200"`
-		FileName string `json:"file_name" binding:"max=500"`
-	} `json:"selected_photos" binding:"required,max=5000,dive"`
-}
+	"photoflow-backend/models"
+)
 
 // bindJSON menjalankan body melalui binding gin persis seperti handler, lalu
 // melaporkan apakah input diterima.
@@ -101,7 +85,7 @@ func TestCreateProjectInputLimits(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var input CreateProjectInput
+			var input models.CreateProjectInput
 			if got := bindJSON(t, &input, tc.body); got != tc.accepted {
 				t.Fatalf("diterima=%v, seharusnya %v", got, tc.accepted)
 			}
@@ -126,18 +110,17 @@ func TestSubmitSelectionInputLimits(t *testing.T) {
 		{"drive_id 201 char lewat batas", map[string]any{
 			"selected_photos": []any{photo(strings.Repeat("a", 201), "foto.jpg")}}, false},
 
-		// Mengunci perilaku yang ADA SEKARANG, bukan yang diinginkan: `required`
-		// tidak menolak array kosong. Handler akan menghapus seluruh foto lalu
-		// mengunci galeri tanpa menyisakan satu pun pilihan. Lihat F-10 di
-		// FINDINGS.md; perbaikannya masuk Fase 4 bersama pembungkusan transaksi.
-		// Kalau tes ini mulai gagal, kemungkinan besar itu justru perbaikannya —
-		// perbarui ekspektasi di sini.
-		{"array kosong diterima (perilaku lama, lihat F-10)", map[string]any{"selected_photos": []any{}}, true},
+		// `required` pada slice tidak menolak array kosong, jadi binding tetap
+		// meloloskannya. Penolakannya ada satu lapis di atas: handler submit
+		// membalas 400 sebelum menyentuh database. Kasus ini mengunci pembagian
+		// tugas itu — kalau mulai gagal, artinya perilaku binding berubah dan
+		// penjagaan di handler perlu ditinjau ulang. Lihat F-10 di FINDINGS.md.
+		{"array kosong lolos binding, ditolak handler (lihat F-10)", map[string]any{"selected_photos": []any{}}, true},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var input submitSelectionInput
+			var input models.SubmitSelectionInput
 			if got := bindJSON(t, &input, tc.body); got != tc.accepted {
 				t.Fatalf("diterima=%v, seharusnya %v", got, tc.accepted)
 			}

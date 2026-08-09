@@ -6,12 +6,31 @@ Tidak diperbaiki di sini — hanya dicatat.
 Aturan file ini: **tidak boleh berisi nilai kredensial apa pun.** Hanya nama
 variabel dan deskripsi masalah.
 
+## Cara membaca daftar ini
+
+Project ini masih tahap pengembangan, bukan produk berlangganan. Dua hal yang
+sedang dikejar: **aplikasi berjalan benar dari ujung ke ujung**, dan **repo yang
+layak dibaca**. Temuan yang alasannya semata "tidak layak untuk produk publik"
+sengaja diturunkan prioritasnya, dan penurunan itu ditulis di entri
+masing-masing supaya alasannya bisa ditinjau ulang kalau keadaan berubah.
+
+Yang TIDAK ikut diturunkan, walau terdengar seperti urusan produk publik:
+
+- **Isolasi antar pengguna.** Satu pengguna membaca atau mengubah data pengguna
+  lain adalah aplikasi yang berjalan salah, bukan kekurangan pengerasan. Dengan
+  tiga akun pun tetap salah.
+- **Kehilangan data.** Pekerjaan klien yang hilang permanen tidak jadi lebih
+  ringan karena penggunanya sedikit.
+- **Apa yang terbaca pembaca repo.** Repo ini publik dan ditujukan untuk dibaca
+  peninjau teknis, jadi hal yang memalukan saat dibaca tetap perlu dibereskan
+  walau tidak lagi berbahaya.
+
 ---
 
-
 ## F-01 — Kredensial produksi ada di riwayat git (DITANGANI SEBAGIAN)
-**Status:** Password Supabase sudah dirotasi. Kredensial Google mati bersama
-akun yang ditangguhkan, diganti di Fase 2. Sisa: rewrite riwayat git.
+
+**Ditemukan saat:** Fase 1
+**Status:** Kredensial sudah diamankan — sisa pekerjaan pembersihan riwayat
 
 `photoflow-backend/.env` dan `photoflow-web-portal/.env` ter-commit ke repo dan
 sudah ter-push ke `origin`. Fase 1 hanya melakukan `git rm --cached`, yang
@@ -40,38 +59,85 @@ tetap memuat nilainya selama belum ditulis ulang.
 
 **Langkah yang perlu diambil:**
 
-1. Kredensial Google (`GDRIVE_CREDENTIALS_JSON`, `GOOGLE_OAUTH_CLIENT_SECRET`,
-   `GOOGLE_API_KEY`) **tidak bisa dirotasi** — akun pemiliknya ditangguhkan,
-   console-nya tidak bisa diakses. Penangguhan itu tidak berkaitan dengan
-   kebocoran ini; urutan waktunya tidak cocok. Kunci-kunci itu praktis sudah
-   mati. Penggantinya dibuat di Google Cloud project baru pada Fase 2, bukan
-   dirotasi di tempat.
-2. **Password database Supabase wajib dirotasi.** Ini satu-satunya kredensial
-   bocor yang masih hidup dan masih di bawah kendalimu. Ditangani di Fase 0.
+1. **SELESAI.** Kredensial Google (`GDRIVE_CREDENTIALS_JSON`,
+   `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_API_KEY`) tidak bisa dan tidak perlu
+   dirotasi — akun pemiliknya ditangguhkan, sehingga kunci-kunci itu mati
+   bersama akunnya. Penangguhan itu tidak berkaitan dengan kebocoran ini;
+   urutan waktunya tidak cocok. Penggantinya dibuat di Google Cloud project
+   baru pada Fase 2, bukan dirotasi di tempat.
+2. **SELESAI.** Password database Supabase sudah dirotasi. Ini satu-satunya
+   kredensial bocor yang masih hidup dan masih di bawah kendali pemilik repo,
+   jadi dengan rotasi ini tidak ada lagi kredensial aktif yang terekspos.
 3. Jangan pernah pakai ulang nilai lama mana pun, termasuk di project Google
    yang baru.
-4. Setelah rotasi selesai, pertimbangkan rewrite riwayat git (`git filter-repo`)
-   lalu force push. Ini memaksa setiap clone yang ada dibuat ulang —
-   koordinasikan dulu kalau repo dipakai bersama.
-5. Aktifkan GitHub secret scanning + push protection supaya tidak terulang.
+4. **BELUM.** Rewrite riwayat git (`git filter-repo`) lalu force push. Nilai
+   lama masih terbaca lewat `git log` walau sudah tidak berlaku. Ini memaksa
+   setiap clone yang ada dibuat ulang — koordinasikan kalau repo dipakai
+   bersama.
+5. **BELUM.** Aktifkan GitHub secret scanning + push protection supaya tidak
+   terulang.
 
 Rewrite riwayat saja **tidak cukup** dan bukan pengganti langkah 2. Clone,
 fork, dan cache yang sudah ada bisa tetap menyimpan commit lama.
 
+**Prioritas.** Setelah langkah 1 dan 2 selesai, tidak ada lagi kredensial hidup
+di riwayat, jadi alasan keamanannya sudah habis. Yang tersisa adalah alasan
+presentasi, dan itu justru relevan dengan tujuan repo ini: repo-nya publik dan
+ditujukan untuk dibaca peninjau teknis, dan `git log` masih memperlihatkan
+private key service account di dalam `.env` yang ter-commit. Peninjau yang
+menemukannya tidak akan tahu kunci itu sudah mati. Kerjakan sebelum repo
+disodorkan ke siapa pun, bukan karena mendesak secara teknis.
+
 ---
 
-## F-02 — `VITE_SUPABASE_ANON_KEY` ikut ter-bundle ke klien
+## F-02 — RLS mati di `projects` dan `photos`, dengan anon key yang publik (KRITIS)
 
-**Ditemukan saat:** Fase 1
-**Status:** Kemungkinan besar bukan masalah — dicek di Fase 0
+**Ditemukan saat:** Fase 1, dikonfirmasi lewat pemeriksaan langsung ke Supabase
+**Status:** Kerentanannya sudah ditutup — policy `profiles` masih perlu ditinjau
 
-Semua variabel berprefix `VITE_` di-inline oleh Vite ke bundle JavaScript yang
-dikirim ke browser, jadi selalu bisa dibaca publik. Untuk anon key Supabase ini
-memang perilaku yang diharapkan.
+Catatan awal temuan ini menyebut "kemungkinan besar bukan masalah". Itu asumsi,
+dan asumsi itu salah. Supabase Security Advisor menandai `public.projects` dan
+`public.photos` sebagai **CRITICAL — "RLS Disabled in Public"**. Hanya
+`profiles` yang sudah mengaktifkannya.
 
-Yang perlu dipastikan: **Row Level Security aktif di semua tabel Supabase.**
-Tanpa RLS, anon key yang publik itu setara akses baca-tulis terbuka ke seluruh
-database. Belum diverifikasi di fase ini.
+**Kenapa itu kritis.** Semua variabel berprefix `VITE_` di-inline oleh Vite ke
+bundle JavaScript yang dikirim ke browser, jadi `VITE_SUPABASE_ANON_KEY` memang
+publik dan siapa pun bisa membacanya dari devtools. Anon key sendiri bukan
+rahasia — Row Level Security-lah satu-satunya yang membatasi apa yang bisa
+dilakukan dengannya. Dengan RLS mati, kunci publik itu memberi akses baca-tulis
+langsung ke `projects` dan `photos` lewat REST API Supabase.
+
+Artinya seluruh lapisan autentikasi yang dibangun di Fase 3.1 bisa dilewati
+begitu saja. Verifikasi JWT di backend Go tidak relevan bagi penyerang yang
+tidak perlu melewati backend sama sekali: ia cukup memakai anon key dari bundle
+dan berbicara langsung ke Supabase — membaca seluruh project milik semua
+fotografer, mengubahnya, atau menghapusnya.
+
+**Sudah diperbaiki:** RLS kini aktif di `projects`, `photos`, `profiles`, dan
+`rate_limits`. Advisor tidak lagi melaporkan satu pun tabel tanpa RLS.
+
+`projects`, `photos`, dan `rate_limits` sengaja dibiarkan **tanpa policy**. RLS
+aktif tanpa policy menolak seluruh akses lewat anon key, dan itu memang yang
+diinginkan: tidak ada kode frontend yang menyentuh ketiganya. Backend Go
+terhubung sebagai pemilik tabel lewat connection string Postgres, dan pemilik
+tabel tidak tunduk pada RLS kecuali tabelnya disetel `FORCE ROW LEVEL SECURITY`,
+jadi backend tidak terpengaruh. Advisor melaporkan ketiganya sebagai INFO
+"RLS Enabled No Policy"; untuk tabel-tabel ini status itu benar dan disengaja.
+
+**Koreksi atas dugaan sebelumnya.** Catatan versi lama menduga RLS memblokir
+`supabase.from('profiles').upsert(...)` di frontend dan karenanya registrasi
+gagal membuat baris profil. Dugaan itu **gugur** setelah diperiksa langsung:
+`auth.users` berisi 3 baris dan `profiles` juga 3, dan dua di antaranya punya
+`gdrive_refresh_token` terisi — artinya alur OAuth Google pernah berjalan sampai
+selesai. Baris profil tetap terbentuk, kemungkinan besar lewat trigger
+`handle_new_user()` yang berjalan sebagai `SECURITY DEFINER`, bukan lewat upsert
+dari frontend.
+
+Penyebab sebenarnya upsert itu gagal ada di F-17: kolom yang dikirim tidak ada
+di skema. Kegagalannya tidak pernah terlihat karena hasilnya tidak diperiksa.
+
+Sisa yang masih perlu ditinjau ada di F-16 (policy `profiles` memakai peran
+`public`, dan tidak ada policy INSERT).
 
 ---
 
@@ -110,7 +176,13 @@ dan backend tidak lagi butuh akses baca ke `auth.users`.
 ## F-05 — Alur OAuth Google memakai `user_id` mentah sebagai `state`
 
 **Ditemukan saat:** Fase 3.1
-**Status:** BELUM DITANGANI — di luar cakupan 3.1, relevan untuk Fase 2
+**Status:** BELUM DITANGANI — dikerjakan bersama Fase 2
+
+**Prioritas diturunkan.** Serangannya menuntut penyerang mengetahui user_id
+korban dan memancing korban menyelesaikan alur OAuth, pada aplikasi yang saat
+ini punya tiga akun dan belum dipakai siapa pun di luar pengembangnya. Bukan
+diabaikan: alur OAuth memang dibangun ulang di Fase 2, dan perbaikannya paling
+murah dikerjakan di sana sekalian, bukan sebagai tambalan terpisah sekarang.
 
 `GET /api/auth/google/login` menerima `user_id` sebagai query parameter dan
 meneruskannya apa adanya sebagai parameter `state` OAuth. Callback lalu
@@ -179,21 +251,21 @@ statusnya.
 ## F-08 — Magic link lama tetap 8 karakter
 
 **Ditemukan saat:** Fase 3.2
-**Status:** Diterima secara sadar
+**Status:** SELESAI — tidak ada token lama yang beredar
 
 Fase 3.2 menaikkan entropi magic link dari 4 byte ke 16 byte, tapi hanya untuk
 token yang dibuat setelahnya. Token lama tetap berlaku karena pencarian memakai
 perbandingan nilai pada kolom `text` tanpa asumsi panjang, jadi tidak ada link
 yang patah dan tidak ada migrasi yang wajib.
 
-Konsekuensinya project lama tetap pada 2^32 kemungkinan, bukan 2^128. Dengan
-pembatasan 20 kegagalan per 10 menit per IP, menjelajahi ruang sebesar itu dari
-satu alamat tidak realistis, tapi angkanya tetap jauh di bawah token baru.
+Kekhawatirannya adalah project lama tertinggal pada 2^32 kemungkinan. Itu tidak
+terjadi: pemilik repo mengonfirmasi satu-satunya project di database adalah data
+dummy, bukan data klien, jadi tidak pernah ada link 8 karakter di tangan siapa
+pun. Tidak ada yang perlu diregenerasi.
 
-Saat temuan ini ditulis, satu-satunya project di database adalah data uji yang
-akan dihapus manual oleh pemilik repo (memuat nomor telepon asli), sehingga
-tidak ada link nyata di tangan klien. Artinya begitu data uji itu hilang, tidak
-akan ada lagi token 8 karakter yang tersisa dan temuan ini otomatis selesai.
+Catatan awal temuan ini menyebut data uji tersebut memuat nomor telepon asli.
+Itu keliru dan sudah dikoreksi di sini supaya tidak terbawa ke SECURITY-NOTES.md
+nanti: datanya dummy.
 
 Kalau di kemudian hari ternyata masih ada token lama yang beredar, opsinya
 adalah regenerasi selektif untuk project yang belum `submitted`. Itu mematikan
@@ -201,24 +273,31 @@ link yang sudah dikirim ke klien, jadi perlu pengiriman ulang manual.
 
 ---
 
-## F-09 — Sumber IP untuk rate limiting belum dibuktikan di produksi
+## F-09 — Sumber IP untuk rate limiting
 
 **Ditemukan saat:** Fase 3.2
-**Status:** PERLU PEMBUKTIAN setelah deploy
+**Status:** SELESAI — terbukti di produksi
 
 Rate limiting pada `GET /api/p/:magic_link` mengunci penghitung pada IP klien.
 Kekuatannya sepenuhnya bergantung pada apakah header sumber IP benar-benar
 diset oleh platform dan tidak bisa dikirim sendiri oleh pemanggil.
 
 Urutan bawaannya `x-vercel-forwarded-for` lalu `x-real-ip`, dan
-`x-forwarded-for` sengaja TIDAK dipercaya. Urutan itu **belum diverifikasi
-terhadap perilaku Vercel yang sebenarnya** — dokumentasinya tidak dapat diakses
-dari lingkungan tempat perubahan ini dikerjakan.
+`x-forwarded-for` sengaja TIDAK dipercaya. Urutan itu tidak dapat diverifikasi
+saat kodenya ditulis karena dokumentasi Vercel tidak bisa diakses dari
+lingkungan tersebut, sehingga sengaja dibuat mudah dibuktikan lewat
+`GET /api/debug/client-ip` dan dapat dikoreksi lewat `CLIENT_IP_HEADER` tanpa
+mengubah kode.
 
-Cara membuktikannya ada di `GET /api/debug/client-ip` (aktif hanya bila
-`DEBUG_CLIENT_IP=1`). Yang harus dipastikan: `resolved` bernilai true, dan
-`resolved_ip` TIDAK berubah ketika pemanggil mengirim `x-forwarded-for` sendiri.
-Kalau berubah, limiternya bisa dilewati dan `CLIENT_IP_HEADER` harus disetel.
+Hasil pembuktian di produksi (`DEBUG_CLIENT_IP` sudah dimatikan kembali):
+
+- 20 request berturut-turut membalas 404, request ke-21 membalas 429 — limiter
+  aktif dan ambangnya sesuai.
+- `X-Forwarded-For` palsu TIDAK mengubah `resolved_ip` — bucket tidak bisa
+  diperbarui dengan mengganti header, jadi limiternya tidak dapat dilewati
+  dengan cara itu.
+
+Urutan header bawaan terbukti benar; `CLIENT_IP_HEADER` tidak perlu disetel.
 
 Batas yang tetap ada walau header sudah benar: pembatasan per IP bisa dilewati
 penyerang yang punya banyak alamat. Pertahanan utama terhadap penebakan token
@@ -234,24 +313,27 @@ tidak boleh berubah jadi pemadaman.
 ## F-10 — `selected_photos` kosong diterima oleh endpoint submit
 
 **Ditemukan saat:** Fase 3.3
-**Status:** BELUM DITANGANI — perilaku lama, relevan untuk Fase 4
+**Status:** SELESAI di Fase 4
 
 Tag `required` pada `selected_photos` tidak menolak array kosong. Akibatnya
-`POST /api/p/:magic_link/submit` dengan `{"selected_photos": []}` akan menghapus
+`POST /api/p/:magic_link/submit` dengan `{"selected_photos": []}` menghapus
 seluruh foto milik project lalu mengunci galerinya dengan status `submitted`,
 tanpa menyisakan satu pun pilihan.
 
-Ini perilaku yang sudah ada sebelum Fase 3.3 dan tidak berubah karenanya.
-Diperbaiki bersama Fase 4, yang memang menyentuh handler submit untuk urusan
-transaksi dan gallery lock — di sana penghapusan-lalu-insert itu akan dibungkus
-transaksi, dan aturan "minimal satu pilihan" paling tepat ditambahkan sekalian.
+Handler sekarang menolak daftar kosong dengan 400 sebelum menyentuh database.
+Penolakannya sengaja ditaruh di handler, bukan di tag binding: `required` pada
+slice memang tidak berarti "tidak boleh kosong", dan menaruhnya di handler
+membuat alasannya bisa dijelaskan di tempat kejadian.
+
+Perbaikan ini menutup jalur kerusakannya, bukan penyebabnya. Penyebabnya ada di
+F-12.
 
 ---
 
 ## F-11 — Tes binding submit menguji salinan struct, bukan struct aslinya
 
 **Ditemukan saat:** Fase 3.3
-**Status:** Diterima sementara — perbaikannya wajar dilakukan di Fase 5
+**Status:** SELESAI di Fase 5
 
 Struct input untuk `POST /api/p/:magic_link/submit` dideklarasikan inline di
 dalam closure handler, sehingga tidak bisa dirujuk dari berkas tes.
@@ -262,10 +344,228 @@ tidak ikut diubah, tes tetap hijau sambil menguji struct yang tidak dipakai
 siapa pun. Tes `CreateProjectInput` tidak punya masalah ini karena tipenya
 memang bernama dan diuji langsung.
 
-Perbaikannya: angkat struct itu jadi tipe bernama, lalu arahkan tes ke tipe
-aslinya. Tidak dilakukan sekarang karena berada di luar cakupan Fase 3.3, dan
-Fase 5 memang sudah menjadwalkan pemecahan `router.go` ke paket terpisah — di
-sana pengangkatan tipe ini jadi bagian yang wajar dari pekerjaan.
+Struct itu kini menjadi `models.SubmitSelectionInput`, dan tesnya mengikat tipe
+tersebut langsung. Salinannya dihapus, sehingga tag binding tidak lagi bisa
+berubah di handler tanpa tesnya ikut menyadari.
+
+---
+
+## F-12 — Submit menghapus katalog foto, padahal kolom untuk menandai sudah ada
+
+**Ditemukan saat:** Fase 4
+**Status:** USULAN — perubahan lintas repo, belum dikerjakan
+
+Tabel `photos` dipakai untuk dua hal yang berbeda pada dua fase hidup project:
+
+- sebelum submit, ia adalah katalog lengkap galeri, dengan `thumbnail_url` yang
+  dipakai klien untuk melihat foto;
+- setelah submit, ia hanya berisi baris hasil pilihan, dengan `thumbnail_url`
+  kosong, untuk dibaca desktop harvester.
+
+Peralihan antar keduanya dilakukan dengan menghapus seluruh baris lalu menulis
+ulang. Karena itulah daftar kosong bisa menghapus segalanya, dan karena itu pula
+katalog aslinya hilang begitu klien submit: tidak ada lagi catatan foto apa saja
+yang pernah ditawarkan, dan galeri tidak bisa ditampilkan ulang.
+
+Kolom `is_selected` sudah ada di tabel dan praktis tidak dipakai. Alur yang tidak
+menghapus apa pun:
+
+```sql
+UPDATE photos SET is_selected = (file_name = ANY(?)) WHERE project_id = ?;
+```
+
+Katalog dan thumbnail tetap utuh, pilihan menjadi atribut alih-alih keberadaan
+baris, "tidak memilih apa pun" jadi keadaan yang bisa diwakili tanpa kehilangan
+data, dan submit ulang tidak lagi merusak.
+
+Belum dikerjakan karena desktop harvester membaca endpoint ini dan saat ini
+mengasumsikan setiap baris yang ada adalah baris terpilih. Mengubahnya menuntut
+harvester ikut memfilter `is_selected`, jadi perubahan ini perlu dikoordinasikan
+dengan repo tersebut — sama seperti F-04.
+
+---
+
+## F-13 — Transaksi pada PUT /api/projects/:id belum punya test
+
+**Ditemukan saat:** Fase 4
+**Status:** MASIH TERBUKA — penghalangnya sudah hilang, tesnya belum ditulis
+
+Handler submit diuji lewat `submitSelection`, fungsi yang bisa dipanggil
+langsung. Bagian transaksional pada `PUT /api/projects/:id` dulu berupa closure
+di dalam pendaftaran rute, sehingga tidak bisa dipanggil dari tes tanpa
+membangun seluruh router beserta koneksi database dan konfigurasi auth-nya.
+
+Perilaku yang belum terjaga tes: kalau insert foto baru gagal, penghapusan foto
+lama harus ikut dibatalkan; dan kalau penarikan dari Drive gagal, foto lama harus
+dipertahankan apa adanya.
+
+Fase 5 sudah memindahkannya keluar: sekarang berupa method
+`handlers.Handler.UpdateProject`, dan bisa diuji dengan pola yang sama seperti
+`submitSelection`. Tesnya sendiri belum ditulis karena berada di luar cakupan
+Fase 5, yang refactor murni. Yang menyulitkan tinggal satu hal: handler itu
+memanggil Google Drive lewat `http.Get` langsung, jadi pengujiannya menuntut
+titik sisip untuk mengganti pemanggilan jaringan itu.
+
+---
+
+## F-14 — AutoMigrate membuat `rate_limits` tanpa RLS, limiter jadi bisa dilewati (KRITIS)
+
+**Ditemukan saat:** pemeriksaan Supabase setelah Fase 4
+**Status:** Tabelnya sudah diperbaiki manual — penjagaan ada di perintah migrasi
+
+Tabel `rate_limits` yang ditambahkan di Fase 3.2 dibuat lewat `AutoMigrate`
+GORM. GORM membuat tabel dengan `CREATE TABLE` biasa, dan Postgres membuat tabel
+baru **tanpa RLS secara bawaan**. Supabase menandainya CRITICAL.
+
+Dampaknya membatalkan seluruh gunanya limiter itu. Anon key ada di bundle
+JavaScript frontend, dan dengan RLS mati siapa pun yang memilikinya bisa
+menghapus baris penghitungnya sendiri lewat REST API Supabase, lalu mengulang
+percobaan dari nol. Pembatasan 20 kegagalan per 10 menit yang sudah dibuktikan
+bekerja di produksi (F-09) bisa dilewati **tanpa menyentuh backend sama sekali**.
+
+Ini pelajaran yang lebih besar dari satu tabel: setiap tabel yang dibuat
+`AutoMigrate` di project Supabase akan lahir tanpa RLS, dan tidak ada yang
+memberi tahu selain advisor. Perbaikan satu kali tidak cukup — yang dibutuhkan
+adalah jalur migrasi yang tidak bisa meninggalkan tabel tanpa RLS.
+
+Sudah dikerjakan di Fase 5:
+
+1. Migrasi dipindahkan keluar dari jalur startup ke perintah tersendiri
+   (`cmd/migrate`), sehingga pembuatan skema jadi tindakan yang disengaja dan
+   bisa diperiksa, bukan efek samping setiap cold start.
+2. Perintah itu menyalakan RLS pada setiap tabel yang dikelolanya, tepat setelah
+   `AutoMigrate`.
+3. Perintah itu kemudian **memverifikasi seluruh tabel di skema `public`** dan
+   berhenti dengan error kalau ada satu saja yang RLS-nya mati — termasuk tabel
+   yang ditambahkan orang lain di kemudian hari. Menyalakan saja tidak cukup:
+   tanpa verifikasi, tabel berikutnya akan lolos dengan cara yang persis sama.
+
+---
+
+## F-15 — `handle_new_user()` SECURITY DEFINER bisa dieksekusi lewat REST API
+
+**Ditemukan saat:** pemeriksaan Supabase setelah Fase 4
+**Status:** BELUM DITANGANI — prioritas rendah, perbaikannya satu baris
+
+**Prioritas diturunkan.** Dampaknya bergantung pada isi fungsinya, dan pada
+tahap ini fungsi itu hanya membuat baris profil untuk user yang memang baru
+mendaftar. Tetap dicatat karena perbaikannya satu perintah `REVOKE`, jadi
+mengerjakannya nanti tidak akan lebih mahal daripada sekarang.
+
+Advisor melaporkan dua peringatan untuk fungsi yang sama:
+
+> Function `public.handle_new_user()` can be executed by the `anon` role as a
+> `SECURITY DEFINER` function via `/rest/v1/rpc/handle_new_user`.
+
+Peringatan kedua sama persis untuk peran `authenticated`.
+
+Fungsi ini kemungkinan besar trigger yang membuat baris `profiles` saat user
+baru mendaftar — dan itulah yang menjelaskan kenapa baris profil tetap terbentuk
+walau upsert dari frontend gagal (lihat F-02).
+
+Masalahnya bukan fungsinya, melainkan fungsi itu ikut terekspos sebagai endpoint
+RPC. `SECURITY DEFINER` berarti ia berjalan dengan hak pembuatnya, bukan hak
+pemanggilnya, jadi siapa pun yang memegang anon key bisa memanggilnya dengan hak
+yang lebih tinggi dari haknya sendiri. Apa yang terjadi kalau dipanggil di luar
+konteks trigger bergantung pada isi fungsinya, yang belum diperiksa.
+
+Yang perlu dilakukan: baca isi fungsinya, lalu cabut hak eksekusinya dari peran
+`anon` dan `authenticated`. Fungsi trigger tidak perlu dapat dipanggil lewat
+REST:
+
+```sql
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM anon, authenticated;
+```
+
+Trigger tetap berjalan seperti biasa setelah pencabutan ini, karena trigger
+dieksekusi oleh pemilik tabel, bukan oleh peran pemanggil REST.
+
+---
+
+## F-16 — Policy `profiles` memakai peran `public` dan tidak punya INSERT
+
+**Ditemukan saat:** pemeriksaan Supabase setelah Fase 4
+**Status:** BELUM DITANGANI — TIDAK diturunkan prioritasnya
+
+**Kenapa tidak diturunkan.** Ini bukan pengerasan untuk produk publik, melainkan
+pertanyaan apakah aplikasinya berjalan benar: kalau klausa `USING` policy-nya
+tidak membatasi ke baris sendiri, satu pengguna bisa membaca
+`gdrive_refresh_token` milik pengguna lain — dan token itu memberi akses ke
+Google Drive orang tersebut. Dengan tiga akun pun itu tetap salah. Menyelesaikan
+pertanyaan ini butuh satu query untuk membaca isi policy-nya.
+
+`profiles` punya policy untuk SELECT dan UPDATE, keduanya menyasar peran
+`public`, dan tidak ada policy untuk INSERT.
+
+Dua hal yang perlu ditinjau:
+
+1. **Peran `public` mencakup `anon`**, yaitu pengunjung yang belum login sama
+   sekali. Kalau maksudnya "pengguna yang sudah masuk boleh membaca dan mengubah
+   barisnya sendiri", peran yang tepat adalah `authenticated`. Perlu dipastikan
+   pula klausa `USING`/`WITH CHECK`-nya benar-benar membatasi ke baris sendiri
+   lewat `auth.uid() = id`; tanpa itu, satu pengguna bisa membaca atau mengubah
+   profil pengguna lain — termasuk `gdrive_refresh_token` milik orang lain, yang
+   memberi akses ke Google Drive mereka.
+2. **Tidak adanya policy INSERT** konsisten dengan temuan bahwa baris profil
+   dibuat oleh trigger, bukan oleh klien. Itu justru desain yang baik dan
+   sebaiknya dipertahankan — asal frontend berhenti mencoba melakukan upsert
+   sendiri (F-17).
+
+Isi policy-nya belum dibaca, jadi butir 1 masih dugaan yang perlu diperiksa,
+bukan kesimpulan.
+
+---
+
+## F-17 — Upsert profil di frontend mengirim kolom yang tidak ada, hasilnya dibuang
+
+**Ditemukan saat:** pemeriksaan Supabase setelah Fase 4
+**Status:** BELUM DITANGANI — frontend, wajar dikerjakan bersama Fase 2
+
+`photoflow-web-portal/src/components/AdminLogin.jsx:71`:
+
+```js
+await supabase.from('profiles').upsert({ id, full_name, whatsapp, email })
+```
+
+Skema `profiles` hanya punya empat kolom: `id`, `full_name`,
+`gdrive_refresh_token`, `updated_at`. `whatsapp` dan `email` tidak ada di sana,
+jadi upsert ini **selalu gagal** karena ketidakcocokan skema.
+
+Kegagalannya tidak pernah terlihat karena hasilnya tidak diperiksa sama sekali:
+tidak ada `error` yang dibaca, tidak ada pesan ke pengguna. Kode berjalan
+seolah-olah berhasil.
+
+Kebetulan tidak ada kerusakan yang terjadi, karena baris profil sudah dibuat
+oleh trigger `handle_new_user()`. Jadi panggilan ini bukan cuma salah — ia juga
+tidak dibutuhkan.
+
+Nomor WhatsApp yang coba disimpan di sini sebenarnya sudah disimpan di tempat
+lain: kolom `admin_whats_app` dan `client_whats_app` pada tabel `projects`, yang
+diisi lewat backend. Jadi perbaikannya adalah **menghapus panggilan upsert ini**,
+bukan menambah kolom ke `profiles`.
+
+Pelajaran yang lebih umum dan layak dijaga: pemanggilan Supabase dari frontend
+yang hasilnya tidak diperiksa akan gagal tanpa suara. Kegagalan ini bertahan
+cukup lama untuk sempat memunculkan dua dugaan keliru sebelum diperiksa
+langsung ke database.
+
+---
+
+## F-18 — Perlindungan password bocor tidak aktif di Supabase Auth
+
+**Ditemukan saat:** pemeriksaan Supabase setelah Fase 4
+**Status:** DITUTUP — tidak tersedia di paket yang dipakai
+
+Advisor melaporkan `auth_leaked_password_protection` dalam keadaan mati.
+Ternyata fitur itu hanya tersedia di Supabase Pro Plan, jadi tidak bisa
+dinyalakan pada project ini.
+
+Sebagai gantinya, panjang minimum password dinaikkan dari bawaan Supabase (6)
+menjadi 8. Itu bukan pengganti setara — pemeriksaan terhadap basis data
+kebocoran menangkap password yang panjang tapi sudah pernah bocor — tapi ini
+yang tersedia tanpa berpindah paket.
+
+Dibuka lagi kalau project berpindah ke Pro.
 
 ---
 

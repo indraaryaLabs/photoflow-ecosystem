@@ -12,25 +12,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// RateLimit adalah satu penghitung fixed-window. Satu baris per bucket, bukan
-// satu baris per request, sehingga tabel tumbuh sebesar jumlah IP unik dan
-// bukan sebesar jumlah trafik.
-//
-// Penghitung sengaja disimpan di Postgres, bukan di memori proses. Backend ini
-// berjalan sebagai fungsi serverless: memori tidak bertahan antar invocation
-// dan beberapa instance berjalan berdampingan, jadi penghitung in-memory bukan
-// hanya tidak persisten — ia memberi kesan terlindungi sambil praktis tidak
-// menahan apa pun.
-type RateLimit struct {
-	BucketKey   string    `gorm:"column:bucket_key;type:text;primaryKey"`
-	WindowStart time.Time `gorm:"column:window_start;not null;index"`
-	HitCount    int       `gorm:"column:hit_count;not null"`
-}
-
-func (RateLimit) TableName() string {
-	return "rate_limits"
-}
-
 // clientIPHeaderEnv memungkinkan header sumber IP diganti lewat Environment
 // Variable tanpa mengubah kode. Ini disediakan karena kontrak header platform
 // perlu dibuktikan di lingkungan nyata, bukan diasumsikan: lihat
@@ -74,6 +55,7 @@ func NewLimiter(db *gorm.DB, window time.Duration, max int) *Limiter {
 // mencekik pengguna yang sah. Penebak token, menurut definisinya, hanya
 // menghasilkan kegagalan. Konsekuensi yang menguntungkan: request yang berhasil
 // tidak membayar satu query tambahan pun.
+
 func (l *Limiter) TooManyFailures(c *gin.Context) bool {
 	ip, ok := l.clientIP(c)
 	if !ok {
