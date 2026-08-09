@@ -10,9 +10,8 @@ import FloatingBar from './components/FloatingBar';
 import AdminDashboard from './components/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
 import { supabase } from './lib/supabase';
-
-// ─── API Base URL ────────────────────────────────────────────────
-const API_BASE = 'https://photoflow-backend.vercel.app';
+import { API_BASE } from './lib/api';
+import { openedFromRecoveryLink } from './lib/recovery';
 
 export default function App() {
   // ─── Variables routing (No hook dependencies) ────────────────
@@ -23,6 +22,11 @@ export default function App() {
   // ─── 1. Auth State ───────────────────────────────────────────
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
+
+  // Tautan pemulihan password membawa sesi yang sah. Tanpa penanda terpisah,
+  // routing di bawah menyimpulkan orangnya sudah login dan melemparnya ke
+  // dashboard, sehingga layar penggantian password tidak pernah terlihat.
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(openedFromRecoveryLink);
 
   // ─── 2. Data State (from API) ────────────────────────────────
   const [project, setProject] = useState(null);
@@ -52,8 +56,9 @@ export default function App() {
       setIsAuthChecking(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setIsAdminAuthenticated(!!session);
+      if (event === 'PASSWORD_RECOVERY') setIsPasswordRecovery(true);
     });
 
     return () => subscription.unsubscribe();
@@ -67,8 +72,9 @@ export default function App() {
     const resetTimer = () => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(async () => {
-        // Logout user dari Supabase
-        const { supabase } = await import('./lib/supabase');
+        // Logout user dari Supabase. Modulnya sudah diimpor di atas berkas ini;
+        // import dinamis di sini tidak memecah bundle apa pun, hanya membuat
+        // bundler memperingatkan bahwa modul yang sama diminta dua cara.
         await supabase.auth.signOut();
         // Paksa kembali ke halaman root (login)
         window.location.href = '/';
@@ -100,9 +106,7 @@ export default function App() {
 
     const fetchGallery = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/p/${token}`, {
-          headers: { 'ngrok-skip-browser-warning': 'true' }
-        });
+        const res = await fetch(`${API_BASE}/api/p/${token}`);
 
         if (!res.ok) {
           const body = await res.json().catch(() => null);
@@ -122,9 +126,7 @@ export default function App() {
         // miliknya; kalau Drive tidak terbaca, backend mengembalikan salinan
         // yang tersimpan di database dalam bentuk yang sama.
         try {
-          const photosRes = await fetch(`${API_BASE}/api/p/${token}/photos`, {
-            headers: { 'ngrok-skip-browser-warning': 'true' }
-          });
+          const photosRes = await fetch(`${API_BASE}/api/p/${token}/photos`);
           if (!photosRes.ok) throw new Error(`status ${photosRes.status}`);
           const photosData = await photosRes.json();
           setPhotos(photosData.files || []);
@@ -229,10 +231,7 @@ export default function App() {
 
       const res = await fetch(`${API_BASE}/api/p/${token}/submit`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ selected_photos: selectedPhotosPayload }),
       });
 
@@ -282,6 +281,12 @@ export default function App() {
         <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
       </div>
     );
+  }
+
+  // Pemulihan password mendahului seluruh routing lain: sesi yang dibawa
+  // tautan itu memang sah, tapi tujuannya bukan masuk ke dashboard.
+  if (isPasswordRecovery) {
+    return <AdminLogin isDark={isDark} toggleTheme={toggleTheme} />;
   }
 
   // Strict Auth Guard Routing

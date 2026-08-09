@@ -1,0 +1,50 @@
+/* Inter (subset latin) dibundel lokal.
+ *
+ * Sebelumnya font ini diambil dari fonts.googleapis.com dan ikonnya dari
+ * unpkg.com. Aplikasi ini punya mode offline, jadi dua permintaan jaringan itu
+ * berarti tampilan rusak persis pada keadaan yang mode offline dibuat untuk
+ * menanganinya — dan setiap kali dibuka, dua host pihak ketiga tahu aplikasi
+ * ini sedang dipakai.
+ *
+ * SIL Open Font License 1.1 — https://github.com/rsms/inter
+ */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('./inter/inter-latin-300-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./inter/inter-latin-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./inter/inter-latin-500-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./inter/inter-latin-600-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./inter/inter-latin-700-normal.woff2') format('woff2');
+}
