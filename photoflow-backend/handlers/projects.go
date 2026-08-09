@@ -1,12 +1,9 @@
 package handlers
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
+	"context"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -15,28 +12,34 @@ import (
 	"photoflow-backend/models"
 )
 
-// fetchDrivePhotos menarik daftar foto sebuah folder Drive lewat API key.
-// Mengembalikan ok=false kalau folder tidak bisa dibaca, sehingga pemanggil bisa
-// memutuskan sendiri apa yang dilakukan terhadap foto lama.
-func fetchDrivePhotos(folderID, projectID string) (photos []models.Photo, ok bool) {
-	apiKey := os.Getenv("GOOGLE_API_KEY")
-	driveAPIUrl := fmt.Sprintf("https://www.googleapis.com/drive/v3/files?q='%s'+in+parents+and+mimeType+contains+'image/'&fields=files(id,name,thumbnailLink)&key=%s", folderID, apiKey)
-
-	resp, err := http.Get(driveAPIUrl)
-	if err != nil || resp.StatusCode != 200 {
+// fetchDrivePhotos menarik daftar foto sebuah folder memakai kredensial Drive
+// milik user, lalu memetakannya ke baris siap simpan.
+//
+// Sebelumnya folder ditarik lewat GOOGLE_API_KEY, yang hanya berhasil untuk
+// folder yang dibagikan publik, dan pembacaan galeri memakai service account
+// bersama. Keduanya kini digantikan kredensial pemilik project, sehingga hanya
+// ada satu sumber kebenaran untuk "siapa yang boleh membaca folder ini".
+//
+// ok bernilai false kalau folder tidak dapat dibaca, sehingga pemanggil bisa
+// memutuskan sendiri nasib foto yang sudah tersimpan.
+func (h *Handler) fetchDrivePhotos(ctx context.Context, userID, folderID, projectID string) (photos []models.Photo, ok bool) {
+	store, err := h.StoreForUser(ctx, userID)
+	if err != nil {
+		log.Printf("⚠️ Drive tidak tersedia untuk user %s: %v", userID, err)
 		return nil, false
 	}
-	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
-	var driveData models.DriveAPIResponse
-	json.Unmarshal(body, &driveData)
+	files, err := store.ListPhotos(ctx, folderID)
+	if err != nil {
+		log.Printf("⚠️ Gagal membaca folder Drive %s: %v", folderID, err)
+		return nil, false
+	}
 
-	for _, file := range driveData.Files {
+	for _, file := range files {
 		photos = append(photos, models.Photo{
 			ProjectID:    projectID,
 			FileName:     file.Name,
-			ThumbnailURL: fmt.Sprintf("https://drive.google.com/thumbnail?id=%s&sz=w800", file.ID),
+			ThumbnailURL: store.ThumbnailURL(file),
 		})
 	}
 	return photos, true
@@ -85,7 +88,7 @@ func (h *Handler) CreateProject(c *gin.Context) {
 		return
 	}
 
-	photosToInsert, ok := fetchDrivePhotos(folderID, newProject.ID)
+	photosToInsert, ok := h.fetchDrivePhotos(c.Request.Context(), userID, folderID, newProject.ID)
 	if !ok {
 		c.JSON(http.StatusCreated, gin.H{
 			"message": "Project dibuat, tapi gagal menarik foto dari Drive.",
@@ -165,7 +168,7 @@ func (h *Handler) UpdateProject(c *gin.Context) {
 	var newPhotos []models.Photo
 	photosRefreshed := false
 	if driveChanged {
-		newPhotos, photosRefreshed = fetchDrivePhotos(newFolderID, project.ID)
+		newPhotos, photosRefreshed = h.fetchDrivePhotos(c.Request.Context(), userID, newFolderID, project.ID)
 		if !photosRefreshed {
 			// Foto lama SENGAJA dipertahankan. Menghapusnya tanpa punya
 			// pengganti membuat galeri kosong permanen hanya karena Drive

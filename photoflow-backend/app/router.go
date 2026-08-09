@@ -84,11 +84,15 @@ func SetupRouter() (*gin.Engine, error) {
 	r.GET("/api/debug/client-ip", limiter.DebugClientIP)
 
 	// --- KONEKSI GOOGLE DRIVE (OAUTH2) ---
-	r.GET("/api/auth/google/login", h.GoogleLogin)
+	// Rute pembuka alur butuh JWT dan mengembalikan URL, bukan redirect:
+	// navigasi teratas browser tidak membawa header Authorization, sehingga
+	// sebuah redirect tidak punya cara membuktikan siapa yang memintanya.
+	r.POST("/api/auth/google/url", requireAuth, h.GoogleAuthURL)
 	r.GET("/api/auth/google/callback", h.GoogleCallback)
 
 	// --- GALERI KLIEN: publik, diakses lewat magic link tanpa login ---
 	r.GET("/api/p/:magic_link", h.GetGallery)
+	r.GET("/api/p/:magic_link/photos", h.GalleryPhotos)
 	r.POST("/api/p/:magic_link/submit", h.SubmitSelection)
 
 	// --- DASHBOARD ADMIN: butuh JWT Supabase yang sah ---
@@ -98,11 +102,14 @@ func SetupRouter() (*gin.Engine, error) {
 	r.DELETE("/api/projects/:id", requireAuth, h.DeleteProject)
 
 	// --- GOOGLE DRIVE ---
-	// Rute token didaftarkan terpisah dari rute folder. Keduanya sempat berbagi
-	// satu path dan dibedakan lewat `if folderId == "token"`, sehingga auth tidak
-	// bisa dipasang tanpa ikut mengunci rute folder yang memang publik.
+	// Dipakai desktop app untuk mengunduh berkas aslinya.
+	//
+	// GET /api/gdrive/:folderId sudah DIHAPUS. Rute itu menerima ID folder apa
+	// pun dari siapa pun tanpa memeriksa hubungan pemanggil dengan folder
+	// tersebut, sehingga berfungsi sebagai proxy terbuka ke setiap folder yang
+	// terjangkau service account. Penggantinya GET /api/p/:magic_link/photos,
+	// yang menentukan pemilik lewat galeri yang diminta.
 	r.GET("/api/gdrive/token", requireAuth, h.DriveToken)
-	r.GET("/api/gdrive/:folderId", h.DriveFolder)
 
 	return r, nil
 }

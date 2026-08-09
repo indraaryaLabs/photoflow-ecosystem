@@ -176,13 +176,19 @@ dan backend tidak lagi butuh akses baca ke `auth.users`.
 ## F-05 — Alur OAuth Google memakai `user_id` mentah sebagai `state`
 
 **Ditemukan saat:** Fase 3.1
-**Status:** BELUM DITANGANI — dikerjakan bersama Fase 2
+**Status:** SELESAI di Fase 2
 
-**Prioritas diturunkan.** Serangannya menuntut penyerang mengetahui user_id
-korban dan memancing korban menyelesaikan alur OAuth, pada aplikasi yang saat
-ini punya tiga akun dan belum dipakai siapa pun di luar pengembangnya. Bukan
-diabaikan: alur OAuth memang dibangun ulang di Fase 2, dan perbaikannya paling
-murah dikerjakan di sana sekalian, bukan sebagai tambalan terpisah sekarang.
+Alur pembukanya kini `POST /api/auth/google/url`, terautentikasi lewat JWT, dan
+mengembalikan URL alih-alih redirect. Bentuk itu dipilih karena navigasi teratas
+browser tidak membawa header `Authorization`, sehingga sebuah redirect tidak
+punya cara membuktikan siapa yang memintanya — dan itulah yang dulu "diselesaikan"
+dengan menerima `user_id` dari query string.
+
+`state` sekarang 32 byte acak, disimpan di tabel `oauth_states` bersama user yang
+memulainya, sekali pakai, dan kedaluwarsa 10 menit. Callback menukarnya lewat
+`DELETE ... RETURNING` dalam satu perintah, bukan SELECT lalu DELETE terpisah —
+alasan yang sama seperti gallery lock di Fase 4: dua perintah terpisah
+menyisakan celah bagi dua callback bersamaan memakai state yang sama.
 
 `GET /api/auth/google/login` menerima `user_id` sebagai query parameter dan
 meneruskannya apa adanya sebagai parameter `state` OAuth. Callback lalu
@@ -399,12 +405,11 @@ Perilaku yang belum terjaga tes: kalau insert foto baru gagal, penghapusan foto
 lama harus ikut dibatalkan; dan kalau penarikan dari Drive gagal, foto lama harus
 dipertahankan apa adanya.
 
-Fase 5 sudah memindahkannya keluar: sekarang berupa method
-`handlers.Handler.UpdateProject`, dan bisa diuji dengan pola yang sama seperti
-`submitSelection`. Tesnya sendiri belum ditulis karena berada di luar cakupan
-Fase 5, yang refactor murni. Yang menyulitkan tinggal satu hal: handler itu
-memanggil Google Drive lewat `http.Get` langsung, jadi pengujiannya menuntut
-titik sisip untuk mengganti pemanggilan jaringan itu.
+Fase 5 memindahkannya keluar jadi method `handlers.Handler.UpdateProject`, dan
+Fase 2 menghapus penghalang terakhirnya: pemanggilan Drive tidak lagi lewat
+`http.Get` langsung melainkan lewat `Handler.StoreForUser`, yang bisa diganti
+`storage.FakeStore` di tes. Pola yang dipakai `gallery_photos_test.go` bisa
+disalin apa adanya. Tesnya belum ditulis karena berada di luar cakupan Fase 2.
 
 ---
 
@@ -566,6 +571,80 @@ kebocoran menangkap password yang panjang tapi sudah pernah bocor — tapi ini
 yang tersedia tanpa berpindah paket.
 
 Dibuka lagi kalau project berpindah ke Pro.
+
+---
+
+## F-19 — `GET /api/gdrive/:folderId` adalah proxy Drive terbuka (KRITIS)
+
+**Ditemukan saat:** Fase 2
+**Status:** SELESAI di Fase 2 — rutenya dihapus
+
+Rute itu publik dan menerima **ID folder Drive apa pun** dari siapa pun, lalu
+membacanya memakai service account bersama milik aplikasi. Tidak ada satu pun
+pemeriksaan yang menghubungkan pemanggil dengan folder yang dimintanya.
+
+Akibatnya backend berfungsi sebagai proxy terbuka ke **setiap folder yang pernah
+dibagikan ke service account itu**, milik fotografer mana pun. Penyerang tidak
+perlu magic link, tidak perlu akun, dan tidak perlu menebak: `drive_folder_id`
+ikut dikirim di dalam payload `GET /api/p/:magic_link`, jadi satu magic link
+yang sah sudah cukup untuk mendapatkan ID folder, dan ID itu dapat dipakai
+langsung tanpa batasan apa pun.
+
+Ini kerentanan paling serius yang ditemukan sesi ini, dan ia lahir dari
+kombinasi yang wajar-wajar saja bila dilihat terpisah: satu kredensial bersama
+yang bisa membaca banyak folder, ditambah rute yang menerima ID folder mentah.
+
+Penggantinya `GET /api/p/:magic_link/photos`. Magic link menentukan project,
+project menentukan pemiliknya, dan kredensial pemilik itulah yang dipakai.
+Tidak ada lagi cara meminta isi folder yang bukan bagian dari galeri mana pun,
+dan kredensial bersamanya sendiri sudah tidak ada.
+
+---
+
+## F-20 — Jalur cadangan galeri mengirim bentuk data yang salah
+
+**Ditemukan saat:** Fase 2
+**Status:** SELESAI di Fase 2
+
+`App.jsx` punya jalur cadangan `setPhotos(data.photos)` untuk project tanpa
+folder Drive. Jalur itu mengirim baris database apa adanya, dengan `file_name`
+dan `thumbnail_url`, sedangkan `PhotoCard.jsx` membaca `photo.thumbnailLink` dan
+penyusun payload submit membaca `p.name`.
+
+Artinya kalau jalur itu pernah terpakai, gambarnya kosong dan setiap
+`file_name` yang dikirim saat submit bernilai `undefined` — pilihan klien
+tersimpan tanpa nama berkas, dan tidak ada yang bisa diambil desktop app.
+
+Tidak pernah ketahuan karena syaratnya tidak pernah terpenuhi: `folderId` selalu
+terisi, sehingga cabang itu tidak pernah dijalankan. Cacat yang menunggu momen
+untuk muncul, dan momen itu justru akan tiba bersama perpindahan ke OAuth
+per-user.
+
+Sekarang backend mengembalikan bentuk yang seragam untuk kedua sumber, dan
+frontend menyelaraskan bentuk pada jalur cadangan terakhirnya.
+
+---
+
+## F-21 — Pemanggil luar `/api/auth/google/login` akan patah
+
+**Ditemukan saat:** Fase 2
+**Status:** Perlu tindakan di luar repo ini
+
+`GET /api/auth/google/login?user_id=...` diganti `POST /api/auth/google/url`
+yang menuntut JWT Supabase. Grep di web portal tidak menemukan satu pun
+pemanggil rute lama, jadi alur koneksi Drive selama ini dipicu dari luar repo —
+kemungkinan desktop app, atau dijalankan manual lewat browser.
+
+Pemanggil itu akan berhenti bekerja. Alur penggantinya:
+
+1. Dapatkan access token Supabase milik user.
+2. `POST /api/auth/google/url` dengan header `Authorization: Bearer <token>`.
+3. Buka `auth_url` dari responsnya di browser.
+4. Setelah user menyetujui, callback menyimpan refresh token-nya sendiri.
+
+Perlu diperiksa juga apakah desktop app menangani `409` berkode
+`drive_not_connected` dan `drive_reconnect_required` dari `/api/gdrive/token`,
+yang kini menggantikan error mentah.
 
 ---
 
