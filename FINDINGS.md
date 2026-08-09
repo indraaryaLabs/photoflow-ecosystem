@@ -651,7 +651,7 @@ yang kini menggantikan error mentah.
 ## F-06 — Middleware auth belum punya test
 
 **Ditemukan saat:** Fase 3.1
-**Status:** Dijadwalkan di Fase 6
+**Status:** SELESAI di Fase 6
 
 `middleware/auth.go` menentukan siapa yang boleh menyentuh data siapa, tapi
 belum punya satu test pun. Kasus yang paling berharga untuk diuji: token
@@ -659,6 +659,36 @@ kedaluwarsa ditolak, token bersignature asal ditolak, token dari issuer lain
 ditolak, token HS256 ditolak walaupun signature-nya cocok, dan `sub` benar-benar
 sampai ke context. Fase 6 sudah mengagendakan test isolasi antar-user, yang
 bertumpu langsung pada middleware ini.
+
+---
+
+## F-22 — Pembatasan algoritma JWT tidak dapat dibuktikan sendirian
+
+**Ditemukan saat:** Fase 6
+**Status:** Informasi — tidak ada perbaikan yang dibutuhkan
+
+Saat menulis tes untuk `middleware/auth.go`, tes algorithm confusion diuji balik
+dengan mencabut `jwt.WithValidMethods` dari kode. **Tesnya tetap lolos.**
+
+Penolakan token HS256 ternyata ditegakkan berlapis, dan dua lapis lain bekerja
+lebih dulu:
+
+1. Pustaka `keyfunc` menolak ketika parameter `alg` pada JWK tidak cocok dengan
+   `alg` pada header token.
+2. `golang-jwt` menolak karena metode HMAC menuntut kunci bertipe `[]byte`,
+   sedangkan yang diberikan `*ecdsa.PublicKey`.
+
+Bahkan setelah lapis pertama dilewati — dengan menyajikan JWKS tanpa `alg` —
+tokennya tetap ditolak oleh lapis kedua. Tidak ditemukan cara mencabut
+`WithValidMethods` sendirian lalu menghasilkan token HS256 yang lolos.
+
+Kesimpulannya, `WithValidMethods` di kode ini adalah pertahanan berlapis yang
+eksplisit, bukan satu-satunya yang menahan. Tesnya tetap dipertahankan karena
+mengunci perilaku yang benar, tapi komentarnya menyebutkan batas ini apa adanya
+supaya tidak ada yang mengira tes itu membuktikan lebih dari yang sebenarnya.
+
+Dicatat karena ini persoalan yang sama dengan F-11: tes yang lolos karena alasan
+selain yang diklaim adalah tes yang memberi rasa aman palsu.
 
 ---
 
