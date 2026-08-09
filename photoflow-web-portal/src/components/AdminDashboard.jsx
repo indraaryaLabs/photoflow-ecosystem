@@ -6,8 +6,7 @@ import {
   MoreVertical, Edit, Trash2, X, AlertOctagon, LogOut, MessageCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-
-const API_BASE = 'https://photoflow-backend.vercel.app';
+import { API_BASE } from '../lib/api';
 
 // --- STYLES & ANIMATIONS ---
 const globalStyles = `
