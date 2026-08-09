@@ -266,11 +266,25 @@ mengirim email konfirmasi, dan alamat demo tidak punya inbox. Buat lewat
 **Authentication → Users → Add user**, centang **Auto Confirm User**, lalu isi
 datanya dengan [`scripts/seed-demo.sql`](scripts/seed-demo.sql).
 
-> **Kredensial demo belum dicantumkan.** Repo ini punya aturan bahwa tidak ada
-> nilai kredensial yang boleh masuk berkas mana pun. Kalau bagian ini diisi,
-> isi dengan akun yang khusus dibuat untuk demo, berisi data contoh saja, dan
-> pahami bahwa siapa pun yang membaca repo ini dapat memakainya — termasuk
-> menghapus project di dalamnya.
+```
+Email    : demo@photoflow.app
+Password : PhotoFlowDemo2026!
+```
+
+Akun ini memang dibuat untuk dibagikan. Ia tidak memuat data pribadi, tidak
+terhubung ke Google Drive mana pun, dan berdiri terpisah dari akun sungguhan
+yang memakai aplikasi ini. Siapa pun yang membaca repo ini bisa masuk — dan
+juga bisa mengubah atau menghapus kedua project contoh di dalamnya. Kalau
+tampilannya nanti kosong, jalankan ulang
+[`scripts/seed-demo.sql`](scripts/seed-demo.sql).
+
+Karena akun ini tidak menghubungkan Drive, galeri kliennya disajikan dari
+salinan foto yang tersimpan di database — jalur cadangan yang sama yang dipakai
+saat Drive fotografer sungguhan sedang tidak terbaca.
+
+Nomor WhatsApp pada kedua project itu placeholder, dan seluruh nomor pada data
+lain di project ini sudah diganti. Sejak itu backend juga tidak lagi
+mengembalikan `client_whats_app` ke halaman galeri sama sekali.
 
 ## Catatan keamanan
 
