@@ -1,10 +1,12 @@
 # Dependensi untuk menjalankan tes saja.
 #
 # Tes tidak menyentuh jaringan, tidak membuka jendela, dan tidak men-decode
-# RAW, jadi eel, Pillow, dan rawpy tidak perlu dipasang. Yang dibutuhkan hanya
-# paket yang benar-benar diimpor modul yang diuji: requests (auth, gdrive) dan
-# sentry-sdk (gdrive). keyring ikut supaya jalur keychain-nya ikut terpasang di
-# CI, walaupun tesnya sendiri memakai stub.
+# RAW, jadi eel, Pillow, rawpy, dan supabase tidak perlu dipasang. sentry-sdk
+# juga tidak: pelaporan crash ada di balik telemetry.py, yang baru mengimpornya
+# saat init() dipanggil dengan DSN yang terisi.
+#
+# Yang tersisa hanya paket yang benar-benar diimpor di tingkat modul oleh kode
+# yang diuji: requests (auth, gdrive). keyring ikut supaya jalur keychain-nya
+# ikut terpasang di CI, walaupun tesnya sendiri memakai stub.
 requests>=2.31.0,<3
-sentry-sdk>=2.0.0,<3
 keyring>=24.0.0,<26
