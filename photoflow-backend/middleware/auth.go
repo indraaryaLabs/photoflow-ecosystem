@@ -48,14 +48,27 @@ type Verifier struct {
 	issuer  string
 	jwksURL string
 
+	// httpClient dipakai saat mengambil JWKS. Nil berarti klien bawaan.
+	// Disediakan supaya tes bisa mengarahkan verifier ke server JWKS lokal
+	// tanpa mengendurkan satu pun aturan yang berlaku di produksi.
+	httpClient *http.Client
+
 	mu sync.Mutex
 	kf keyfunc.Keyfunc
+}
+
+// VerifierOption menyesuaikan Verifier saat dibuat.
+type VerifierOption func(*Verifier)
+
+// WithHTTPClient mengganti klien HTTP yang dipakai mengambil JWKS.
+func WithHTTPClient(client *http.Client) VerifierOption {
+	return func(v *Verifier) { v.httpClient = client }
 }
 
 // NewVerifier membangun Verifier dari base URL project Supabase, misalnya
 // "https://xxxx.supabase.co". Fungsi ini hanya memvalidasi konfigurasi dan
 // tidak menyentuh jaringan; JWKS diambil saat request terautentikasi pertama.
-func NewVerifier(supabaseURL string) (*Verifier, error) {
+func NewVerifier(supabaseURL string, opts ...VerifierOption) (*Verifier, error) {
 	trimmed := strings.TrimRight(strings.TrimSpace(supabaseURL), "/")
 	if trimmed == "" {
 		return nil, errors.New("SUPABASE_URL kosong")
@@ -65,10 +78,14 @@ func NewVerifier(supabaseURL string) (*Verifier, error) {
 	}
 
 	issuer := trimmed + "/auth/v1"
-	return &Verifier{
+	v := &Verifier{
 		issuer:  issuer,
 		jwksURL: issuer + "/.well-known/jwks.json",
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(v)
+	}
+	return v, nil
 }
 
 // keyfunc mengambil jwt.Keyfunc dari JWKS, menginisialisasinya sekali lalu
@@ -86,7 +103,7 @@ func (v *Verifier) keyfunc() (jwt.Keyfunc, error) {
 
 	if v.kf == nil {
 		kf, err := keyfunc.NewDefaultOverrideCtx(context.Background(), []string{v.jwksURL},
-			keyfunc.Override{RefreshInterval: jwksRefreshInterval})
+			keyfunc.Override{RefreshInterval: jwksRefreshInterval, Client: v.httpClient})
 		if err != nil {
 			return nil, fmt.Errorf("gagal memuat JWKS: %w", err)
 		}
