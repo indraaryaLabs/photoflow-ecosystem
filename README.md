@@ -30,7 +30,7 @@ flowchart TB
 
     subgraph Fotografer["Fotografer"]
         Dashboard["Dashboard admin<br/>React + Vite"]
-        Desktop["Aplikasi desktop<br/>(repo terpisah)"]
+        Desktop["Aplikasi desktop<br/>Python + Eel"]
     end
 
     subgraph Backend["Backend Go — Vercel Serverless"]
@@ -48,7 +48,9 @@ flowchart TB
     Drive["Google Drive<br/>milik fotografer"]
 
     Dashboard -- "email + password" --> SBAuth
+    Desktop -- "email + password" --> SBAuth
     SBAuth -- "JWT" --> Dashboard
+    SBAuth -- "JWT + refresh token" --> Desktop
     Dashboard -- "Bearer JWT" --> Router
     Desktop -- "Bearer JWT" --> Router
 
@@ -68,6 +70,12 @@ flowchart TB
 Backend memverifikasi tanda tangannya terhadap kunci publik JWKS Supabase, lalu
 mengambil identitas dari klaim `sub`. Backend tidak pernah menerima identitas
 yang dikirim pemanggil.
+
+Ini berlaku untuk kedua antarmuka fotografer. Dashboard web dan aplikasi
+desktop sama-sama login langsung ke Supabase Auth dan membawa JWT yang sama;
+tidak ada jalur login khusus desktop. Bedanya hanya pada tempat menyimpan
+refresh token — browser mengurusnya sendiri, sedangkan aplikasi desktop
+menyimpannya di keyring milik sistem operasi.
 
 **Klien** tidak punya akun. Aksesnya berupa magic link 16 byte yang menentukan
 satu project. Karena tidak ada yang bisa diautentikasi, pertahanannya adalah
@@ -106,7 +114,8 @@ dibawa kembali browser.
 | Autentikasi | JWT Supabase, diverifikasi lewat JWKS asimetris (ES256/RS256) |
 | Integrasi | Google Drive API, OAuth2 dengan scope `drive.readonly` |
 | Frontend | React 19, Vite, Tailwind |
-| Deploy | Vercel (dua project: backend dan web portal) |
+| Aplikasi desktop | Python 3.11, Eel, PyInstaller, rawpy |
+| Deploy | Vercel (dua project: backend dan web portal), GitHub Actions untuk build desktop |
 
 ## Struktur
 
@@ -124,7 +133,22 @@ photoflow-backend/
 photoflow-web-portal/
   src/components/  AdminLogin, AdminDashboard, galeri klien
   src/lib/         klien Supabase
+
+photoflow-desktop/
+  main.py          fungsi yang dipanggil antarmuka, operasi berkas, thumbnail
+  auth.py          sesi Supabase Auth, penyimpanan token, pembaruan otomatis
+  gdrive.py        operasi Google Drive
+  config.py        konstanta, dapat ditimpa lewat environment variable
+  web/             antarmuka Eel: HTML, CSS, JS
+  tests/           tes unit, tanpa jaringan
 ```
+
+Aplikasi desktop dulunya tinggal di dua repo terpisah, `photoflow-app` dan
+`photoflow-app-macOS`, yang isinya 99% sama — hanya `main.py`, ikon, dan berkas
+workflow yang berbeda. Keduanya juga hanya punya workflow build macOS, jadi
+tidak ada satu pun yang benar-benar menghasilkan aplikasi Windows. Keduanya
+sekarang digabung ke sini, dan satu matrix GitHub Actions membangun kedua
+sistem dari sumber yang sama.
 
 ## Menjalankan secara lokal
 
@@ -148,6 +172,18 @@ cp .env.example .env
 npm install
 npm run dev
 ```
+
+### Aplikasi desktop
+
+```bash
+cd photoflow-desktop
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python main.py
+```
+
+Semua alamat yang dituju dapat ditimpa lewat environment variable; daftarnya
+ada di [`photoflow-desktop/README.md`](photoflow-desktop/README.md).
 
 ### Migrasi
 
@@ -179,6 +215,15 @@ Untuk menjalankan seluruhnya, sediakan PostgreSQL dan isi `TEST_DATABASE_URL`:
 ```bash
 TEST_DATABASE_URL="host=127.0.0.1 port=5432 user=postgres dbname=postgres sslmode=disable" \
   go test ./...
+```
+
+Tes aplikasi desktop tidak menyentuh jaringan dan tidak membuka jendela, jadi
+`eel`, `Pillow`, dan `rawpy` tidak perlu terpasang untuk menjalankannya:
+
+```bash
+cd photoflow-desktop
+pip install -r requirements-dev.txt
+python -m unittest discover -s tests -v
 ```
 
 Variabelnya sengaja terpisah dari `DATABASE_URL`: tes tersebut menjalankan
