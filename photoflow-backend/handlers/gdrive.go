@@ -76,14 +76,10 @@ func (h *Handler) GalleryPhotos(c *gin.Context) {
 		return
 	}
 
-	// Galeri yang sudah disubmit tidak lagi menampilkan katalog Drive: yang
-	// tersimpan justru pilihan kliennya, dan menarik ulang dari Drive akan
-	// menampilkan seluruh folder seolah belum dipilih apa pun.
-	if project.Status == models.StatusSubmitted {
-		h.respondWithStoredPhotos(c, project, "submitted")
-		return
-	}
-
+	// Galeri yang sudah disubmit SENGAJA tetap membaca Drive, sama seperti
+	// sebelumnya. Setelah submit, tabel photos hanya berisi pilihan klien dengan
+	// thumbnail_url kosong, jadi menyajikannya di sini akan menampilkan gambar
+	// kosong. Penguncian tampilan sudah ditangani frontend lewat status project.
 	store, err := h.StoreForUser(c.Request.Context(), project.UserID)
 	if err != nil {
 		h.respondWithStoredPhotos(c, project, driveFallbackReason(err))

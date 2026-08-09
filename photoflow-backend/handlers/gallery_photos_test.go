@@ -128,19 +128,23 @@ func TestGalleryPhotosFallbackUsesGalleryFieldNames(t *testing.T) {
 	}
 }
 
-// TestGalleryPhotosUsesStoredAfterSubmit memastikan galeri yang sudah dikunci
-// menampilkan pilihan kliennya, bukan seluruh isi folder Drive seolah belum
-// ada yang dipilih.
-func TestGalleryPhotosUsesStoredAfterSubmit(t *testing.T) {
+// TestGalleryPhotosStillReadsDriveAfterSubmit menjaga agar galeri yang sudah
+// dikunci tetap menampilkan foto beserta thumbnail-nya.
+//
+// Setelah submit, tabel photos hanya menyimpan pilihan klien dengan
+// thumbnail_url kosong. Menyajikan salinan itu di sini akan membuat galeri
+// pasca-submit tampil sebagai gambar kosong — regresi yang tidak terlihat dari
+// kode handler, hanya dari isi tabelnya.
+func TestGalleryPhotosStillReadsDriveAfterSubmit(t *testing.T) {
 	h, project := newGalleryHandler(t, nil, nil)
-	driveCalled := false
 	h.StoreForUser = func(_ context.Context, _ string) (storage.PhotoStore, error) {
-		driveCalled = true
-		return storage.NewFakeStore(project.DriveFolderID, nil), nil
+		return storage.NewFakeStore(project.DriveFolderID, []storage.PhotoRef{
+			{ID: "drive-1", Name: "satu.jpg", ThumbnailLink: "https://contoh/1"},
+		}), nil
 	}
 
 	if err := submitSelection(h.DB, project.ID, []models.Photo{
-		{ProjectID: project.ID, FileName: "pilihan.jpg", ThumbnailURL: "https://contoh/p", IsSelected: true},
+		{ProjectID: project.ID, FileName: "pilihan.jpg", IsSelected: true},
 	}); err != nil {
 		t.Fatalf("submit gagal disiapkan: %v", err)
 	}
@@ -150,14 +154,11 @@ func TestGalleryPhotosUsesStoredAfterSubmit(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("status %d, seharusnya 200", code)
 	}
-	if driveCalled {
-		t.Fatal("Drive dibaca untuk galeri yang sudah disubmit")
+	if body.Source != "drive" {
+		t.Fatalf("source %q, seharusnya drive: galeri pasca-submit tetap membaca Drive", body.Source)
 	}
-	if body.Source != "stored" || body.Reason != "submitted" {
-		t.Fatalf("source=%q reason=%q, seharusnya stored/submitted", body.Source, body.Reason)
-	}
-	if len(body.Files) != 1 || body.Files[0].Name != "pilihan.jpg" {
-		t.Fatalf("isi files tidak sesuai: %+v", body.Files)
+	if len(body.Files) != 1 || body.Files[0].ThumbnailLink == "" {
+		t.Fatalf("thumbnail hilang pada galeri pasca-submit: %+v", body.Files)
 	}
 }
 
