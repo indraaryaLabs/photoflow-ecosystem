@@ -1,48 +1,141 @@
 package handlers
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	"photoflow-backend/middleware"
+	"photoflow-backend/models"
 	"photoflow-backend/storage"
 )
 
-// DriveToken menghasilkan access token Google Drive dari refresh token milik
-// pemanggil. Dipakai desktop app; rute ini terautentikasi.
+// DriveToken menghasilkan access token Google Drive milik pemanggil, untuk
+// dipakai desktop app mengunduh berkas aslinya.
 func (h *Handler) DriveToken(c *gin.Context) {
 	userID := c.GetString(middleware.ContextUserIDKey)
 
-	// Generate GDrive Access Token dari Refresh Token milik user
-	accessToken, expiry, err := storage.GetUserAccessToken(userID, h.DB)
+	token, err := storage.GetUserAccessToken(c.Request.Context(), h.DB, userID)
 	if err != nil {
+		if code, ok := driveErrorCode(err); ok {
+			// Bukan kegagalan server: user perlu menghubungkan Drive-nya.
+			// Kode ini yang dipakai klien untuk menampilkan ajakan reconnect
+			// alih-alih pesan error mentah.
+			c.JSON(http.StatusConflict, gin.H{"error": code, "code": code})
+			return
+		}
 		log.Printf("🔴 GDrive access token untuk user %s: %v", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghasilkan access token"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"access_token": accessToken,
-		"expiry":       expiry,
+		"access_token": token.AccessToken,
+		"expiry":       token.Expiry,
 	})
 }
 
-// DriveFolder membaca isi folder Google Drive, termasuk format RAW.
-//
-// Sengaja tetap publik: dipanggil galeri klien yang diakses lewat magic link
-// tanpa login.
-func (h *Handler) DriveFolder(c *gin.Context) {
-	folderID := c.Param("folderId")
+// driveErrorCode memetakan kesalahan koneksi Drive ke kode yang bisa
+// ditindaklanjuti klien. Kesalahan lain sengaja tidak dipetakan supaya tidak
+// ada detail internal yang bocor ke pemanggil.
+func driveErrorCode(err error) (string, bool) {
+	switch {
+	case errors.Is(err, storage.ErrDriveNotConnected):
+		return "drive_not_connected", true
+	case errors.Is(err, storage.ErrDriveReconnectRequired):
+		return "drive_reconnect_required", true
+	default:
+		return "", false
+	}
+}
 
-	files, err := storage.GetImagesFromFolder(folderID)
-	if err != nil {
-		// Rute ini publik: pesan error mentah dari Google API tidak boleh
-		// sampai ke pemanggil.
-		log.Printf("🔴 Baca folder Drive %s: %v", folderID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membaca folder Google Drive"})
+// GalleryPhotos melayani daftar foto sebuah galeri lewat magic link.
+//
+// Menggantikan GET /api/gdrive/:folderId, yang menerima ID folder apa pun dari
+// siapa pun tanpa memeriksa hubungan pemanggil dengan folder itu. Magic link
+// menentukan project, project menentukan pemiliknya, dan kredensial pemilik
+// itulah yang dipakai membaca Drive — jadi tidak ada lagi cara meminta isi
+// folder yang bukan bagian dari galeri mana pun.
+//
+// Rute ini publik dan tidak boleh gagal hanya karena Drive tidak terbaca:
+// fotonya sudah tersimpan di database, dan galeri klien harus tetap tampil.
+// Bentuk responsnya seragam untuk kedua sumber sehingga frontend tidak perlu
+// tahu yang mana yang sedang dipakai.
+func (h *Handler) GalleryPhotos(c *gin.Context) {
+	magicLink := c.Param("magic_link")
+
+	var project models.Project
+	if err := h.DB.Where("magic_link_token = ?", magicLink).First(&project).Error; err != nil {
+		if h.Limiter.TooManyFailures(c) {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Terlalu banyak percobaan. Coba lagi nanti."})
+			return
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": "Galeri tidak ditemukan atau link tidak valid"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"files": files})
+
+	// Galeri yang sudah disubmit tidak lagi menampilkan katalog Drive: yang
+	// tersimpan justru pilihan kliennya, dan menarik ulang dari Drive akan
+	// menampilkan seluruh folder seolah belum dipilih apa pun.
+	if project.Status == models.StatusSubmitted {
+		h.respondWithStoredPhotos(c, project, "submitted")
+		return
+	}
+
+	store, err := h.StoreForUser(c.Request.Context(), project.UserID)
+	if err != nil {
+		h.respondWithStoredPhotos(c, project, driveFallbackReason(err))
+		return
+	}
+
+	files, err := store.ListPhotos(c.Request.Context(), project.DriveFolderID)
+	if err != nil {
+		log.Printf("⚠️ Baca folder Drive %s untuk galeri %s: %v", project.DriveFolderID, project.ID, err)
+		h.respondWithStoredPhotos(c, project, driveFallbackReason(err))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"files": files, "source": "drive"})
+}
+
+// driveFallbackReason menerjemahkan kesalahan jadi alasan singkat yang aman
+// ditampilkan, untuk menjelaskan kenapa foto diambil dari salinan tersimpan.
+func driveFallbackReason(err error) string {
+	if code, ok := driveErrorCode(err); ok {
+		return code
+	}
+	return "drive_unavailable"
+}
+
+// respondWithStoredPhotos mengembalikan salinan foto dari database dalam bentuk
+// yang sama persis dengan hasil pembacaan Drive.
+//
+// Penyeragaman ini bukan kerapian belaka: baris database memakai `file_name`
+// dan `thumbnail_url`, sedangkan galeri membaca `name` dan `thumbnailLink`.
+// Selama ini jalur cadangan mengirim bentuk yang salah, sehingga andai ia
+// pernah terpakai, gambarnya kosong dan nama berkasnya hilang saat submit.
+func (h *Handler) respondWithStoredPhotos(c *gin.Context, project models.Project, reason string) {
+	var photos []models.Photo
+	if err := h.DB.Where("project_id = ?", project.ID).Find(&photos).Error; err != nil {
+		log.Printf("🔴 Gagal memuat foto tersimpan project %s: %v", project.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat daftar foto"})
+		return
+	}
+
+	files := make([]storage.PhotoRef, 0, len(photos))
+	for _, photo := range photos {
+		files = append(files, storage.PhotoRef{
+			ID:            photo.ID,
+			Name:          photo.FileName,
+			ThumbnailLink: photo.ThumbnailURL,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"files":  files,
+		"source": "stored",
+		"reason": reason,
+	})
 }

@@ -7,6 +7,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -18,6 +19,7 @@ import (
 
 	"photoflow-backend/middleware"
 	"photoflow-backend/models"
+	"photoflow-backend/storage"
 )
 
 // Handler menyimpan dependensi yang dibutuhkan handler-handler di paket ini.
@@ -25,11 +27,23 @@ type Handler struct {
 	DB      *gorm.DB
 	OAuth   *oauth2.Config
 	Limiter *middleware.Limiter
+
+	// StoreForUser membangun PhotoStore memakai kredensial Drive milik user
+	// tertentu. Ini titik sisip yang membuat handler bisa diuji tanpa memanggil
+	// jaringan: tes memasang fungsi yang mengembalikan storage.FakeStore.
+	StoreForUser func(ctx context.Context, userID string) (storage.PhotoStore, error)
 }
 
-// New membuat Handler.
+// New membuat Handler dengan PhotoStore yang membaca Google Drive sungguhan.
 func New(db *gorm.DB, oauthConfig *oauth2.Config, limiter *middleware.Limiter) *Handler {
-	return &Handler{DB: db, OAuth: oauthConfig, Limiter: limiter}
+	return &Handler{
+		DB:      db,
+		OAuth:   oauthConfig,
+		Limiter: limiter,
+		StoreForUser: func(ctx context.Context, userID string) (storage.PhotoStore, error) {
+			return storage.NewGDriveStoreForUser(ctx, db, userID)
+		},
+	}
 }
 
 // errGalleryLocked dikembalikan ketika galeri sudah disubmit sebelumnya.

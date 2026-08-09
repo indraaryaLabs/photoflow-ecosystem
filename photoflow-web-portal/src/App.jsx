@@ -117,16 +117,30 @@ export default function App() {
           setIsSubmittedState(true);
         }
 
-        const folderId = data.project?.drive_folder_id;
-        if (folderId) {
-          const gDriveRes = await fetch(`${API_BASE}/api/gdrive/${folderId}`, {
+        // Daftar foto diambil lewat magic link, bukan lewat ID folder Drive.
+        // Backend yang menentukan pemilik galeri dan memakai kredensial Drive
+        // miliknya; kalau Drive tidak terbaca, backend mengembalikan salinan
+        // yang tersimpan di database dalam bentuk yang sama.
+        try {
+          const photosRes = await fetch(`${API_BASE}/api/p/${token}/photos`, {
             headers: { 'ngrok-skip-browser-warning': 'true' }
           });
-          if (!gDriveRes.ok) throw new Error(`Gagal memuat proxy Google Drive (status ${gDriveRes.status})`);
-          const gDriveData = await gDriveRes.json();
-          setPhotos(gDriveData.files || []);
-        } else {
-          setPhotos(data.photos || []);
+          if (!photosRes.ok) throw new Error(`status ${photosRes.status}`);
+          const photosData = await photosRes.json();
+          setPhotos(photosData.files || []);
+        } catch (photosErr) {
+          // Galeri tidak boleh mati hanya karena daftar foto gagal diambil:
+          // salinannya ikut terkirim bersama data project. Bentuknya diselaraskan
+          // di sini karena baris database memakai file_name dan thumbnail_url,
+          // sedangkan galeri membaca name dan thumbnailLink.
+          console.warn('Gagal memuat daftar foto, memakai salinan tersimpan:', photosErr);
+          setPhotos(
+            (data.photos || []).map(p => ({
+              id: p.id,
+              name: p.file_name,
+              thumbnailLink: p.thumbnail_url,
+            }))
+          );
         }
       } catch (err) {
         setError(err.message || 'Terjadi kesalahan saat memuat galeri.');
