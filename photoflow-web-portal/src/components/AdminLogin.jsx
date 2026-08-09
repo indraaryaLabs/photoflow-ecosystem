@@ -4,6 +4,39 @@ import { Mail, Lock, Eye, EyeOff, User, ArrowRight, Loader2, Aperture, Sun, Moon
 import { supabase } from '../lib/supabase';
 import { openedFromRecoveryLink, clearUrlFragment } from '../lib/recovery';
 
+/**
+ * Terjemahkan error Supabase Auth jadi kalimat yang benar untuk user.
+ *
+ * Pemetaan ini pernah salah dengan cara yang merugikan: setiap kegagalan
+ * dilaporkan sebagai "Email atau password salah". Kegagalan jaringan pun ikut
+ * kena, sehingga seseorang yang koneksinya putus diberi tahu bahwa
+ * passwordnya salah — lalu menggantinya, padahal tidak ada yang salah dengan
+ * password itu. Kesalahan jaringan tidak membawa status HTTP, dan itulah
+ * pembedanya.
+ *
+ * Yang TIDAK dibedakan, sengaja: email tidak terdaftar versus password salah.
+ * Supabase memang membedakan keduanya, tapi meneruskan perbedaan itu ke layar
+ * berarti memberi tahu siapa pun yang mencoba, akun mana yang ada di sistem.
+ */
+function describeAuthError(error) {
+  if (!error?.status || error.name === 'AuthRetryableFetchError') {
+    return 'Tidak dapat menghubungi server. Periksa koneksi internet Anda.';
+  }
+  if (error.code === 'email_not_confirmed') {
+    return 'Email belum dikonfirmasi. Buka dulu tautan konfirmasi yang kami kirim.';
+  }
+  if (error.status === 400 || error.status === 401) {
+    return 'Email atau password salah.';
+  }
+  if (error.status === 422) {
+    return error.message || 'Data yang dikirim tidak valid.';
+  }
+  if (error.status === 429) {
+    return 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi.';
+  }
+  return 'Server sedang bermasalah. Coba lagi sebentar lagi.';
+}
+
 export default function AdminLogin({ isDark, toggleTheme }) {
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -55,7 +88,7 @@ export default function AdminLogin({ isDark, toggleTheme }) {
         password: formData.password
       });
       if (error) {
-        setFeedback({ type: 'error', message: 'Email atau password salah.' });
+        setFeedback({ type: 'error', message: describeAuthError(error) });
       } else {
         window.location.href = '/admin';
       }
@@ -83,7 +116,7 @@ export default function AdminLogin({ isDark, toggleTheme }) {
       });
 
       if (error) {
-        setFeedback({ type: 'error', message: error.message });
+        setFeedback({ type: 'error', message: describeAuthError(error) });
       } else {
         // Baris di tabel profiles dibuat trigger handle_new_user() di sisi
         // Supabase. Frontend sempat melakukan upsert sendiri di sini, dan
@@ -119,7 +152,7 @@ export default function AdminLogin({ isDark, toggleTheme }) {
     // Membedakan keduanya berarti memberi tahu siapa pun yang mencoba, akun
     // mana yang ada di sistem ini.
     if (error) {
-      setFeedback({ type: 'error', message: 'Gagal mengirim tautan. Coba lagi sebentar lagi.' });
+      setFeedback({ type: 'error', message: describeAuthError(error) });
     } else {
       setFeedback({
         type: 'success',
@@ -142,7 +175,7 @@ export default function AdminLogin({ isDark, toggleTheme }) {
 
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) {
-      setFeedback({ type: 'error', message: error.message });
+      setFeedback({ type: 'error', message: describeAuthError(error) });
       setIsLoading(false);
       return;
     }
@@ -163,7 +196,7 @@ export default function AdminLogin({ isDark, toggleTheme }) {
   const handleLogout = async () => {
     setIsLoading(true);
     const { error } = await supabase.auth.signOut();
-    if (error) setFeedback({ type: 'error', message: error.message });
+    if (error) setFeedback({ type: 'error', message: describeAuthError(error) });
     setFormData({ name: '', email: '', password: '', whatsapp: '' });
     setIsLoading(false);
   };
