@@ -541,7 +541,7 @@ bukan kesimpulan.
 ## F-17 — Upsert profil di frontend mengirim kolom yang tidak ada, hasilnya dibuang
 
 **Ditemukan saat:** pemeriksaan Supabase setelah Fase 4
-**Status:** BELUM DITANGANI — frontend, wajar dikerjakan bersama Fase 2
+**Status:** SELESAI
 
 `photoflow-web-portal/src/components/AdminLogin.jsx:71`:
 
@@ -570,6 +570,11 @@ Pelajaran yang lebih umum dan layak dijaga: pemanggilan Supabase dari frontend
 yang hasilnya tidak diperiksa akan gagal tanpa suara. Kegagalan ini bertahan
 cukup lama untuk sempat memunculkan dua dugaan keliru sebelum diperiksa
 langsung ke database.
+
+**Penutupan.** Panggilan upsert-nya dihapus, sesuai saran di atas. Baris profil
+tetap dibuat trigger `handle_new_user()`, dan nomor WhatsApp tetap tersimpan di
+kolom `projects` seperti sebelumnya — jadi tidak ada data yang hilang karena
+penghapusan ini.
 
 ---
 
