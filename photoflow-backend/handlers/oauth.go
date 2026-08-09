@@ -1,14 +1,30 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/base64"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
+	"gorm.io/gorm"
 
+	"photoflow-backend/middleware"
 	"photoflow-backend/models"
 )
+
+// oauthStateBytes menentukan entropi parameter `state`. 32 byte membuatnya
+// tidak dapat ditebak, yang justru merupakan seluruh gunanya.
+const oauthStateBytes = 32
+
+// oauthStateTTL membatasi umur satu permintaan koneksi. Cukup panjang untuk
+// user memilih akun dan membaca layar consent, cukup pendek supaya state yang
+// terlantar tidak menumpuk.
+const oauthStateTTL = 10 * time.Minute
 
 // oauthSuccessPage ditampilkan setelah user menyelesaikan koneksi Google Drive.
 const oauthSuccessPage = `
@@ -63,85 +79,143 @@ const oauthSuccessPage = `
     </div>
 </body>
 </html>
-		`
+	`
 
-// GoogleLogin mengalihkan user ke layar consent Google.
+// newOAuthState membangkitkan nilai state yang tidak dapat ditebak.
+func newOAuthState() (string, error) {
+	buf := make([]byte, oauthStateBytes)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("gagal membangkitkan state OAuth: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+// GoogleAuthURL memulai alur koneksi Google Drive untuk user yang sedang login.
 //
-// PERHATIAN: user_id diambil mentah dari query dan dipakai sebagai parameter
-// `state`. Itu kerentanan yang tercatat sebagai F-05 di FINDINGS.md dan
-// dijadwalkan diperbaiki di Fase 2. Perilakunya sengaja tidak diubah di sini
-// karena Fase 5 adalah refactor murni.
-func (h *Handler) GoogleLogin(c *gin.Context) {
-	userID := c.Query("user_id")
-	if userID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id wajib disertakan sebagai query parameter"})
+// Rute ini terautentikasi dan mengembalikan URL, BUKAN redirect. Alasannya
+// teknis: navigasi teratas browser tidak membawa header Authorization, jadi
+// sebuah redirect tidak punya cara membuktikan siapa yang memintanya. Dulu
+// masalah itu "diselesaikan" dengan menerima user_id dari query string, yang
+// berarti identitasnya ditentukan oleh pihak yang sedang diautentikasi.
+//
+// Frontend memanggil rute ini dengan Bearer token, lalu mengarahkan browser ke
+// auth_url yang dikembalikan.
+func (h *Handler) GoogleAuthURL(c *gin.Context) {
+	userID := c.GetString(middleware.ContextUserIDKey)
+
+	state, err := newOAuthState()
+	if err != nil {
+		log.Printf("🔴 %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memulai koneksi Google Drive"})
 		return
 	}
 
-	// Encode user_id ke dalam state agar bisa diambil kembali di callback
-	state := userID
+	// Pemetaan state ke user disimpan di sisi server. Inilah yang membuat
+	// callback tidak perlu mempercayai apa pun yang dibawa kembali browser.
+	record := models.OAuthState{
+		State:     state,
+		UserID:    userID,
+		ExpiresAt: time.Now().Add(oauthStateTTL),
+	}
+	if err := h.DB.Create(&record).Error; err != nil {
+		log.Printf("🔴 Gagal menyimpan state OAuth: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memulai koneksi Google Drive"})
+		return
+	}
 
-	// Generate URL OAuth Google dengan prompt select_account + consent & access_type offline
-	// select_account = paksa pilih akun (Fast Account Switching)
-	// consent = paksa consent screen agar Google selalu memberikan Refresh Token
+	// Buang state kedaluwarsa sekalian; tidak butuh cron untuk tabel sekecil ini.
+	if err := h.DB.Where("expires_at < ?", time.Now()).Delete(&models.OAuthState{}).Error; err != nil {
+		log.Printf("⚠️ Gagal membersihkan state OAuth kedaluwarsa: %v", err)
+	}
+
+	// access_type offline agar Google memberikan refresh token.
+	// prompt select_account consent agar user bisa berganti akun dan Google
+	// selalu mengirim refresh token, bukan hanya pada persetujuan pertama.
 	url := h.OAuth.AuthCodeURL(state,
 		oauth2.AccessTypeOffline,
 		oauth2.SetAuthURLParam("prompt", "select_account consent"),
 	)
 
-	c.Redirect(http.StatusTemporaryRedirect, url)
+	c.JSON(http.StatusOK, gin.H{"auth_url": url})
 }
 
-// GoogleCallback menukar authorization code jadi refresh token lalu
-// menyimpannya ke profil user.
+// GoogleCallback menyelesaikan alur koneksi: mencocokkan state, menukar
+// authorization code, lalu menyimpan refresh token ke profil user.
 func (h *Handler) GoogleCallback(c *gin.Context) {
-	// Ambil authorization code & state (user_id) dari Google
 	code := c.Query("code")
-	state := c.Query("state") // berisi user_id
+	state := c.Query("state")
 
 	if code == "" {
 		c.String(http.StatusBadRequest, "Authorization code tidak ditemukan.")
 		return
 	}
-
 	if state == "" {
-		c.String(http.StatusBadRequest, "State (user_id) tidak valid.")
+		c.String(http.StatusBadRequest, "State tidak valid.")
 		return
 	}
 
-	userID := state
+	userID, err := h.consumeOAuthState(state)
+	if err != nil {
+		// Pesannya sengaja seragam: pemanggil tidak perlu tahu apakah state-nya
+		// tidak pernah ada, sudah terpakai, atau kedaluwarsa.
+		log.Printf("⚠️ State OAuth ditolak: %v", err)
+		c.String(http.StatusBadRequest, "Permintaan koneksi tidak valid atau sudah kedaluwarsa. Silakan ulangi dari aplikasi.")
+		return
+	}
 
-	// Tukar authorization code menjadi Access Token + Refresh Token
 	token, err := h.OAuth.Exchange(c.Request.Context(), code)
 	if err != nil {
 		log.Printf("🔴 OAuth Exchange Error: %v", err)
-		c.String(http.StatusInternalServerError, "Gagal menukar authorization code: %v", err)
+		c.String(http.StatusInternalServerError, "Gagal menukar authorization code.")
 		return
 	}
 
-	refreshToken := token.RefreshToken
-
 	// Safety: Jika Google tidak memberikan refresh_token (edge case),
 	// biarkan token lama di database tetap utuh, jangan overwrite dengan string kosong.
-	if refreshToken == "" {
+	if token.RefreshToken == "" {
 		log.Printf("⚠️ Refresh Token kosong untuk user %s. Token lama dipertahankan.", userID)
 	} else {
-		// Simpan Refresh Token ke tabel profiles berdasarkan user_id
-		result := h.DB.Model(&models.Profile{}).Where("id = ?", userID).Update("gdrive_refresh_token", refreshToken)
+		result := h.DB.Model(&models.Profile{}).Where("id = ?", userID).
+			Update("gdrive_refresh_token", token.RefreshToken)
 		if result.Error != nil {
 			log.Printf("🔴 DB Update Error: %v", result.Error)
 			c.String(http.StatusInternalServerError, "Gagal menyimpan refresh token ke database.")
 			return
 		}
-
 		if result.RowsAffected == 0 {
 			c.String(http.StatusNotFound, "Profile dengan user_id tersebut tidak ditemukan.")
 			return
 		}
-
 		log.Printf("✅ Refresh Token berhasil disimpan untuk user: %s", userID)
 	}
 
-	// Tampilkan halaman sukses sederhana
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(oauthSuccessPage))
 }
+
+// consumeOAuthState menukar state dengan user yang memulainya, sekali pakai.
+//
+// Penghapusan dan pembacaan dilakukan dalam satu perintah DELETE ... RETURNING,
+// bukan SELECT lalu DELETE terpisah. Alasannya sama seperti gallery lock: dua
+// perintah terpisah menyisakan celah bagi dua callback bersamaan untuk
+// sama-sama lolos memakai state yang sama.
+func (h *Handler) consumeOAuthState(state string) (string, error) {
+	var record models.OAuthState
+	err := h.DB.Raw(
+		`DELETE FROM oauth_states WHERE state = ? RETURNING state, user_id, expires_at`,
+		state,
+	).Scan(&record).Error
+	if err != nil {
+		return "", fmt.Errorf("gagal membaca state: %w", err)
+	}
+	if record.UserID == "" {
+		return "", errors.New("state tidak dikenal atau sudah dipakai")
+	}
+	if time.Now().After(record.ExpiresAt) {
+		return "", errors.New("state sudah kedaluwarsa")
+	}
+	return record.UserID, nil
+}
+
+// ensureNoLegacyStateUsage menahan agar tipe gorm.DB tetap terpakai eksplisit
+// pada berkas ini; dihapus kalau tidak lagi diperlukan.
+var _ = func(db *gorm.DB) {}
