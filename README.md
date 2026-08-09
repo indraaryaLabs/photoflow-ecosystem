@@ -138,6 +138,7 @@ photoflow-desktop/
   main.py          fungsi yang dipanggil antarmuka, operasi berkas, thumbnail
   auth.py          sesi Supabase Auth, penyimpanan token, pembaruan otomatis
   gdrive.py        operasi Google Drive
+  telemetry.py     pelaporan crash, dimuat saat dibutuhkan
   config.py        konstanta, dapat ditimpa lewat environment variable
   web/             antarmuka Eel: HTML, CSS, JS
   tests/           tes unit, tanpa jaringan
@@ -235,11 +236,41 @@ data yang sedang dipakai.
 - Web portal: https://photoflow-ecosystem.vercel.app
 - API: https://photoflow-backend.vercel.app
 
-> **Akun demo belum dicantumkan.** Repo ini punya aturan bahwa tidak ada nilai
-> kredensial yang boleh masuk berkas mana pun, dan password akun demo termasuk
-> di dalamnya. Isi bagian ini dengan akun yang khusus dibuat untuk demo,
-> berisi data contoh saja, dan pahami bahwa siapa pun yang membaca repo ini
-> dapat memakainya.
+### Coba tanpa akun
+
+Galeri klien memang tidak butuh login — itu inti produknya. Dua tautan di bawah
+membuka galeri sungguhan, persis seperti yang diterima klien lewat WhatsApp.
+
+**Galeri yang menunggu dipilih** — pilih foto, perhatikan penghitung dan batas
+maksimalnya:
+
+```
+https://photoflow-ecosystem.vercel.app/?token=fb0bd309058553e34dbe46f19f04a405
+```
+
+**Galeri yang sudah dikirim** — terkunci, tidak menerima perubahan lagi:
+
+```
+https://photoflow-ecosystem.vercel.app/?token=51fafe800d88d1bf22ffbd6f6b13cac6
+```
+
+Nomor WhatsApp pada kedua galeri itu sengaja placeholder. Baris project
+dikembalikan utuh oleh `GET /api/p/:magic_link`, jadi nomor apa pun yang
+tersimpan di sana terbaca oleh siapa saja yang memegang tautannya.
+
+### Dashboard fotografer
+
+Sisi fotografer butuh login. Akun demo dibuat dari dashboard Supabase, bukan
+lewat form pendaftaran: form itu memanggil `supabase.auth.signUp()` yang
+mengirim email konfirmasi, dan alamat demo tidak punya inbox. Buat lewat
+**Authentication → Users → Add user**, centang **Auto Confirm User**, lalu isi
+datanya dengan [`scripts/seed-demo.sql`](scripts/seed-demo.sql).
+
+> **Kredensial demo belum dicantumkan.** Repo ini punya aturan bahwa tidak ada
+> nilai kredensial yang boleh masuk berkas mana pun. Kalau bagian ini diisi,
+> isi dengan akun yang khusus dibuat untuk demo, berisi data contoh saja, dan
+> pahami bahwa siapa pun yang membaca repo ini dapat memakainya — termasuk
+> menghapus project di dalamnya.
 
 ## Catatan keamanan
 
