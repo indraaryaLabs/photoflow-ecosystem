@@ -1,0 +1,24 @@
+# Rahasia
+.env
+token.json
+credentials.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+
+# Hasil build PyInstaller
+build/
+dist/
+*.spec
+
+# Cache thumbnail aplikasi
+.photoflow_cache/
+
+# Sistem operasi
+.DS_Store
+Thumbs.db

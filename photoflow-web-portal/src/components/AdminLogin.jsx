@@ -1,17 +1,61 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, Eye, EyeOff, User, ArrowRight, Loader2, Aperture, Sun, Moon, Phone, LogOut, LayoutDashboard } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User, ArrowRight, Loader2, Aperture, Sun, Moon, Phone, LogOut, LayoutDashboard, AlertCircle, CheckCircle2, KeyRound } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-// Jika Anda menggunakan React Router, uncomment baris di bawah ini:
-// import { useNavigate } from 'react-router-dom';
+import { openedFromRecoveryLink, clearUrlFragment } from '../lib/recovery';
+
+/**
+ * Terjemahkan error Supabase Auth jadi kalimat yang benar untuk user.
+ *
+ * Pemetaan ini pernah salah dengan cara yang merugikan: setiap kegagalan
+ * dilaporkan sebagai "Email atau password salah". Kegagalan jaringan pun ikut
+ * kena, sehingga seseorang yang koneksinya putus diberi tahu bahwa
+ * passwordnya salah — lalu menggantinya, padahal tidak ada yang salah dengan
+ * password itu. Kesalahan jaringan tidak membawa status HTTP, dan itulah
+ * pembedanya.
+ *
+ * Yang TIDAK dibedakan, sengaja: email tidak terdaftar versus password salah.
+ * Supabase memang membedakan keduanya, tapi meneruskan perbedaan itu ke layar
+ * berarti memberi tahu siapa pun yang mencoba, akun mana yang ada di sistem.
+ */
+function describeAuthError(error) {
+  if (!error?.status || error.name === 'AuthRetryableFetchError') {
+    return 'Tidak dapat menghubungi server. Periksa koneksi internet Anda.';
+  }
+  if (error.code === 'email_not_confirmed') {
+    return 'Email belum dikonfirmasi. Buka dulu tautan konfirmasi yang kami kirim.';
+  }
+  if (error.status === 400 || error.status === 401) {
+    return 'Email atau password salah.';
+  }
+  if (error.status === 422) {
+    return error.message || 'Data yang dikirim tidak valid.';
+  }
+  if (error.status === 429) {
+    return 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi.';
+  }
+  return 'Server sedang bermasalah. Coba lagi sebentar lagi.';
+}
 
 export default function AdminLogin({ isDark, toggleTheme }) {
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Pesan untuk user. Sebelumnya seluruh kegagalan di layar ini dilaporkan
+  // lewat alert(), padahal sisa aplikasi memakai toast dan pesan inline —
+  // dan alert() memblokir halaman sampai ditutup.
+  const [feedback, setFeedback] = useState(null);
+
   // State untuk menyimpan sesi login
   const [session, setSession] = useState(null);
+
+  // Mode pemulihan password. Supabase mengirim tautan yang membawa token
+  // pemulihan kembali ke aplikasi ini; tanpa penanganan khusus, pemiliknya
+  // hanya akan masuk ke dashboard dan tidak pernah sampai ke layar penggantian
+  // password.
+  const [isRecovery, setIsRecovery] = useState(openedFromRecoveryLink);
+  const [newPassword, setNewPassword] = useState('');
 
   // Mengecek apakah user sudah login saat komponen dimuat
   useEffect(() => {
@@ -19,8 +63,12 @@ export default function AdminLogin({ isDark, toggleTheme }) {
       setSession(session);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecovery(true);
+        setFeedback(null);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -32,14 +80,15 @@ export default function AdminLogin({ isDark, toggleTheme }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+    setFeedback(null);
 
     if (isLoginMode) {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password
       });
       if (error) {
-        alert("Login failed: " + error.message);
+        setFeedback({ type: 'error', message: describeAuthError(error) });
       } else {
         window.location.href = '/admin';
       }
@@ -47,12 +96,15 @@ export default function AdminLogin({ isDark, toggleTheme }) {
       // Validasi nomor WhatsApp sebelum registrasi
       const wa = formData.whatsapp || '';
       if (!wa.startsWith('62') || wa.length < 10 || wa.length > 15 || !/^\d+$/.test(wa)) {
-        alert('Nomor WhatsApp tidak valid. Gunakan format yang benar.');
+        setFeedback({
+          type: 'error',
+          message: 'Nomor WhatsApp tidak valid. Mulai dengan 62, 10–15 angka.'
+        });
         setIsLoading(false);
         return;
       }
 
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
@@ -64,19 +116,16 @@ export default function AdminLogin({ isDark, toggleTheme }) {
       });
 
       if (error) {
-        alert("Register failed: " + error.message);
+        setFeedback({ type: 'error', message: describeAuthError(error) });
       } else {
-        // Opsional: Insert langsung ke tabel profiles jika Anda sudah membuatnya di Supabase
-        if (data?.user) {
-          await supabase.from('profiles').upsert({
-            id: data.user.id,
-            full_name: formData.name,
-            whatsapp: formData.whatsapp,
-            email: formData.email
-          });
-        }
-
-        alert("Registrasi berhasil! Silakan cek email Anda atau langsung Sign In.");
+        // Baris di tabel profiles dibuat trigger handle_new_user() di sisi
+        // Supabase. Frontend sempat melakukan upsert sendiri di sini, dan
+        // kolom yang dikirimnya tidak semuanya ada — hasilnya dibuang diam-diam
+        // (FINDINGS.md F-17). Sekarang penulisannya dibiarkan pada trigger.
+        setFeedback({
+          type: 'success',
+          message: 'Registrasi berhasil. Cek email untuk konfirmasi, lalu masuk.'
+        });
         setIsLoginMode(true);
       }
     }
@@ -84,17 +133,77 @@ export default function AdminLogin({ isDark, toggleTheme }) {
     setIsLoading(false);
   };
 
+  // Kirim tautan pemulihan password ke email yang sedang diisi.
+  const handleForgotPassword = async () => {
+    const email = formData.email.trim();
+    if (!email) {
+      setFeedback({ type: 'error', message: 'Isi email dulu, lalu tekan "Lupa password".' });
+      return;
+    }
+
+    setIsLoading(true);
+    setFeedback(null);
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    });
+
+    // Keberhasilan dilaporkan sama untuk email yang terdaftar maupun tidak.
+    // Membedakan keduanya berarti memberi tahu siapa pun yang mencoba, akun
+    // mana yang ada di sistem ini.
+    if (error) {
+      setFeedback({ type: 'error', message: describeAuthError(error) });
+    } else {
+      setFeedback({
+        type: 'success',
+        message: `Kalau ${email} terdaftar, tautan pemulihan sudah dikirim ke sana.`
+      });
+    }
+    setIsLoading(false);
+  };
+
+  // Simpan password baru setelah user membuka tautan pemulihan.
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      setFeedback({ type: 'error', message: 'Password baru minimal 6 karakter.' });
+      return;
+    }
+
+    setIsLoading(true);
+    setFeedback(null);
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      setFeedback({ type: 'error', message: describeAuthError(error) });
+      setIsLoading(false);
+      return;
+    }
+
+    setNewPassword('');
+    setIsRecovery(false);
+    // Token pemulihan dibuang dari URL supaya me-refresh halaman tidak
+    // mengulang alur yang sudah selesai.
+    clearUrlFragment();
+    // Tautan pemulihan membawa serta sesi yang sah. Membuangnya memaksa
+    // password baru itu benar-benar dipakai sekali sebelum masuk.
+    await supabase.auth.signOut();
+    setFeedback({ type: 'success', message: 'Password berhasil diganti. Silakan masuk.' });
+    setIsLoading(false);
+  };
+
   // Fungsi Logout
   const handleLogout = async () => {
     setIsLoading(true);
     const { error } = await supabase.auth.signOut();
-    if (error) alert("Error logging out: " + error.message);
+    if (error) setFeedback({ type: 'error', message: describeAuthError(error) });
     setFormData({ name: '', email: '', password: '', whatsapp: '' });
     setIsLoading(false);
   };
 
   const toggleMode = () => {
     setIsLoginMode(prev => !prev);
+    setFeedback(null);
     setFormData({ name: '', email: '', password: '', whatsapp: '' }); // Reset form
   };
 
@@ -155,7 +264,7 @@ export default function AdminLogin({ isDark, toggleTheme }) {
               <div className="h-[60px] relative w-full flex flex-col items-center justify-center">
                 <AnimatePresence mode="wait">
                   <motion.div
-                    key={session ? "loggedin" : (isLoginMode ? "login" : "register")}
+                    key={isRecovery ? "recovery" : (session ? "loggedin" : (isLoginMode ? "login" : "register"))}
                     initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
                     animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                     exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
@@ -163,22 +272,88 @@ export default function AdminLogin({ isDark, toggleTheme }) {
                     className="absolute flex flex-col items-center w-full"
                   >
                     <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white mb-1.5 transition-colors duration-500">
-                      {session ? "You're signed in" : (isLoginMode ? "Welcome back" : "Create an account")}
+                      {isRecovery
+                        ? "Ganti password"
+                        : (session ? "You're signed in" : (isLoginMode ? "Welcome back" : "Create an account"))}
                     </h1>
                     <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium transition-colors duration-500">
-                      {session
-                        ? session.user.email
-                        : (isLoginMode
-                          ? "Enter your details to access PhotoFlow Admin."
-                          : "Start managing your gallery like a pro.")}
+                      {isRecovery
+                        ? "Masukkan password baru untuk akun Anda."
+                        : (session
+                          ? session.user.email
+                          : (isLoginMode
+                            ? "Enter your details to access PhotoFlow Admin."
+                            : "Start managing your gallery like a pro."))}
                     </p>
                   </motion.div>
                 </AnimatePresence>
               </div>
             </div>
 
-            {/* --- CONDITIONAL RENDER: IF LOGGED IN VS LOGGED OUT --- */}
-            {session ? (
+            {/* --- PESAN UNTUK USER --- */}
+            <AnimatePresence>
+              {feedback && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                  animate={{ opacity: 1, height: "auto", marginBottom: 20 }}
+                  exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="overflow-hidden"
+                >
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className={`flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-sm ${
+                      feedback.type === 'error'
+                        ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300'
+                        : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300'
+                    }`}
+                  >
+                    {feedback.type === 'error'
+                      ? <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                      : <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />}
+                    <span>{feedback.message}</span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* --- CONDITIONAL RENDER: PEMULIHAN / SUDAH LOGIN / BELUM LOGIN --- */}
+            {isRecovery ? (
+              /* SET PASSWORD BARU — dicapai lewat tautan pemulihan dari email */
+              <form onSubmit={handleUpdatePassword} className="space-y-4">
+                <div className="relative group">
+                  <InputField
+                    icon={KeyRound}
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Password baru (min. 6 karakter)"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    autoComplete="new-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                <motion.button
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.98 }}
+                  disabled={isLoading}
+                  className="relative w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 text-white font-medium text-sm shadow-[0_4px_20px_-5px_rgba(99,102,241,0.4)] transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed border border-indigo-400/20"
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Simpan password baru</span>}
+                  </div>
+                </motion.button>
+              </form>
+            ) : session ? (
               /* LOGGED IN VIEW */
               <div className="space-y-4">
                 <motion.button
@@ -278,9 +453,17 @@ export default function AdminLogin({ isDark, toggleTheme }) {
 
                   {isLoginMode && (
                     <div className="flex justify-end pt-1">
-                      <a href="#" className="text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors">
-                        Forgot password?
-                      </a>
+                      {/* Dulu ini `<a href="#">` yang tidak mengerjakan apa pun.
+                          Sekarang ia benar-benar mengirim tautan pemulihan ke
+                          email yang sedang diisi di atas. */}
+                      <button
+                        type="button"
+                        onClick={handleForgotPassword}
+                        disabled={isLoading}
+                        className="text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 rounded-sm"
+                      >
+                        Lupa password?
+                      </button>
                     </div>
                   )}
 
@@ -321,10 +504,12 @@ export default function AdminLogin({ isDark, toggleTheme }) {
 
           </div>
 
-          <p className="text-center text-xs text-zinc-500 dark:text-zinc-600 mt-6 font-medium transition-colors duration-500">
-            Protected by reCAPTCHA and subject to the <br className="hidden sm:block" />
-            <a href="#" className="hover:text-zinc-800 dark:hover:text-zinc-400 transition-colors">Privacy Policy</a> and <a href="#" className="hover:text-zinc-800 dark:hover:text-zinc-400 transition-colors">Terms of Service</a>.
-          </p>
+          {/* Di sini dulu tertulis "Protected by reCAPTCHA and subject to the
+              Privacy Policy and Terms of Service", dengan ketiganya menunjuk
+              href="#". Tidak ada reCAPTCHA di aplikasi ini, dan kedua dokumen
+              itu tidak pernah ada. Klaim keamanan yang tidak benar lebih buruk
+              daripada tidak ada klaim sama sekali, jadi seluruh baris itu
+              dihapus alih-alih dibiarkan sebagai hiasan. */}
 
         </motion.div>
       </div>
