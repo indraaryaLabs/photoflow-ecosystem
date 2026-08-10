@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Camera, Sun, Moon, Copy, Check, Plus,
-  FolderOpen, Link as LinkIcon, Clock, ChevronRight,
-  LayoutDashboard, CheckCircle2, Sparkles, Loader2, Download,
-  MoreVertical, Edit, Trash2, X, AlertOctagon, LogOut, MessageCircle
+  Camera, Copy, Check, Plus, FolderOpen, Link as LinkIcon, Clock,
+  CheckCircle2, Loader2, MoreVertical, Edit, Trash2, X, AlertOctagon,
+  LogOut, MessageCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { API_BASE } from '../lib/api';
+import ThemeToggle from './ThemeToggle';
 
 // --- STYLES & ANIMATIONS ---
 const globalStyles = `
@@ -45,7 +45,7 @@ const globalStyles = `
   ::-webkit-scrollbar-thumb:hover { background: #71717a; }
 `;
 
-export default function AdminDashboard({ isDark, toggleTheme }) {
+export default function AdminDashboard({ themeChoice, cycleTheme }) {
   // --- STATE MANAGEMENT ---
   const [toast, setToast] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -322,7 +322,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
 
   // --- RENDER ---
   return (
-    <div className={`${isDark ? 'dark' : ''} min-h-screen transition-colors duration-500`}>
+    <div className="min-h-screen transition-colors duration-500">
       <style>{globalStyles}</style>
 
       {/* MAIN LAYOUT */}
@@ -332,8 +332,8 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
         <header className="sticky top-0 z-40 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border-b border-zinc-200 dark:border-white/10 transition-colors duration-300">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-tr from-indigo-500 to-violet-500 p-2 rounded-xl shadow-lg shadow-indigo-500/20">
-                <Camera className="w-5 h-5 text-white" />
+              <div className="grid h-9 w-9 place-items-center rounded-lg border border-zinc-200 bg-zinc-100 text-zinc-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200">
+                <Camera size={18} strokeWidth={1.75} aria-hidden="true" />
               </div>
               <div>
                 <h1 className="text-lg font-semibold tracking-tight leading-tight">PhotoFlow Workspace</h1>
@@ -342,20 +342,14 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={toggleTheme}
-                className="p-2.5 rounded-full bg-zinc-100 dark:bg-white/5 border border-transparent dark:border-white/5 hover:bg-zinc-200 dark:hover:bg-white/10 text-zinc-600 dark:text-zinc-400 transition-all duration-300 hover:scale-105 active:scale-95"
-                title="Toggle Theme"
-              >
-                {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </button>
+              <ThemeToggle choice={themeChoice} onCycle={cycleTheme} />
 
               <button
                 onClick={handleLogout}
                 className="p-2.5 rounded-full bg-zinc-100 dark:bg-white/5 border border-transparent dark:border-white/5 hover:bg-red-50 dark:hover:bg-red-500/10 text-zinc-600 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-all duration-300 hover:scale-105 active:scale-95"
                 title="Logout"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut size={16} strokeWidth={1.75} />
               </button>
             </div>
           </div>
@@ -369,10 +363,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
             <div className="col-span-1">
               <div className="sticky top-28">
                 <div className="mb-6">
-                  <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-indigo-500" />
-                    New Project
-                  </h2>
+                  <h2 className="text-xl font-semibold tracking-tight">New Project</h2>
                   <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Create a new gallery selection for your client.</p>
                 </div>
 
@@ -475,7 +466,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                         </div>
                       ) : (
                         <>
-                          <Plus className="w-4 h-4" />
+                          <Plus size={16} strokeWidth={1.75} />
                           <span>Create Project</span>
                         </>
                       )}
@@ -489,10 +480,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
             <div className="col-span-1 lg:col-span-2">
               <div className="mb-6 flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
-                    <LayoutDashboard className="w-5 h-5 text-zinc-400" />
-                    Client Projects
-                  </h2>
+                  <h2 className="text-xl font-semibold tracking-tight">Client Projects</h2>
                   <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Manage and track your gallery delivery status.</p>
                 </div>
 
@@ -524,7 +512,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                 // Empty State
                 <div className="bg-white/50 dark:bg-white/[0.02] border border-dashed border-zinc-300 dark:border-white/10 rounded-2xl p-12 flex flex-col items-center justify-center text-center animate-slide-up-fade">
                   <div className="w-16 h-16 bg-zinc-100 dark:bg-white/5 rounded-full flex items-center justify-center mb-4">
-                    <FolderOpen className="w-8 h-8 text-zinc-400" />
+                    <FolderOpen size={32} strokeWidth={1.75} className="text-zinc-400" />
                   </div>
                   <h3 className="text-lg font-medium text-zinc-900 dark:text-white">No projects yet</h3>
                   <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 max-w-sm">Create your first project on the left panel to start sharing galleries with your clients.</p>
@@ -558,9 +546,9 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-slide-up-fade">
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-2xl rounded-2xl p-6 w-full max-w-md relative">
               <button type="button" onClick={() => setEditingProject(null)} className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
-                <X className="w-5 h-5" />
+                <X size={20} strokeWidth={1.75} />
               </button>
-              <h2 className="text-xl font-semibold mb-6 flex items-center gap-2"><Edit className="w-5 h-5 text-indigo-500" /> Edit Project</h2>
+              <h2 className="text-xl font-semibold mb-6 flex items-center gap-2"><Edit size={20} strokeWidth={1.75} className="text-indigo-500" /> Edit Project</h2>
               <form onSubmit={handleEdit} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Project Name</label>
@@ -603,7 +591,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                 <div className="pt-4 flex gap-3">
                   <button type="button" onClick={() => setEditingProject(null)} className="flex-1 px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 font-medium text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">Cancel</button>
                   <button type="submit" disabled={actionLoading} className="flex-1 px-4 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-medium text-sm shadow-lg shadow-indigo-500/25 transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
-                    {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Changes"}
+                    {actionLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : "Save Changes"}
                   </button>
                 </div>
               </form>
@@ -616,14 +604,14 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-slide-up-fade">
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-2xl rounded-2xl p-6 w-full max-w-sm text-center relative">
               <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 flex items-center justify-center mb-4 text-red-500">
-                <AlertOctagon className="w-6 h-6" />
+                <AlertOctagon size={24} strokeWidth={1.75} />
               </div>
               <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mb-2">Delete Project?</h2>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">Are you sure you want to delete <strong className="text-zinc-800 dark:text-zinc-300">{deletingProject.client_name}</strong>? This action cannot be undone and will remove all associated photos.</p>
               <div className="flex gap-3">
                 <button onClick={() => setDeletingProject(null)} className="flex-1 px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 font-medium text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">Cancel</button>
                 <button onClick={handleDelete} disabled={actionLoading} className="flex-1 px-4 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm shadow-lg shadow-red-500/25 transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
-                  {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Yes, Delete"}
+                  {actionLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : "Yes, Delete"}
                 </button>
               </div>
             </div>
@@ -636,11 +624,11 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
             <div className="bg-zinc-900/90 dark:bg-zinc-800/90 backdrop-blur-xl border border-zinc-800 dark:border-white/10 shadow-2xl rounded-2xl px-5 py-3.5 flex items-center gap-3 text-white">
               {toast.type === 'success' ? (
                 <div className="bg-emerald-500/20 text-emerald-400 rounded-full p-1">
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 size={16} strokeWidth={1.75} />
                 </div>
               ) : (
                 <div className="bg-red-500/20 text-red-500 rounded-full p-1">
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 size={16} strokeWidth={1.75} />
                 </div>
               )}
               <span className="text-sm font-medium tracking-wide">{toast.message}</span>
@@ -688,7 +676,7 @@ function ProjectCard({ project, index, onCopy, onWhatsApp, onEdit, onDelete }) {
           </p>
           <div className="flex items-center gap-3 mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
             <span className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" />
+              <Clock size={14} strokeWidth={1.75} />
               {new Date(project.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
             </span>
             <span className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700"></span>
@@ -718,9 +706,9 @@ function ProjectCard({ project, index, onCopy, onWhatsApp, onEdit, onDelete }) {
           title="Copy Magic Link"
         >
           {copied ? (
-            <Check className="w-4 h-4 text-emerald-500" />
+            <Check size={16} strokeWidth={1.75} className="text-emerald-500" />
           ) : (
-            <Copy className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
+            <Copy size={16} strokeWidth={1.75} className="group-hover/btn:scale-110 transition-transform" />
           )}
         </button>
 
@@ -730,7 +718,7 @@ function ProjectCard({ project, index, onCopy, onWhatsApp, onEdit, onDelete }) {
           className="p-2 rounded-xl border border-zinc-200 dark:border-white/5 bg-white dark:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:text-emerald-500 dark:hover:text-emerald-400 hover:border-emerald-200 dark:hover:border-emerald-500/20 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all duration-200 active:scale-90 group/wa"
           title="Send via WhatsApp"
         >
-          <MessageCircle className="w-4 h-4 group-hover/wa:scale-110 transition-transform" />
+          <MessageCircle size={16} strokeWidth={1.75} className="group-hover/wa:scale-110 transition-transform" />
         </button>
 
         {/* Kebab Action */}
@@ -739,7 +727,7 @@ function ProjectCard({ project, index, onCopy, onWhatsApp, onEdit, onDelete }) {
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="p-2 rounded-xl text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/10 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
           >
-            <MoreVertical className="w-4 h-4" />
+            <MoreVertical size={16} strokeWidth={1.75} />
           </button>
 
           {isMenuOpen && (
@@ -747,10 +735,10 @@ function ProjectCard({ project, index, onCopy, onWhatsApp, onEdit, onDelete }) {
               <div className="fixed inset-0 z-10" onClick={() => setIsMenuOpen(false)}></div>
               <div className="absolute right-0 top-full mt-2 w-36 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden z-20 animate-slide-up-fade origin-top-right">
                 <button onClick={() => { setIsMenuOpen(false); onEdit(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5 flex items-center gap-2">
-                  <Edit className="w-3.5 h-3.5" /> Edit
+                  <Edit size={14} strokeWidth={1.75} /> Edit
                 </button>
                 <button onClick={() => { setIsMenuOpen(false); onDelete(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center gap-2">
-                  <Trash2 className="w-3.5 h-3.5" /> Delete
+                  <Trash2 size={14} strokeWidth={1.75} /> Delete
                 </button>
               </div>
             </>
