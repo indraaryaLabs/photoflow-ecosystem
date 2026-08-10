@@ -116,7 +116,7 @@ const PreviewModal = ({
             onClick={onClose}
             className="p-2 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 text-white transition-all hover:scale-105 active:scale-95 pointer-events-auto"
           >
-            <X className="w-5 h-5" />
+            <X size={20} strokeWidth={1.75} />
           </button>
         </div>
 
@@ -165,7 +165,7 @@ const PreviewModal = ({
                 )}
                 {!isImgLoaded && (
                   <div className="absolute inset-0 flex items-center justify-center z-10">
-                    <Loader2 className="w-8 h-8 text-white/50 animate-spin" />
+                    <Loader2 size={32} strokeWidth={1.75} className="text-white/50 animate-spin" />
                   </div>
                 )}
 
@@ -197,7 +197,7 @@ const PreviewModal = ({
                       exit={{ scale: 0, opacity: 0 }}
                       className="absolute top-8 left-8 sm:top-12 sm:left-12 bg-indigo-500 text-white px-4 py-2 rounded-full font-semibold text-sm flex items-center gap-2 shadow-lg shadow-indigo-500/30 z-20 pointer-events-none"
                     >
-                      <CheckCircle2 className="w-4 h-4" />
+                      <CheckCircle2 size={16} strokeWidth={1.75} />
                       Terpilih
                     </motion.div>
                   )}
@@ -212,7 +212,7 @@ const PreviewModal = ({
             onClick={(e) => { e.stopPropagation(); onPrev(); }}
           >
             <div className="p-3 rounded-full bg-black/20 group-hover:bg-white/20 backdrop-blur-md text-white border border-transparent group-hover:border-white/20 transition-all opacity-0 group-hover:opacity-100 -translate-x-4 group-hover:translate-x-0 shadow-lg">
-              <ChevronLeft className="w-6 h-6" />
+              <ChevronLeft size={24} strokeWidth={1.75} />
             </div>
           </div>
           <div 
@@ -220,7 +220,7 @@ const PreviewModal = ({
             onClick={(e) => { e.stopPropagation(); onNext(); }}
           >
             <div className="p-3 rounded-full bg-black/20 group-hover:bg-white/20 backdrop-blur-md text-white border border-transparent group-hover:border-white/20 transition-all opacity-0 group-hover:opacity-100 translate-x-4 group-hover:translate-x-0 shadow-lg">
-              <ChevronRight className="w-6 h-6" />
+              <ChevronRight size={24} strokeWidth={1.75} />
             </div>
           </div>
         </div>
@@ -230,7 +230,7 @@ const PreviewModal = ({
         
         <div className="absolute bottom-0 inset-x-0 z-50 p-6 pb-8 flex justify-center items-center gap-4 pointer-events-none">
           <button onClick={onPrev} className="sm:hidden p-4 rounded-full bg-white/10 text-white active:scale-95 transition-transform pointer-events-auto backdrop-blur-md">
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft size={20} strokeWidth={1.75} />
           </button>
 
           <button
@@ -244,19 +244,19 @@ const PreviewModal = ({
           >
             {isSelected ? (
               <>
-                <X className="w-5 h-5" />
+                <X size={20} strokeWidth={1.75} />
                 Batal Pilih
               </>
             ) : (
               <>
-                <Check className="w-5 h-5" />
+                <Check size={20} strokeWidth={1.75} />
                 Pilih Foto
               </>
             )}
           </button>
 
           <button onClick={onNext} className="sm:hidden p-4 rounded-full bg-white/10 text-white active:scale-95 transition-transform pointer-events-auto backdrop-blur-md">
-            <ChevronRight className="w-5 h-5" />
+            <ChevronRight size={20} strokeWidth={1.75} />
           </button>
         </div>
       </motion.div>

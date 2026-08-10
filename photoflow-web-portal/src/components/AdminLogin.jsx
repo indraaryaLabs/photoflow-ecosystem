@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, Eye, EyeOff, User, ArrowRight, Loader2, Aperture, Sun, Moon, Phone, LogOut, LayoutDashboard, AlertCircle, CheckCircle2, KeyRound } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User, ArrowRight, Loader2, Aperture, Phone, LogOut, LayoutDashboard, AlertCircle, CheckCircle2, KeyRound } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { openedFromRecoveryLink, clearUrlFragment } from '../lib/recovery';
+import ThemeToggle from './ThemeToggle';
 
 /**
  * Terjemahkan error Supabase Auth jadi kalimat yang benar untuk user.
@@ -37,7 +38,7 @@ function describeAuthError(error) {
   return 'Server sedang bermasalah. Coba lagi sebentar lagi.';
 }
 
-export default function AdminLogin({ isDark, toggleTheme }) {
+export default function AdminLogin({ themeChoice, cycleTheme }) {
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -208,18 +209,15 @@ export default function AdminLogin({ isDark, toggleTheme }) {
   };
 
   return (
-    <div className={isDark ? 'dark' : ''}>
+    <div>
       <div className="relative min-h-screen w-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans selection:bg-indigo-500/30 transition-colors duration-500">
 
         {/* --- THEME TOGGLE BUTTON --- */}
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={toggleTheme}
-          className="absolute top-6 right-6 z-50 p-2.5 rounded-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm text-zinc-500 dark:text-zinc-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-        >
-          {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-        </motion.button>
+        <ThemeToggle
+          choice={themeChoice}
+          onCycle={cycleTheme}
+          className="absolute top-6 right-6 z-50"
+        />
 
         {/* --- BACKGROUND EFFECTS --- */}
         <div className="absolute inset-0 z-0 bg-[linear-gradient(to_right,#0000000a_1px,transparent_1px),linear-gradient(to_bottom,#0000000a_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] transition-colors duration-500"></div>
@@ -258,7 +256,7 @@ export default function AdminLogin({ isDark, toggleTheme }) {
                 whileHover={{ scale: 1.05, rotate: 5 }}
                 className="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center mb-5 shadow-lg shadow-indigo-500/25 border border-indigo-400/20 dark:border-white/10"
               >
-                <Aperture className="w-6 h-6 text-white" />
+                <Aperture size={24} strokeWidth={1.75} className="text-white" />
               </motion.div>
 
               <div className="h-[60px] relative w-full flex flex-col items-center justify-center">
@@ -310,8 +308,8 @@ export default function AdminLogin({ isDark, toggleTheme }) {
                     }`}
                   >
                     {feedback.type === 'error'
-                      ? <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                      : <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />}
+                      ? <AlertCircle size={16} strokeWidth={1.75} className="mt-0.5 shrink-0" />
+                      : <CheckCircle2 size={16} strokeWidth={1.75} className="mt-0.5 shrink-0" />}
                     <span>{feedback.message}</span>
                   </div>
                 </motion.div>
@@ -338,7 +336,7 @@ export default function AdminLogin({ isDark, toggleTheme }) {
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                     aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showPassword ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
                   </button>
                 </div>
 
@@ -349,7 +347,7 @@ export default function AdminLogin({ isDark, toggleTheme }) {
                   className="relative w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 text-white font-medium text-sm shadow-[0_4px_20px_-5px_rgba(99,102,241,0.4)] transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed border border-indigo-400/20"
                 >
                   <div className="flex items-center justify-center gap-2">
-                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Simpan password baru</span>}
+                    {isLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : <span>Simpan password baru</span>}
                   </div>
                 </motion.button>
               </form>
@@ -376,7 +374,7 @@ export default function AdminLogin({ isDark, toggleTheme }) {
                   className="relative w-full py-3.5 rounded-xl bg-zinc-100 dark:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300 font-medium text-sm border border-zinc-200 dark:border-white/10 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all duration-300"
                 >
                   <div className="flex items-center justify-center gap-2">
-                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+                    {isLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : <LogOut size={16} strokeWidth={1.75} />}
                     <span>Sign Out</span>
                   </div>
                 </motion.button>
@@ -447,7 +445,7 @@ export default function AdminLogin({ isDark, toggleTheme }) {
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showPassword ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
                     </button>
                   </div>
 
@@ -477,11 +475,11 @@ export default function AdminLogin({ isDark, toggleTheme }) {
 
                     <div className="flex items-center justify-center gap-2">
                       {isLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
                       ) : (
                         <>
                           <span>{isLoginMode ? "Sign In" : "Get Started"}</span>
-                          <ArrowRight className="w-4 h-4 opacity-70 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                          <ArrowRight size={16} strokeWidth={1.75} className="opacity-70 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                         </>
                       )}
                     </div>
