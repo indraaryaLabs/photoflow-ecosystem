@@ -14,7 +14,7 @@ const Toast = ({ toasts }) => {
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             className="flex items-center gap-3 px-4 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-2xl shadow-2xl shadow-black/40 pointer-events-auto w-full"
           >
-            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+            <AlertCircle size={20} strokeWidth={1.75} className="text-amber-500 shrink-0" />
             <span className="text-sm font-medium tracking-tight">{toast.message}</span>
           </motion.div>
         ))}

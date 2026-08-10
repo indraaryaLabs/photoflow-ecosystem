@@ -105,11 +105,11 @@ Terima kasih atas kerja samanya.`;
                   {isSubmitted ? (
                     <>
                       <span>Konfirmasi WhatsApp</span>
-                      <MessageCircle className="w-4 h-4" />
+                      <MessageCircle size={16} strokeWidth={1.75} />
                     </>
                   ) : isSubmitting ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
                       <span>Mengirim...</span>
                     </>
                   ) : isFull ? (
@@ -121,7 +121,7 @@ Terima kasih atas kerja samanya.`;
                     <>
                       <span className="hidden sm:inline">Kirim Pilihan</span>
                       <span className="sm:hidden">Kirim</span>
-                      <CheckCircle2 className="w-4 h-4" />
+                      <CheckCircle2 size={16} strokeWidth={1.75} />
                     </>
                   )}
                 </motion.span>
