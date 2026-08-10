@@ -49,7 +49,7 @@ const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
           className="p-4 rounded-full bg-white/20 hover:bg-white/40 backdrop-blur-md text-white shadow-xl border border-white/20 transition-transform hover:scale-110 pointer-events-auto active:scale-95"
           title="Lihat Detail"
         >
-          <Eye className="w-6 h-6" />
+          <Eye size={24} strokeWidth={1.75} />
         </button>
       </div>
 
@@ -74,7 +74,7 @@ const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
             transition={{ type: "spring", stiffness: 400, damping: 20 }}
             className="absolute top-3 right-3 bg-indigo-500 text-white rounded-full p-1.5 shadow-lg shadow-indigo-500/40 z-30 pointer-events-none"
           >
-            <Check size={16} strokeWidth={3} />
+            <Check size={16} strokeWidth={2.25} aria-hidden="true" />
           </motion.div>
         )}
       </AnimatePresence>
