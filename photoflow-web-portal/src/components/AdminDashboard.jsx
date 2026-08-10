@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Camera, Copy, Check, Plus, FolderOpen, Link as LinkIcon, Clock,
+  Copy, Check, Plus, FolderOpen, Link as LinkIcon, Clock,
   CheckCircle2, Loader2, MoreVertical, Edit, Trash2, X, AlertOctagon,
   LogOut, MessageCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { API_BASE } from '../lib/api';
+import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
 
 // --- STYLES & ANIMATIONS ---
@@ -333,7 +334,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="grid h-9 w-9 place-items-center rounded-lg border border-zinc-200 bg-zinc-100 text-zinc-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200">
-                <Camera size={18} strokeWidth={1.75} aria-hidden="true" />
+                <BrandMark size={20} />
               </div>
               <div>
                 <h1 className="text-lg font-semibold tracking-tight leading-tight">PhotoFlow Workspace</h1>
