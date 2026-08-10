@@ -389,7 +389,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                         required
                         value={formData.projectName}
                         onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
-                        placeholder="e.g. Wedding Session, Maternity"
+                        placeholder="e.g. Engagement Session, Maternity"
                         className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm transition-all duration-300 outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
                       />
                     </div>
@@ -402,7 +402,7 @@ export default function AdminDashboard({ isDark, toggleTheme }) {
                         required
                         value={formData.clientName}
                         onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                        placeholder="e.g. Prewedding Rina & Anton"
+                        placeholder="e.g. The Hartleys"
                         className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm transition-all duration-300 outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
                       />
                     </div>
