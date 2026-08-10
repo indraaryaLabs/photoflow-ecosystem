@@ -47,9 +47,11 @@ with pengaturan as (
         'https://drive.google.com/drive/folders/GANTI_ID_FOLDER' as drive_folder_url,
         'GANTI_ID_FOLDER'                                        as drive_folder_id,
 
-        -- Nomor WhatsApp sengaja placeholder. Baris project dikembalikan utuh
-        -- oleh GET /api/p/:magic_link, jadi nomor apa pun di sini terbaca oleh
-        -- siapa saja yang memegang magic link-nya.
+        -- Nomor WhatsApp sengaja placeholder. `client_whats_app` sudah tidak
+        -- lagi dikirim ke halaman galeri (FINDINGS.md F-23), tapi
+        -- `admin_whats_app` masih — tombol "Konfirmasi WhatsApp" pada galeri
+        -- klien menujunya. Jadi nomor itu terbaca siapa pun yang memegang
+        -- magic link-nya, dan untuk data demo tidak boleh nomor sungguhan.
         '6281234567890' as wa_admin
 ),
 
@@ -73,7 +75,7 @@ galeri_pending as (
          drive_folder_url, drive_folder_id, magic_link_token,
          admin_whats_app, client_whats_app, status, created_at, updated_at)
     select
-        s.user_id, 'Prewedding Rina & Anton', 'Rina & Anton', 12,
+        s.user_id, 'Engagement Session', 'The Hartleys', 12,
         s.drive_folder_url, s.drive_folder_id,
         -- 16 byte acak, sama seperti yang dibuat backend. Panjang inilah yang
         -- benar-benar menjaga galeri tanpa login: pembatasan percobaan per IP
@@ -92,7 +94,7 @@ galeri_submitted as (
          drive_folder_url, drive_folder_id, magic_link_token,
          admin_whats_app, client_whats_app, status, created_at, updated_at)
     select
-        s.user_id, 'Wisuda Nurul Hidayah', 'Nurul Hidayah', 8,
+        s.user_id, 'Family Portrait', 'The Mercers', 8,
         s.drive_folder_url, s.drive_folder_id,
         encode(gen_random_bytes(16), 'hex'),
         s.wa_admin, '6289876543211', 'submitted',
