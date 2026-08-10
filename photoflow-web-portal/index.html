@@ -1,14 +1,40 @@
 <!doctype html>
-<html lang="id" class="dark">
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <meta name="description" content="PhotoFlow Client Portal — Pilih dan kirim foto favorit Anda dengan mudah." />
     <title>PhotoFlow — Client Portal</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script>
+      // Tema ditentukan sebelum halaman digambar pertama kali.
+      //
+      // Elemen <html> dulu memuat class="dark" tetap. Akibatnya siapa pun yang
+      // memakai mode terang melihat kedipan gelap di setiap kali membuka
+      // halaman — sampai React selesai dimuat dan membetulkannya.
+      //
+      // Skrip ini sinkron dan tanpa modul, jadi ia selesai sebelum baris
+      // pertama dilukis. Isinya harus tetap sepadan dengan src/lib/theme.js:
+      // tidak adanya nilai tersimpan berarti "ikuti sistem".
+      (function () {
+        try {
+          var saved = localStorage.getItem('theme');
+          var dark =
+            saved === 'dark' ||
+            (saved !== 'light' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        } catch (e) {
+          // Mode privat sebagian browser melempar saat localStorage disentuh.
+          // Diamkan: React akan menerapkan temanya sesaat lagi.
+        }
+      })();
+    </script>
   </head>
   <body class="font-sans antialiased">
     <div id="root"></div>

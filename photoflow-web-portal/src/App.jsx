@@ -12,6 +12,7 @@ import AdminLogin from './components/AdminLogin';
 import { supabase } from './lib/supabase';
 import { API_BASE } from './lib/api';
 import { openedFromRecoveryLink } from './lib/recovery';
+import { useTheme } from './lib/theme';
 
 export default function App() {
   // ─── Variables routing (No hook dependencies) ────────────────
@@ -35,11 +36,9 @@ export default function App() {
   const [error, setError] = useState(null);
 
   // ─── 3. UI State ─────────────────────────────────────────────
-  const [isDark, setIsDark] = useState(() => {
-    const saved = localStorage.getItem('theme');
-    if (saved !== null) return saved === 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
+  // Tiga keadaan: mengikuti sistem (default), terang, gelap. Seluruh logikanya
+  // — termasuk kapan boleh menulis ke localStorage — ada di lib/theme.js.
+  const { choice: themeChoice, cycle: cycleTheme } = useTheme();
 
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [toasts, setToasts] = useState([]);
@@ -154,41 +153,7 @@ export default function App() {
     fetchGallery();
   }, [token]);
 
-  // Dark mode sync
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  }, [isDark]);
-
-  // Dark mode auto listener (real-time system pref)
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e) => {
-      setIsDark(e.matches);
-      if (e.matches) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    };
-    mediaQuery.addEventListener('change', handleChange);
-
-    // Explicit runtime evaluation in case SSR/initial state missed it
-    if (localStorage.getItem('theme') === null) {
-      handleChange(mediaQuery);
-    }
-
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
-
   // ─── Callbacks ───────────────────────────────────────────────
-  const toggleTheme = useCallback(() => setIsDark(prev => !prev), []);
-
   const addToast = useCallback((message) => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message }]);
@@ -278,7 +243,7 @@ export default function App() {
   if (isAuthChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+        <Loader2 size={32} strokeWidth={1.75} className="text-indigo-500 animate-spin" />
       </div>
     );
   }
@@ -286,15 +251,15 @@ export default function App() {
   // Pemulihan password mendahului seluruh routing lain: sesi yang dibawa
   // tautan itu memang sah, tapi tujuannya bukan masuk ke dashboard.
   if (isPasswordRecovery) {
-    return <AdminLogin isDark={isDark} toggleTheme={toggleTheme} />;
+    return <AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} />;
   }
 
   // Strict Auth Guard Routing
   if (isAdminRoute) {
     if (isAdminAuthenticated) {
-      return <AdminDashboard isDark={isDark} toggleTheme={toggleTheme} />;
+      return <AdminDashboard themeChoice={themeChoice} cycleTheme={cycleTheme} />;
     } else {
-      return <AdminLogin isDark={isDark} toggleTheme={toggleTheme} />;
+      return <AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} />;
     }
   }
 
@@ -305,17 +270,14 @@ export default function App() {
       window.location.replace('/admin');
       return null;
     } else {
-      return <AdminLogin isDark={isDark} toggleTheme={toggleTheme} />;
+      return <AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} />;
     }
   }
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300">
-        <Loader2
-          className="w-12 h-12 text-indigo-500 animate-spin mb-6"
-          strokeWidth={2}
-        />
+        <Loader2 size={40} strokeWidth={1.75} className="text-indigo-500 animate-spin mb-6" aria-hidden="true" />
         <p className="text-lg font-medium text-zinc-600 dark:text-zinc-300 tracking-wide">
           Memuat Galeri...
         </p>
@@ -330,7 +292,7 @@ export default function App() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300 px-6 text-center">
         <div className="w-16 h-16 rounded-full bg-red-500/10 dark:bg-red-500/20 flex items-center justify-center mb-6">
-          <AlertTriangle className="w-8 h-8 text-red-500" strokeWidth={2} />
+          <AlertTriangle size={32} strokeWidth={1.75} className="text-red-500" />
         </div>
         <h1 className="text-xl font-semibold text-zinc-800 dark:text-zinc-100 mb-2">
           Gagal Memuat Galeri
@@ -349,7 +311,7 @@ export default function App() {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300 font-sans selection:bg-indigo-500/30">
       <Toast toasts={toasts} />
 
-      <Header project={project} isDark={isDark} toggleTheme={toggleTheme} />
+      <Header project={project} themeChoice={themeChoice} cycleTheme={cycleTheme} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28">
         <div className="mb-8 flex flex-col gap-2">
