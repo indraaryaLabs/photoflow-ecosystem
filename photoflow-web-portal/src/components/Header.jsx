@@ -1,4 +1,4 @@
-import { Camera } from 'lucide-react';
+import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
 
 const Header = ({ project, themeChoice, cycleTheme }) => (
@@ -6,7 +6,7 @@ const Header = ({ project, themeChoice, cycleTheme }) => (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 rounded-xl bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-          <Camera size={16} strokeWidth={1.75} aria-hidden="true" />
+          <BrandMark size={18} />
         </div>
         <div>
           <h1 className="text-sm font-semibold text-zinc-900 dark:text-white tracking-tight">PhotoFlow</h1>
