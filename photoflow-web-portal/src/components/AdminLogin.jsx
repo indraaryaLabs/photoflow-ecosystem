@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, Eye, EyeOff, User, ArrowRight, Loader2, Aperture, Phone, LogOut, LayoutDashboard, AlertCircle, CheckCircle2, KeyRound } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User, ArrowRight, Loader2, Phone, LogOut, LayoutDashboard, AlertCircle, CheckCircle2, KeyRound } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { openedFromRecoveryLink, clearUrlFragment } from '../lib/recovery';
+import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
 
 /**
@@ -256,7 +257,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                 whileHover={{ scale: 1.05, rotate: 5 }}
                 className="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center mb-5 shadow-lg shadow-indigo-500/25 border border-indigo-400/20 dark:border-white/10"
               >
-                <Aperture size={24} strokeWidth={1.75} className="text-white" />
+                <BrandMark size={26} className="text-white" title="PhotoFlow" />
               </motion.div>
 
               <div className="h-[60px] relative w-full flex flex-col items-center justify-center">
