@@ -1,0 +1,5 @@
+# Skill agent yang dipasang lewat `npx skills add`. Milik lingkungan kerja
+# masing-masing orang, bukan bagian dari PhotoFlow — jangan ikut ke repo.
+.agents/
+.claude/
+skills-lock.json
