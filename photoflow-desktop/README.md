@@ -36,13 +36,27 @@ proses Python. Jembatan antara keduanya adalah [Eel](https://github.com/python-e
 main.py      fungsi yang dipanggil antarmuka, operasi berkas, thumbnail
 auth.py      sesi Supabase Auth, penyimpanan token, pembaruan otomatis
 gdrive.py    operasi Google Drive
+telemetry.py pelaporan crash, dimuat saat dibutuhkan
 config.py    konstanta, dapat ditimpa lewat environment variable
 web/         antarmuka: index.html, style.css, script.js
 tests/       tes unit, tanpa jaringan
 ```
 
-Font dan ikon dibundel di `web/assets/vendor/`. Aplikasi ini punya mode
-offline, jadi tidak ada aset yang diambil dari jaringan saat dibuka.
+### Waktu buka aplikasi
+
+Tidak ada pustaka berat yang dimuat sebelum jendela muncul. `rawpy`, `Pillow`,
+`supabase`, `google-api-python-client`, dan `sentry-sdk` diimpor saat pertama
+kali dipakai, bukan saat aplikasi dimulai — jalur impor `main.py` turun dari
+sekitar 0,9 detik ke 0,55 detik dengan cache panas, dan jauh lebih banyak lagi
+pada peluncuran pertama saat berkasnya belum ada di cache sistem.
+
+Ongkosnya berpindah, bukan hilang: thumbnail pertama tetap menunggu `rawpy`
+dimuat. Bedanya, saat itu terjadi jendelanya sudah terbuka.
+
+Dua hal lain yang ikut menentukan: build memakai `--onedir`, bukan `--onefile`
+yang mengekstrak ulang seluruh bundle setiap kali dijalankan; dan font serta
+ikon dibundel lokal di `web/assets/vendor/`, sehingga tampilan tidak menunggu
+jaringan — hal yang juga dibutuhkan mode offline aplikasi ini.
 
 ## Autentikasi
 
@@ -121,7 +135,8 @@ python -m unittest discover -s tests -v
 ```
 
 Tesnya tidak menyentuh jaringan dan tidak membuka jendela, jadi `eel`,
-`Pillow`, dan `rawpy` tidak perlu terpasang untuk menjalankannya.
+`Pillow`, `rawpy`, `supabase`, dan `sentry-sdk` tidak perlu terpasang untuk
+menjalankannya.
 
 ## Build
 

@@ -686,6 +686,53 @@ Drive, yang lain perlu login ulang.
 
 ---
 
+## F-23 — `GET /api/p/:magic_link` mengembalikan seluruh baris project
+
+**Ditemukan saat:** menyiapkan data demo
+**Status:** SELESAI
+
+`GetGallery` menyerahkan struct `Project` apa adanya ke `c.JSON`. Rute itu
+publik — cukup memegang magic link — jadi setiap kolom tabelnya ikut terbaca:
+
+- `client_whats_app` — nomor telepon **orang lain**, dan halaman galeri tidak
+  pernah memakainya sama sekali
+- `admin_whats_app` — nomor fotografer
+- `drive_folder_id` dan `drive_folder_url` — menunjuk folder Drive fotografer
+- `user_id` dan `magic_link_token`
+
+Ditemukan bukan lewat pembacaan kode, melainkan saat menyiapkan galeri demo:
+memeriksa isi tabel memperlihatkan nomor telepon sungguhan di kolom yang
+dikirim ke jalur publik.
+
+Rantainya bermula lebih jauh. Dashboard membaca `user_metadata.whatsapp` milik
+fotografer lalu mengirimkannya sebagai `admin_whatsapp` pada setiap project
+baru, jadi nomor yang diisi sekali saat pendaftaran menyebar ke seluruh
+project — dan dari sana ke jalur publik. Membersihkan tabel `projects` saja
+tidak cukup; project berikutnya akan membawanya lagi.
+
+**Perbaikan.** `models.GalleryProject` memuat persis lima nilai yang dipakai
+halaman galeri: `project_name`, `client_name`, `max_selections`, `status`, dan
+`admin_whatsapp`. Kolom baru pada `Project` karena itu tidak lagi bocor dengan
+sendirinya — menampakkannya harus jadi keputusan yang ditulis.
+
+`admin_whatsapp` sengaja dipertahankan: setelah mengirim pilihan, klien diberi
+tombol untuk mengabari fotografernya lewat WhatsApp, dan nomor itu tujuannya.
+Yang memegang magic link adalah klien yang memang sudah berhubungan dengan
+fotografer tersebut.
+
+Daftar foto ikut dipersempit lewat `models.GalleryPhoto`. `is_selected`
+dibuang: pada galeri yang belum disubmit nilainya selalu false, dan pada yang
+sudah disubmit ia memberi tahu pembuka tautan foto mana yang dipilih klien.
+
+Tesnya memeriksa daftar kunci JSON secara persis, bukan sekadar ketiadaan nomor
+telepon, sehingga penambahan kolom baru menggagalkan tes lebih dulu:
+`models/gallery_view_test.go`.
+
+Nomor sungguhan yang sudah terlanjur tersimpan — di `projects` maupun di
+`raw_user_meta_data` milik ketiga akun — sudah diganti placeholder.
+
+---
+
 ## F-06 — Middleware auth belum punya test
 
 **Ditemukan saat:** Fase 3.1

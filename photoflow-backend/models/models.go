@@ -88,6 +88,65 @@ func (OAuthState) TableName() string {
 // Setelah itu galeri terkunci dan tidak menerima submit lagi.
 const StatusSubmitted = "submitted"
 
+// GalleryProject adalah bentuk project yang boleh dilihat klien.
+//
+// Sebelumnya GetGallery mengembalikan baris Project apa adanya. Rute itu
+// publik — cukup memegang magic link — sehingga seluruh kolomnya ikut terbaca:
+// `user_id`, `drive_folder_id`, `magic_link_token`, dan `client_whats_app`.
+// Nomor WhatsApp klien adalah nomor orang lain yang tidak dibutuhkan halaman
+// galeri sama sekali, dan `drive_folder_id` menunjuk folder Drive fotografer.
+//
+// Struct ini memuat persis lima nilai yang benar-benar dipakai halaman galeri.
+// Kolom baru pada Project karena itu tidak lagi bocor dengan sendirinya:
+// menampakkannya harus jadi keputusan yang ditulis di sini.
+//
+// AdminWhatsApp memang sengaja ada. Setelah mengirim pilihan, klien diberi
+// tombol untuk mengabari fotografernya lewat WhatsApp, dan nomor itulah
+// tujuannya. Yang memegang magic link adalah klien yang memang sudah
+// berhubungan dengan fotografer tersebut.
+type GalleryProject struct {
+	ProjectName   string `json:"project_name"`
+	ClientName    string `json:"client_name"`
+	MaxSelections int    `json:"max_selections"`
+	Status        string `json:"status"`
+	AdminWhatsApp string `json:"admin_whatsapp"`
+}
+
+// NewGalleryProject menyalin hanya kolom yang boleh dilihat klien.
+func NewGalleryProject(p Project) GalleryProject {
+	return GalleryProject{
+		ProjectName:   p.ProjectName,
+		ClientName:    p.ClientName,
+		MaxSelections: p.MaxSelections,
+		Status:        p.Status,
+		AdminWhatsApp: p.AdminWhatsApp,
+	}
+}
+
+// GalleryPhoto adalah satu foto pada salinan yang tersimpan di database.
+// Dipakai galeri klien saat Drive tidak terbaca.
+type GalleryPhoto struct {
+	ID           string `json:"id"`
+	FileName     string `json:"file_name"`
+	ThumbnailURL string `json:"thumbnail_url"`
+}
+
+// NewGalleryPhotos menyalin daftar foto ke bentuk yang aman ditampilkan.
+// IsSelected sengaja tidak ikut: pada galeri yang belum disubmit nilainya
+// selalu false, dan pada yang sudah disubmit ia membocorkan pilihan klien
+// kepada siapa pun yang membuka tautannya.
+func NewGalleryPhotos(photos []Photo) []GalleryPhoto {
+	out := make([]GalleryPhoto, 0, len(photos))
+	for _, p := range photos {
+		out = append(out, GalleryPhoto{
+			ID:           p.ID,
+			FileName:     p.FileName,
+			ThumbnailURL: p.ThumbnailURL,
+		})
+	}
+	return out
+}
+
 // CreateProjectInput dibatasi panjangnya di tingkat binding supaya nilai yang
 // tidak masuk akal ditolak sebelum menyentuh database. MaxSelections memakai
 // omitempty karena nilai 0 berarti "pakai default", bukan nilai di luar batas.
