@@ -17,7 +17,8 @@ import os
 import threading
 
 import requests
-import sentry_sdk
+
+import telemetry
 
 import auth
 import config
@@ -178,7 +179,7 @@ def move_drive_files(file_ids, current_parent, target_parent):
             moved += 1
         except Exception as exc:
             print(f"[gdrive] ✗ Move failed for {fid}: {exc}")
-            sentry_sdk.capture_exception(exc)
+            telemetry.capture(exc)
             failed.append(fid)
     # Kegagalan per berkas ikut dilaporkan. Sebelumnya fungsi ini selalu
     # mengembalikan success=True walaupun setiap berkas gagal dipindah,
@@ -202,7 +203,7 @@ def copy_drive_files(file_ids, target_parent):
             copied += 1
         except Exception as exc:
             print(f"[gdrive] ✗ Copy failed for {fid}: {exc}")
-            sentry_sdk.capture_exception(exc)
+            telemetry.capture(exc)
             failed.append(fid)
     return {"success": not failed, "copied": copied, "failed": failed}
 
@@ -218,7 +219,7 @@ def trash_drive_files(file_ids):
             trashed += 1
         except Exception as exc:
             print(f"[gdrive] ✗ Trash failed for {fid}: {exc}")
-            sentry_sdk.capture_exception(exc)
+            telemetry.capture(exc)
             failed.append(fid)
     return {"success": not failed, "trashed": trashed, "failed": failed}
 
@@ -265,7 +266,7 @@ def download_drive_files(file_ids, local_dest_folder):
             print(f"[gdrive] ✓ Downloaded: {os.path.basename(dest_path)}")
         except Exception as exc:
             print(f"[gdrive] ✗ Download failed for {fid}: {exc}")
-            sentry_sdk.capture_exception(exc)
+            telemetry.capture(exc)
             failed.append(fid)
     return {"success": not failed, "downloaded": downloaded, "failed": failed}
 
@@ -308,6 +309,6 @@ def upload_files_to_drive(file_paths, target_folder_id):
             print(f"[gdrive] ✓ Uploaded: {os.path.basename(path)}")
         except Exception as exc:
             print(f"[gdrive] ✗ Upload failed for {path}: {exc}")
-            sentry_sdk.capture_exception(exc)
+            telemetry.capture(exc)
             failed.append(path)
     return {"success": not failed, "uploaded": uploaded, "failed": failed}

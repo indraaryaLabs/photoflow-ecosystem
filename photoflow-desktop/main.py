@@ -45,23 +45,33 @@ import io
 from pathlib import Path
 # tkinter is imported lazily inside _choose_folder_fallback() to avoid
 # unnecessary Cocoa framework initialization on macOS.
-from PIL import Image
 import hashlib
 import threading
 import concurrent.futures
-import rawpy
-import sentry_sdk
+# PIL, rawpy, supabase, dan pustaka pelaporan crash TIDAK diimpor di sini.
+#
+# Keempatnya berat, dan tidak satu pun dibutuhkan untuk memunculkan jendela.
+# Diimpor di tingkat modul, ongkosnya dibayar sebelum eel.start() sempat
+# berjalan — pada peluncuran pertama di Windows, saat berkasnya belum ada di
+# cache sistem, itu beberapa detik menatap layar kosong. PIL dan rawpy kini
+# diimpor di dalam fungsi yang memakainya (pembuatan thumbnail dan pratinjau),
+# supabase di dalam bootstrap latar belakang, dan pelaporan crash di balik
+# telemetry.py.
+#
+# Ongkosnya berpindah, bukan hilang: thumbnail pertama tetap menunggu rawpy
+# dimuat. Bedanya, saat itu terjadi jendelanya sudah terbuka dan sudah ada
+# indikator proses.
 import urllib.request
 import urllib.error
 import json
 import webbrowser
 import requests
 import socket
-from supabase import create_client, Client
 
 import auth
 import config
 import gdrive
+import telemetry
 from auth import AuthError, SessionExpired
 
 CURRENT_VERSION = config.CURRENT_VERSION
@@ -74,7 +84,7 @@ SUPABASE_ANON_KEY = config.SUPABASE_ANON_KEY
 # Default to offline until the background bootstrap confirms connectivity.
 # All @eel.expose functions already null-check supabase_client before use.
 is_offline = True
-supabase_client: Client = None
+supabase_client = None
 _safari_fallback: bool = False
 _startup_complete: bool = False
 
@@ -137,17 +147,10 @@ def _async_startup_tasks():
     """
     global supabase_client, _startup_complete
 
-    # 1. Sentry — safe to call early; capture_exception() is a no-op until init.
-    if SENTRY_DSN:
-        try:
-            sentry_sdk.init(
-                dsn=SENTRY_DSN,
-                traces_sample_rate=1.0,
-                profiles_sample_rate=1.0,
-            )
-            print("[PhotoFlow] ✓ Sentry crash analytics initialized.")
-        except Exception as e:
-            print(f"[PhotoFlow] ✗ Sentry init failed (non-fatal): {e}")
+    # 1. Sentry — capture() jadi no-op sampai init selesai, jadi aman dipanggil
+    #    kapan pun. Modulnya sendiri baru dimuat di sini.
+    if telemetry.init(SENTRY_DSN):
+        print("[PhotoFlow] ✓ Sentry crash analytics initialized.")
 
     # 2. Network check — updates global is_offline.
     check_internet()
@@ -155,6 +158,8 @@ def _async_startup_tasks():
     # 3. Supabase client — requires network; skip if offline.
     if not is_offline:
         try:
+            from supabase import create_client
+
             supabase_client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
             print("[PhotoFlow] ✓ Supabase Client Connected!")
         except Exception as e:
@@ -311,7 +316,7 @@ def login_to_server(email, password):
         return {"success": False, "error": "server_error", "message": str(e)}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Login error: {e}")
-        sentry_sdk.capture_exception(e)
+        telemetry.capture(e)
         return {"success": False, "error": "exception", "message": str(e)}
 
 
@@ -478,6 +483,12 @@ def get_image_thumbnail(file_path, max_size=256):
 
     Returns a base64 ASCII string, or "" if all methods fail.
     """
+    # Diimpor di sini, bukan di tingkat modul: keduanya berat dan hanya
+    # dibutuhkan saat ada gambar yang benar-benar dibaca. Lihat catatan
+    # di blok impor paling atas.
+    import rawpy
+    from PIL import Image
+
     try:
         # STEP 1: Try standard Pillow first (fastest for JPG/PNG)
         try:
@@ -578,6 +589,12 @@ def get_high_res_image(file_path):
       2. rawpy embedded JPEG for RAW files
       3. rawpy full post-process as last resort
     """
+    # Diimpor di sini, bukan di tingkat modul: keduanya berat dan hanya
+    # dibutuhkan saat ada gambar yang benar-benar dibaca. Lihat catatan
+    # di blok impor paling atas.
+    import rawpy
+    from PIL import Image
+
     MAX_SIZE = (2500, 2500)
 
     try:
@@ -651,7 +668,7 @@ def start_drive_upload(file_paths, user_id=None):
         return {"success": False, "error": "Sesi cloud berakhir. Mohon login ulang."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive upload failed: {e}")
-        sentry_sdk.capture_exception(e)
+        telemetry.capture(e)
         return {"success": False, "error": str(e)}
 
 
@@ -664,7 +681,7 @@ def get_drive_contents(folder_id='root', user_id=None):
         return {"error": "Sesi cloud berakhir. Mohon login ulang."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive explorer failed: {e}")
-        sentry_sdk.capture_exception(e)
+        telemetry.capture(e)
         return {"error": str(e)}
 
 @eel.expose
@@ -675,7 +692,7 @@ def get_drive_folders_only(folder_id='root', user_id=None):
         return {"error": "Sesi cloud berakhir. Mohon login ulang."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive folders fetch failed: {e}")
-        sentry_sdk.capture_exception(e)
+        telemetry.capture(e)
         return {"error": str(e)}
 
 @eel.expose
@@ -686,7 +703,7 @@ def execute_drive_move(file_ids, current_parent, target_parent, user_id=None):
         return {"success": False, "error": "Sesi cloud berakhir. Mohon login ulang."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive move failed: {e}")
-        sentry_sdk.capture_exception(e)
+        telemetry.capture(e)
         return {"success": False, "error": str(e)}
 
 @eel.expose
@@ -697,7 +714,7 @@ def execute_drive_copy(file_ids, target_parent, user_id=None):
         return {"success": False, "error": "Sesi cloud berakhir. Mohon login ulang."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive copy failed: {e}")
-        sentry_sdk.capture_exception(e)
+        telemetry.capture(e)
         return {"success": False, "error": str(e)}
 
 @eel.expose
@@ -708,7 +725,7 @@ def create_new_drive_folder(folder_name, parent_id='root', user_id=None):
         return {"success": False, "error": "Sesi cloud berakhir. Mohon login ulang."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive create folder failed: {e}")
-        sentry_sdk.capture_exception(e)
+        telemetry.capture(e)
         return {"success": False, "error": str(e)}
 
 @eel.expose
@@ -719,7 +736,7 @@ def trash_drive_files(file_ids, user_id=None):
         return {"success": False, "error": "Sesi cloud berakhir. Mohon login ulang."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive trash failed: {e}")
-        sentry_sdk.capture_exception(e)
+        telemetry.capture(e)
         return {"success": False, "error": str(e)}
 
 @eel.expose
@@ -730,7 +747,7 @@ def rename_drive_item(file_id, new_name, user_id=None):
         return {"success": False, "error": "Sesi cloud berakhir. Mohon login ulang."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive rename failed: {e}")
-        sentry_sdk.capture_exception(e)
+        telemetry.capture(e)
         return {"success": False, "error": str(e)}
 
 @eel.expose
@@ -749,6 +766,12 @@ def upload_files_to_drive(local_file_paths, target_folder_id, mode='preview', us
 
 
     def _upload_worker():
+        # Diimpor di sini, bukan di tingkat modul: keduanya berat dan hanya
+        # dibutuhkan saat ada gambar yang benar-benar dibaca. Lihat catatan
+        # di blok impor paling atas.
+        import rawpy
+        from PIL import Image
+
         processed_count = 0
         lock = threading.Lock()
         total = len(local_file_paths)
@@ -762,7 +785,7 @@ def upload_files_to_drive(local_file_paths, target_folder_id, mode='preview', us
             return
         except Exception as e:
             print(f"[PhotoFlow] ✗ Token fetch error: {e}")
-            sentry_sdk.capture_exception(e)
+            telemetry.capture(e)
             eel.showAdvancedToast(f"Gagal terhubung ke cloud: {e}", "error")
             eel.resetUploadState()
             return
@@ -820,7 +843,7 @@ def upload_files_to_drive(local_file_paths, target_folder_id, mode='preview', us
 
             except Exception as img_err:
                 print(f"[PhotoFlow] ✗ Failed to process or upload {path}: {img_err}")
-                sentry_sdk.capture_exception(img_err)
+                telemetry.capture(img_err)
             finally:
                 with lock:
                     processed_count += 1
@@ -844,7 +867,7 @@ def upload_files_to_drive(local_file_paths, target_folder_id, mode='preview', us
             eel.sync_complete()
         except Exception as e:
             print(f"[PhotoFlow] ✗ Worker drive upload failed: {e}")
-            sentry_sdk.capture_exception(e)
+            telemetry.capture(e)
         finally:
             print("[PhotoFlow] Thread upload finished. Triggering resetUploadState().")
             eel.resetUploadState()
@@ -930,7 +953,7 @@ def download_drive_files(file_ids_list, local_dest_folder, user_id=None):
         return {"success": False, "error": "Sesi cloud berakhir. Mohon login ulang."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive download failed: {e}")
-        sentry_sdk.capture_exception(e)
+        telemetry.capture(e)
         return {"success": False, "error": str(e)}
 
 @eel.expose
@@ -1021,7 +1044,7 @@ def open_google_login(user_id=None):
         return False
     except Exception as e:
         print(f"[PhotoFlow] ✗ Google Login error: {e}")
-        sentry_sdk.capture_exception(e)
+        telemetry.capture(e)
         return False
 
 @eel.expose
@@ -1066,7 +1089,7 @@ def get_submitted_projects():
             return {"success": True, "data": mapped_data}
         except Exception as e:
             print(f"[PhotoFlow] ✗ Error fetching projects: {e}")
-            sentry_sdk.capture_exception(e)
+            telemetry.capture(e)
             return {"error": str(e)}
     else:
         return {"error": "User not authenticated. Akses ditolak."}
@@ -1090,7 +1113,7 @@ def get_project_filenames(project_id):
         return {"success": True, "data": filenames}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Error fetching filenames: {e}")
-        sentry_sdk.capture_exception(e)
+        telemetry.capture(e)
         return {"error": str(e)}
 
 def _pick_release_asset(assets):
@@ -1172,6 +1195,12 @@ RAW_EXTS = ('.cr2', '.cr3', '.nef', '.arw', '.rw2', '.dng', '.raf', '.orf')
 
 @bottle.route('/thumb')
 def serve_thumbnail():
+    # Diimpor di sini, bukan di tingkat modul: keduanya berat dan hanya
+    # dibutuhkan saat ada gambar yang benar-benar dibaca. Lihat catatan
+    # di blok impor paling atas.
+    import rawpy
+    from PIL import Image
+
     filepath = bottle.request.query.path
     if not filepath or not os.path.exists(filepath):
         return bottle.HTTPError(404, "File not found")
@@ -1254,4 +1283,4 @@ if __name__ == '__main__':
             eel.start('index.html', mode='default', size=(850, 740), port=0)
         except Exception as e:
             print(f"[PhotoFlow] All browser strategies exhausted: {e}")
-            sentry_sdk.capture_exception(e)
+            telemetry.capture(e)

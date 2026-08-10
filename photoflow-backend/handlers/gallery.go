@@ -33,9 +33,13 @@ func (h *Handler) GetGallery(c *gin.Context) {
 		return
 	}
 
+	// Hanya kolom yang dipakai halaman galeri yang dikirim. Rute ini publik,
+	// jadi mengirim baris Project apa adanya berarti membocorkan user_id,
+	// drive_folder_id, magic_link_token, dan nomor WhatsApp klien kepada siapa
+	// pun yang memegang tautannya.
 	c.JSON(http.StatusOK, gin.H{
-		"project": project,
-		"photos":  photos,
+		"project": models.NewGalleryProject(project),
+		"photos":  models.NewGalleryPhotos(photos),
 	})
 }
 
