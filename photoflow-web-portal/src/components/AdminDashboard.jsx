@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { API_BASE } from '../lib/api';
+import { sudahDitawari, tandaiSudahDitawari } from '../lib/driveOnboarding';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
 
@@ -85,6 +86,10 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
   // dibedakan supaya spanduknya tidak berkedip muncul saat halaman dimuat.
   const [driveConnected, setDriveConnected] = useState(null);
   const [connectingDrive, setConnectingDrive] = useState(false);
+
+  // Identitas pemakai, dipakai untuk menandai siapa yang sudah pernah ditawari
+  // menghubungkan Drive. null berarti belum diketahui.
+  const [userId, setUserId] = useState(null);
 
   // --- HELPERS ---
   const showToast = (message, type = 'success') => {
@@ -247,7 +252,44 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
   useEffect(() => {
     fetchProjects();
     fetchDriveStatus();
+    // getSession, bukan getUser: yang pertama membaca sesi yang sudah tersimpan
+    // di peramban, yang kedua menembak jaringan ke Supabase. Yang dibutuhkan di
+    // sini hanya id-nya, dan id itu sudah ada di tangan — menunggu satu
+    // perjalanan jaringan untuk mendapatkannya hanya menunda langkah pertama
+    // fotografer baru, dan gagal sama sekali kalau jaringannya sedang buruk.
+    supabase.auth.getSession().then(({ data }) => setUserId(data?.session?.user?.id ?? null));
   }, []);
+
+  // Bawa fotografer baru langsung ke layar persetujuan Google, tanpa ia perlu
+  // mencari tombolnya sendiri.
+  //
+  // Ini titik paling awal yang mungkin. Registrasi menuntut konfirmasi email
+  // lebih dulu, jadi ketika tombol "Sign up" ditekan belum ada sesi sama sekali
+  // -- tidak ada yang bisa meminta izin atas nama siapa pun. Kedatangan pertama
+  // di dashboard adalah saat pertama identitasnya benar-benar ada.
+  //
+  // Persetujuannya sendiri tidak bisa dilewati: Google mewajibkan pemilik akun
+  // melihat dan menyetujuinya sendiri. Yang dihilangkan di sini adalah langkah
+  // mencari dan menekan tombol, bukan persetujuannya.
+  //
+  // Syaratnya sengaja sempit. Hanya akun yang belum punya project yang dibawa
+  // otomatis; yang sudah punya project sedang di tengah pekerjaan, dan melempar
+  // orang seperti itu ke Google tanpa diminta terasa seperti aplikasinya rusak.
+  // Mereka tetap mendapat spanduk dan tombolnya.
+  useEffect(() => {
+    if (isLoading) return;                 // daftar project belum selesai dimuat
+    if (driveConnected !== false) return;  // sudah terhubung, atau belum diketahui
+    if (projects.length > 0) return;       // bukan akun baru
+    if (!userId) return;                   // identitas belum diketahui
+    if (sudahDitawari(userId)) return;     // sudah pernah, jangan ulangi
+
+    // Ditandai SEBELUM berpindah. Kalau tawarannya ditolak di layar Google,
+    // yang bersangkutan tidak akan dilempar ke sana lagi setiap membuka
+    // dashboard.
+    tandaiSudahDitawari(userId);
+    handleConnectDrive();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, driveConnected, projects.length, userId]);
 
   // --- HANDLERS ---
   const handleDelete = async () => {
@@ -479,6 +521,27 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
   };
 
   // --- RENDER ---
+  // Perpindahan ke Google terjadi lewat window.location, dan di antara klik dan
+  // berpindahnya halaman ada jeda satu permintaan jaringan. Tanpa layar ini,
+  // jeda itu tampak seperti aplikasi membeku — terutama pada alur otomatis,
+  // yang tidak didahului klik apa pun sehingga tidak ada yang menjelaskan
+  // kenapa tiba-tiba pindah ke Google.
+  if (connectingDrive) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-5 bg-ash-50 dark:bg-ash-950 text-center px-6">
+        <style>{globalStyles}</style>
+        <Loader2 size={36} strokeWidth={1.75} className="text-ash-600 dark:text-ash-400 animate-spin" aria-hidden="true" />
+        <div>
+          <p className="text-lg font-semibold text-ash-900 dark:text-ash-100">Menghubungkan Google Drive</p>
+          <p className="text-sm text-ash-600 dark:text-ash-400 mt-1 max-w-sm">
+            Anda akan dibawa ke halaman persetujuan Google. Pilih akun yang menyimpan
+            folder foto klien Anda.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen transition-colors duration-500">
       <style>{globalStyles}</style>
