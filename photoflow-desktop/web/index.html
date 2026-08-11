@@ -7,10 +7,10 @@
     <!-- Eel Python-JS Bridge -->
     <script type="text/javascript" src="/eel.js"></script>
     <title>PhotoFlow - Studio Photography Sorter</title>
-    <link rel="icon" type="image/x-icon" href="assets/icon.ico?v=3">
-    <link rel="shortcut icon" type="image/x-icon" href="assets/icon.ico?v=3">
+    <link rel="icon" type="image/x-icon" href="assets/icon.ico?v=4">
+    <link rel="shortcut icon" type="image/x-icon" href="assets/icon.ico?v=4">
     <!-- Font dan ikon dibundel lokal: aplikasi ini punya mode offline, jadi
-         no asset may be fetched over the network at launch. -->
+         tidak boleh ada aset yang ditarik lewat jaringan saat dibuka. -->
     <link rel="stylesheet" href="assets/vendor/inter.css">
     <script src="assets/vendor/lucide.min.js"></script>
 
@@ -21,6 +21,13 @@
 
     <!-- LOGIN -->
     <div class="login-overlay" id="login-overlay">
+        <!-- Tombol tema di layar masuk, sejajar dengan aplikasi web yang
+             menaruhnya di pojok kanan atas. Tanpa ini, layar masuk adalah
+             satu-satunya layar yang temanya tidak dapat diubah -- dan itu
+             justru layar pertama yang dilihat orang. -->
+        <button class="icon-btn login-theme-toggle" id="btn-theme-toggle-login" data-theme-toggle>
+            <i data-lucide="monitor"></i>
+        </button>
         <div class="login-card">
             <div class="login-brand">
                 <div class="login-brand-mark">
@@ -239,8 +246,8 @@
                     </button>
                     <div class="feature-tooltip tooltip-header">This feature requires an internet connection.</div>
                 </div>
-                <button class="icon-btn" id="btn-theme-toggle" title="Toggle Light/Dark Mode">
-                    <i data-lucide="moon"></i>
+                <button class="icon-btn" id="btn-theme-toggle" data-theme-toggle>
+                    <i data-lucide="monitor"></i>
                 </button>
             </div>
         </header>

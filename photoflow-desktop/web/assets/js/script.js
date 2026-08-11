@@ -337,7 +337,11 @@ document.addEventListener('DOMContentLoaded', () => {
 // itu menang selamanya dan tidak ada lagi jalan kembali mengikuti perangkat.
 // Perubahan tema di sistem operasi saat aplikasi sedang terbuka juga tidak
 // pernah diikuti.
-const themeBtn = document.getElementById('btn-theme-toggle');
+// Ada dua tombol tema, bukan satu: satu di bilah atas aplikasi, satu di layar
+// masuk. Keduanya menyalakan keadaan yang sama, jadi keduanya juga harus ikut
+// berubah rupa bersamaan -- menyimpan rujukan ke salah satunya saja berarti
+// yang lain memajang ikon yang keliru begitu temanya diganti dari yang satu.
+const themeBtns = Array.from(document.querySelectorAll('[data-theme-toggle]'));
 const themeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 const THEME_CYCLE = ['system', 'light', 'dark'];
 
@@ -374,13 +378,15 @@ function updateThemeIcon(choice) {
         : choice === 'dark'
             ? 'Theme: dark. Click to follow your system.'
             : 'Theme: following your system. Click for light.';
-    themeBtn.innerHTML = `<i data-lucide="${icon}"></i>`;
-    themeBtn.title = label;
-    themeBtn.setAttribute('aria-label', label);
+    themeBtns.forEach((btn) => {
+        btn.innerHTML = `<i data-lucide="${icon}"></i>`;
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+    });
     lucide.createIcons();
 }
 
-themeBtn.addEventListener('click', () => {
+function cycleTheme() {
     const current = readThemeChoice();
     const next = THEME_CYCLE[(THEME_CYCLE.indexOf(current) + 1) % THEME_CYCLE.length];
     try {
@@ -392,7 +398,9 @@ themeBtn.addEventListener('click', () => {
         // Tidak bisa menyimpan bukan alasan untuk tidak menerapkan temanya.
     }
     applyTheme(next);
-});
+}
+
+themeBtns.forEach((btn) => btn.addEventListener('click', cycleTheme));
 
 // Perubahan tema di sistem operasi selagi aplikasi terbuka. Hanya berlaku
 // ketika belum ada pilihan tersimpan; pilihan yang disengaja tetap menang.
