@@ -1,10 +1,19 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Eye } from 'lucide-react';
+import { Check, Eye, ImageOff } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
   const [isLoaded, setIsLoaded] = useState(false);
+
+  // Sebagian baris foto memang tidak punya thumbnail — misalnya yang lahir dari
+  // proses submit, yang hanya membawa nama berkas. Sebelumnya kartunya tetap
+  // merender <img> dengan src kosong, dan hasilnya kotak abu tanpa keterangan
+  // yang tidak dapat dibedakan dari gambar yang gagal dimuat. Sekarang keadaan
+  // itu ditampilkan apa adanya, lengkap dengan nama berkasnya, supaya foto tetap
+  // bisa dikenali dan dipilih.
+  const [gagalMuat, setGagalMuat] = useState(false);
+  const adaGambar = Boolean(photo.thumbnailLink) && !gagalMuat;
 
   return (
     <motion.div
@@ -36,20 +45,31 @@ const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
           "shadow-[0_0_0_3px_#fff,0_0_0_6px_var(--color-ash-950)] dark:shadow-[0_0_0_3px_#fff,0_0_0_6px_var(--color-ash-950)]"
       )}
     >
-      {!isLoaded && <div className="absolute inset-0 animate-pulse bg-ash-300 dark:bg-ash-800" />}
+      {adaGambar && !isLoaded && (
+        <div className="absolute inset-0 animate-pulse bg-ash-300 dark:bg-ash-800" />
+      )}
 
-      <img
-        src={photo.thumbnailLink}
-        alt="Gallery shot"
-        loading="lazy"
-        referrerPolicy="no-referrer"
-        onLoad={() => setIsLoaded(true)}
-        onError={() => setIsLoaded(true)}
-        className={cn(
-          "w-full h-full object-cover transition-opacity duration-500",
-          isLoaded ? "opacity-100" : "opacity-0"
-        )}
-      />
+      {adaGambar ? (
+        <img
+          src={photo.thumbnailLink}
+          alt={photo.name || 'Foto galeri'}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onLoad={() => setIsLoaded(true)}
+          onError={() => setGagalMuat(true)}
+          className={cn(
+            "w-full h-full object-cover transition-opacity duration-500",
+            isLoaded ? "opacity-100" : "opacity-0"
+          )}
+        />
+      ) : (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-3 text-center bg-ash-200 dark:bg-ash-800">
+          <ImageOff size={22} strokeWidth={1.75} className="text-ash-500 dark:text-ash-400" aria-hidden="true" />
+          <span className="text-[11px] leading-snug font-medium text-ash-600 dark:text-ash-400 break-all line-clamp-3">
+            {photo.name || 'Pratinjau tidak tersedia'}
+          </span>
+        </div>
+      )}
 
       {/* Hover Overlay Gelap */}
       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 z-10" />

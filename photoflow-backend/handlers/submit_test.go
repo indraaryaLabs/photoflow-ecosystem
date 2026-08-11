@@ -86,6 +86,40 @@ func countPhotos(t *testing.T, db *gorm.DB, projectID string) int64 {
 	return n
 }
 
+// renamePhotos memberi nama berbeda pada tiap foto. seedProject memberi semua
+// foto nama yang sama, dan sejak submit menandai berdasarkan nama berkas,
+// nama yang seragam membuat hasilnya tidak bisa dibedakan.
+func renamePhotos(t *testing.T, db *gorm.DB, projectID string, names ...string) {
+	t.Helper()
+	var ids []string
+	if err := db.Model(&models.Photo{}).
+		Where("project_id = ?", projectID).
+		Order("id").Pluck("id", &ids).Error; err != nil {
+		t.Fatalf("gagal membaca foto: %v", err)
+	}
+	if len(ids) != len(names) {
+		t.Fatalf("ada %d foto, tapi %d nama diberikan", len(ids), len(names))
+	}
+	for i, id := range ids {
+		if err := db.Model(&models.Photo{}).Where("id = ?", id).
+			Update("file_name", names[i]).Error; err != nil {
+			t.Fatalf("gagal mengganti nama foto: %v", err)
+		}
+	}
+}
+
+// selectedNames mengembalikan nama foto yang tertandai, terurut.
+func selectedNames(t *testing.T, db *gorm.DB, projectID string) []string {
+	t.Helper()
+	var names []string
+	if err := db.Model(&models.Photo{}).
+		Where("project_id = ? AND is_selected", projectID).
+		Order("file_name").Pluck("file_name", &names).Error; err != nil {
+		t.Fatalf("gagal membaca pilihan: %v", err)
+	}
+	return names
+}
+
 func projectStatus(t *testing.T, db *gorm.DB, projectID string) string {
 	t.Helper()
 	var status string
@@ -93,38 +127,84 @@ func projectStatus(t *testing.T, db *gorm.DB, projectID string) string {
 	return status
 }
 
-func TestSubmitSelectionReplacesPhotosAndLocks(t *testing.T) {
+// Submit MENANDAI pilihan, tidak mengganti daftar fotonya.
+//
+// Tes ini dulu berbunyi sebaliknya: ia memastikan seluruh baris foto terhapus
+// dan disisipkan ulang hanya yang dipilih. Perilaku itu membuang salinan daftar
+// isi folder Drive, sehingga galeri yang jatuh ke salinan database menyusut
+// jadi sebanyak yang dipilih saja — empat foto dipilih satu menyisakan satu.
+func TestSubmitSelectionMarksSelectionAndLocks(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 3)
 
+	// seedProject memberi setiap foto nama yang sama; supaya bisa dibedakan,
+	// namanya disetel ulang di sini.
+	renamePhotos(t, db, project.ID, "satu.jpg", "dua.jpg", "tiga.jpg")
+
 	err := submitSelection(db, project.ID, []models.Photo{
-		{ProjectID: project.ID, FileName: "pilihan.jpg", IsSelected: true},
+		{ProjectID: project.ID, FileName: "dua.jpg", IsSelected: true},
 	})
 	if err != nil {
 		t.Fatalf("submit pertama seharusnya berhasil: %v", err)
 	}
 
-	if got := countPhotos(t, db, project.ID); got != 1 {
-		t.Fatalf("foto tersisa %d, seharusnya 1", got)
+	if got := countPhotos(t, db, project.ID); got != 3 {
+		t.Fatalf("foto tersisa %d, seharusnya tetap 3", got)
+	}
+	if got := selectedNames(t, db, project.ID); len(got) != 1 || got[0] != "dua.jpg" {
+		t.Fatalf("yang tertandai %v, seharusnya hanya [dua.jpg]", got)
 	}
 	if got := projectStatus(t, db, project.ID); got != models.StatusSubmitted {
 		t.Fatalf("status %q, seharusnya %q", got, models.StatusSubmitted)
 	}
 }
 
-// TestSubmitSelectionRollsBackOnInsertFailure membuktikan alasan transaksi ada
-// di sini: tanpa transaksi, penghapusan foto lama sudah permanen ketika insert
-// penggantinya gagal, dan pekerjaan klien hilang tanpa bisa dipulihkan.
+// Nama yang belum punya baris tetap harus tercatat, kalau tidak aplikasi
+// desktop tidak akan pernah tahu foto itu dipilih. Ini terjadi ketika isi
+// folder berubah setelah project dibuat.
+func TestSubmitSelectionMenyisipkanNamaYangBelumTersimpan(t *testing.T) {
+	db := newSubmitTestDB(t)
+	project := seedProject(t, db, 2)
+	renamePhotos(t, db, project.ID, "lama-satu.jpg", "lama-dua.jpg")
+
+	err := submitSelection(db, project.ID, []models.Photo{
+		{ProjectID: project.ID, FileName: "lama-dua.jpg", IsSelected: true},
+		{ProjectID: project.ID, FileName: "baru.jpg", IsSelected: true},
+	})
+	if err != nil {
+		t.Fatalf("submit seharusnya berhasil: %v", err)
+	}
+
+	if got := countPhotos(t, db, project.ID); got != 3 {
+		t.Fatalf("foto tersimpan %d, seharusnya 3 (dua lama + satu baru)", got)
+	}
+	got := selectedNames(t, db, project.ID)
+	if len(got) != 2 || got[0] != "baru.jpg" || got[1] != "lama-dua.jpg" {
+		t.Fatalf("yang tertandai %v, seharusnya [baru.jpg lama-dua.jpg]", got)
+	}
+}
+
+// Transaksi tetap diperlukan meski tidak ada lagi penghapusan: penguncian
+// status dan penandaan pilihan harus jadi atau batal bersama-sama. Kalau
+// penandaan gagal setelah status terlanjur "submitted", galerinya terkunci
+// tanpa satu pun pilihan tercatat — dan klien tidak bisa mengulang.
 //
-// Kegagalan dipicu dengan project_id yang bukan UUID, sehingga insert ditolak
-// Postgres di tengah jalan setelah penghapusan berjalan.
+// Kegagalan dipicu lewat project_id yang bukan UUID pada baris sisipan.
 func TestSubmitSelectionRollsBackOnInsertFailure(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 3)
+	renamePhotos(t, db, project.ID, "satu.jpg", "dua.jpg", "tiga.jpg")
+
+	// Pemicu kegagalan yang lama -- project_id cacat pada baris kiriman -- tidak
+	// berlaku lagi: markSelection membangun sendiri baris sisipannya dan
+	// mengabaikan project_id apa pun yang datang dari klien. Itu justru lebih
+	// benar, tapi berarti kegagalan harus dipicu dari sisi database.
+	tolakInsertFoto(t, db)
+	defer izinkanInsertFoto(t, db)
 
 	err := submitSelection(db, project.ID, []models.Photo{
-		{ProjectID: project.ID, FileName: "sah.jpg", IsSelected: true},
-		{ProjectID: "bukan-uuid", FileName: "rusak.jpg", IsSelected: true},
+		{ProjectID: project.ID, FileName: "satu.jpg", IsSelected: true},
+		{ProjectID: project.ID, FileName: "belum-tersimpan.jpg", IsSelected: true},
 	})
 	if err == nil {
 		t.Fatal("insert yang cacat seharusnya menghasilkan error")
@@ -134,11 +214,37 @@ func TestSubmitSelectionRollsBackOnInsertFailure(t *testing.T) {
 	}
 
 	if got := countPhotos(t, db, project.ID); got != 3 {
-		t.Fatalf("foto tersisa %d, seharusnya 3: penghapusan tidak ter-rollback", got)
+		t.Fatalf("foto tersisa %d, seharusnya 3", got)
 	}
-	if got := projectStatus(t, db, project.ID); got != "pending" {
+	if got := len(selectedNames(t, db, project.ID)); got != 0 {
+		t.Fatalf("%d foto tertandai, seharusnya 0: penandaan tidak ter-rollback", got)
+	}
+	if got := projectStatus(t, db, project.ID); got != models.StatusPending {
 		t.Fatalf("status %q, seharusnya tetap pending: penguncian tidak ter-rollback", got)
 	}
+}
+
+// tolakInsertFoto memasang trigger yang menggagalkan setiap INSERT ke photos.
+// Kegagalannya datang dari database, tempat kegagalan sungguhan akan muncul,
+// bukan dari cabang khusus tes di dalam kode produksi.
+func tolakInsertFoto(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	stmts := []string{
+		`CREATE OR REPLACE FUNCTION tolak_insert_foto() RETURNS trigger AS $$
+		 BEGIN RAISE EXCEPTION 'insert foto ditolak oleh tes'; END; $$ LANGUAGE plpgsql`,
+		`CREATE TRIGGER tolak_insert_foto BEFORE INSERT ON photos
+		 FOR EACH ROW EXECUTE FUNCTION tolak_insert_foto()`,
+	}
+	for _, q := range stmts {
+		if err := db.Exec(q).Error; err != nil {
+			t.Fatalf("gagal memasang trigger penolak: %v", err)
+		}
+	}
+}
+
+func izinkanInsertFoto(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	db.Exec(`DROP TRIGGER IF EXISTS tolak_insert_foto ON photos`)
 }
 
 // TestSubmitSelectionRejectsSecondSubmit adalah kasus berurutan: submit kedua
@@ -146,6 +252,7 @@ func TestSubmitSelectionRollsBackOnInsertFailure(t *testing.T) {
 func TestSubmitSelectionRejectsSecondSubmit(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 3)
+	renamePhotos(t, db, project.ID, "pertama.jpg", "kedua.jpg", "ketiga.jpg")
 
 	if err := submitSelection(db, project.ID, []models.Photo{
 		{ProjectID: project.ID, FileName: "pertama.jpg", IsSelected: true},
@@ -161,8 +268,12 @@ func TestSubmitSelectionRejectsSecondSubmit(t *testing.T) {
 		t.Fatalf("submit kedua seharusnya errGalleryLocked, dapat: %v", err)
 	}
 
-	if got := countPhotos(t, db, project.ID); got != 1 {
-		t.Fatalf("foto tersisa %d, seharusnya tetap 1 dari submit pertama", got)
+	if got := countPhotos(t, db, project.ID); got != 3 {
+		t.Fatalf("foto tersisa %d, seharusnya tetap 3", got)
+	}
+	// Yang penting: pilihan submit pertama tidak boleh tergeser oleh yang kedua.
+	if got := selectedNames(t, db, project.ID); len(got) != 1 || got[0] != "pertama.jpg" {
+		t.Fatalf("yang tertandai %v, seharusnya tetap [pertama.jpg] dari submit pertama", got)
 	}
 }
 
@@ -222,7 +333,11 @@ func TestSubmitSelectionConcurrentSubmitsOnlyOneWins(t *testing.T) {
 			succeeded, locked, attempts-1)
 	}
 
-	if got := countPhotos(t, db, project.ID); got != 1 {
-		t.Fatalf("foto tersisa %d, seharusnya 1: submit kedua ikut menulis", got)
+	// Yang diukur sekarang jumlah foto yang TERTANDAI, bukan jumlah baris.
+	// Sejak submit menandai alih-alih mengganti, ketiga foto bawaan memang tetap
+	// ada; kalau lebih dari satu submit berhasil menembus, yang bertambah adalah
+	// tandanya.
+	if got := selectedNames(t, db, project.ID); len(got) != 1 || got[0] != "pilihan.jpg" {
+		t.Fatalf("yang tertandai %v, seharusnya hanya [pilihan.jpg]", got)
 	}
 }
