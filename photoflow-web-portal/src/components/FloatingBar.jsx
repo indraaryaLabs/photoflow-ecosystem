@@ -58,7 +58,7 @@ const FloatingBar = ({ project, selectedCount, maxSelections, onSubmit, isSubmit
                   </AnimatePresence>
                 </div>
                 <span className="text-ash-600 dark:text-ash-400 font-normal">
-                  / {maxSelections} Terpilih
+                  / {maxSelections} selected
                 </span>
               </span>
             </div>
@@ -69,15 +69,15 @@ const FloatingBar = ({ project, selectedCount, maxSelections, onSubmit, isSubmit
               whileTap={{ scale: 0.95 }}
               onClick={() => {
                 if (isSubmitted) {
-                  const clientName = project?.client_name || 'Klien';
-                  const projectName = project?.project_name || project?.client_name || 'Galeri';
+                  const clientName = project?.client_name || 'Client';
+                  const projectName = project?.project_name || project?.client_name || 'Gallery';
                   const adminWa = project?.admin_whatsapp || '';
                   
-                  const message = `Halo, Saya ${clientName} menginformasikan bahwa proses pemilihan foto untuk project ${projectName} telah selesai.
+                  const message = `Hello, this is ${clientName}. I have finished selecting the photos for the ${projectName} project.
 
-Seluruh foto pilihan sudah tersubmit di sistem PhotoFlow dan siap untuk tahapan pengeditan selanjutnya.
+All of my picks are submitted in PhotoFlow and ready for editing.
 
-Terima kasih atas kerja samanya.`;
+Thank you.`;
                   
                   const url = `https://wa.me/${adminWa}?text=${encodeURIComponent(message)}`;
                   window.open(url, '_blank');
@@ -110,23 +110,23 @@ Terima kasih atas kerja samanya.`;
                 >
                   {isSubmitted ? (
                     <>
-                      <span>Konfirmasi WhatsApp</span>
+                      <span>Confirm on WhatsApp</span>
                       <MessageCircle size={16} strokeWidth={1.75} />
                     </>
                   ) : isSubmitting ? (
                     <>
                       <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
-                      <span>Mengirim...</span>
+                      <span>Submitting…</span>
                     </>
                   ) : isFull ? (
                     <>
-                      <span>Siap Dikirim</span>
+                      <span>Ready to submit</span>
                       <span className="text-lg leading-none">🚀</span>
                     </>
                   ) : (
                     <>
-                      <span className="hidden sm:inline">Kirim Pilihan</span>
-                      <span className="sm:hidden">Kirim</span>
+                      <span className="hidden sm:inline">Submit selection</span>
+                      <span className="sm:hidden">Submit</span>
                       <CheckCircle2 size={16} strokeWidth={1.75} />
                     </>
                   )}

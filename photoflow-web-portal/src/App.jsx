@@ -118,7 +118,7 @@ export default function App() {
   // Fetch Gallery Data
   useEffect(() => {
     if (!token) {
-      setError('Link galeri tidak valid atau hilang.');
+      setError('This gallery link is invalid or incomplete.');
       setIsLoading(false);
       return;
     }
@@ -129,7 +129,7 @@ export default function App() {
 
         if (!res.ok) {
           const body = await res.json().catch(() => null);
-          throw new Error(body?.message || `Galeri tidak ditemukan. (status ${res.status})`);
+          throw new Error(body?.message || `Gallery not found. (status ${res.status})`);
         }
 
         const data = await res.json();
@@ -161,7 +161,7 @@ export default function App() {
           // salinannya ikut terkirim bersama data project. Bentuknya diselaraskan
           // di sini karena baris database memakai file_name dan thumbnail_url,
           // sedangkan galeri membaca name dan thumbnailLink.
-          console.warn('Gagal memuat daftar foto, memakai salinan tersimpan:', photosErr);
+          console.warn('Could not load the photo list; falling back to the stored copy:', photosErr);
           setPhotoSource({ stored: true, reason: 'photos_endpoint_failed' });
           setPhotos(
             (data.photos || []).map(p => ({
@@ -172,7 +172,7 @@ export default function App() {
           );
         }
       } catch (err) {
-        setError(err.message || 'Terjadi kesalahan saat memuat galeri.');
+        setError(err.message || 'Something went wrong while loading this gallery.');
       } finally {
         setIsLoading(false);
       }
@@ -193,7 +193,7 @@ export default function App() {
   const handleToggleSelect = useCallback((id) => {
     // Gallery Lock: Cegah interaksi jika sudah disubmit
     if (isSubmittedState) {
-      addToast('Galeri telah dikunci karena pilihan sudah disubmit.');
+      addToast('This gallery is locked. Your selection has already been submitted.');
       return;
     }
 
@@ -203,7 +203,7 @@ export default function App() {
         next.delete(id);
       } else {
         if (next.size >= project?.max_selections) {
-          addToast(`Batas maksimal tercapai (${project.max_selections} foto).`);
+          addToast(`You have reached the limit of ${project.max_selections} photos.`);
           return prev;
         }
         next.add(id);
@@ -230,13 +230,13 @@ export default function App() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        throw new Error(body?.error || `Gagal mengirim pilihan. (status ${res.status})`);
+        throw new Error(body?.error || `Could not submit your selection. (status ${res.status})`);
       }
 
-      addToast('Pilihan foto berhasil dikirim ke fotografer!');
+      addToast('Your selection has been sent to your photographer.');
       setIsSubmittedState(true);
     } catch (err) {
-      addToast(err.message || 'Terjadi kesalahan saat mengirim pilihan.');
+      addToast(err.message || 'Something went wrong while submitting your selection.');
     } finally {
       setIsSubmitting(false);
     }
@@ -316,7 +316,7 @@ export default function App() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-ash-50 dark:bg-ash-950 transition-colors duration-300">
         <Loader2 size={40} strokeWidth={1.75} className="text-ash-600 dark:text-ash-400 animate-spin mb-6" aria-hidden="true" />
         <p className="text-lg font-medium text-ash-600 dark:text-ash-300 tracking-wide">
-          Memuat Galeri...
+          Loading gallery...
         </p>
         <p className="text-sm text-ash-500 dark:text-ash-500 mt-1">
           Mohon tunggu sebentar
@@ -332,7 +332,7 @@ export default function App() {
           <AlertTriangle size={32} strokeWidth={1.75} className="text-danger-500" />
         </div>
         <h1 className="text-xl font-semibold text-ash-800 dark:text-ash-100 mb-2">
-          Gagal Memuat Galeri
+          Could not load this gallery
         </h1>
         <p className="text-ash-600 dark:text-ash-400 max-w-md">
           {error}
@@ -353,11 +353,11 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28">
         <div className="mb-8 flex flex-col gap-2">
           <h2 className="text-2xl sm:text-3xl font-semibold text-ash-900 dark:text-white tracking-tight">
-            Pilih Foto Favorit
+            Choose your favourites
           </h2>
           <p className="text-ash-600 dark:text-ash-400 text-sm sm:text-base max-w-2xl">
-            Klik gambar untuk memilih, atau tekan ikon <strong>👁 (Mata)</strong> untuk melihat resolusi tinggi secara utuh.
-            Maksimal <strong className="text-ash-700 dark:text-ash-200">{project.max_selections}</strong> foto.
+            Click a photo to select it, or use the eye icon to view it full size.
+            You can choose up to <strong className="text-ash-700 dark:text-ash-200">{project.max_selections}</strong> photos.
           </p>
         </div>
 
@@ -372,10 +372,9 @@ export default function App() {
           >
             <AlertTriangle size={18} strokeWidth={1.75} className="mt-0.5 shrink-0 text-warning-500 dark:text-warning-400" aria-hidden="true" />
             <span>
-              Google Drive sedang tidak dapat dibaca, jadi daftar ini diambil dari
-              salinan tersimpan. Isinya bisa tertinggal dari folder aslinya, dan
-              sebagian gambar mungkin tidak muncul. Hubungi fotografer Anda kalau
-              ada foto yang hilang.
+              Google Drive could not be read, so this list comes from a stored copy.
+              It may be out of date, and some images may not appear. Contact your
+              photographer if a photo is missing.
             </span>
           </div>
         )}
