@@ -109,6 +109,11 @@ func (h *Handler) CreateProject(c *gin.Context) {
 }
 
 // ListProjects mengembalikan project milik pemanggil saja.
+//
+// Jumlah foto ikut dihitung. Tanpa itu dashboard tidak punya cara membedakan
+// project yang fotonya berhasil ditarik dari project yang kosong karena Drive
+// tidak terbaca — dan kartunya selama ini menampilkan `max_selections`, yaitu
+// batas yang diketik fotografer, bukan berapa foto yang benar-benar ada.
 func (h *Handler) ListProjects(c *gin.Context) {
 	userID := c.GetString(middleware.ContextUserIDKey)
 
@@ -118,7 +123,140 @@ func (h *Handler) ListProjects(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data project"})
 		return
 	}
-	c.JSON(http.StatusOK, projects)
+
+	c.JSON(http.StatusOK, h.withPhotoCounts(projects))
+}
+
+// projectWithCount adalah baris project ditambah jumlah fotonya.
+type projectWithCount struct {
+	models.Project
+	PhotoCount int64 `json:"photo_count"`
+}
+
+// withPhotoCounts menghitung foto untuk sekumpulan project dalam satu query,
+// bukan satu query per project.
+func (h *Handler) withPhotoCounts(projects []models.Project) []projectWithCount {
+	out := make([]projectWithCount, 0, len(projects))
+	if len(projects) == 0 {
+		return out
+	}
+
+	ids := make([]string, 0, len(projects))
+	for _, p := range projects {
+		ids = append(ids, p.ID)
+	}
+
+	type baris struct {
+		ProjectID string
+		Jumlah    int64
+	}
+	var hasil []baris
+	if err := h.DB.Model(&models.Photo{}).
+		Select("project_id, count(*) as jumlah").
+		Where("project_id IN ?", ids).
+		Group("project_id").Scan(&hasil).Error; err != nil {
+		// Bukan alasan menggagalkan seluruh daftar; jumlahnya saja yang hilang.
+		log.Printf("⚠️ Gagal menghitung foto: %v", err)
+	}
+	jumlah := make(map[string]int64, len(hasil))
+	for _, b := range hasil {
+		jumlah[b.ProjectID] = b.Jumlah
+	}
+
+	for _, p := range projects {
+		out = append(out, projectWithCount{Project: p, PhotoCount: jumlah[p.ID]})
+	}
+	return out
+}
+
+// ResyncProject menarik ulang daftar foto dari Drive untuk project yang sudah ada.
+//
+// Sebelum ini foto hanya ditarik pada dua saat: ketika project dibuat, dan
+// ketika project diedit DENGAN URL folder yang berubah. Akibatnya urutan yang
+// paling wajar justru buntu: buat project saat Drive belum terhubung atau
+// folder belum dibagikan, betulkan izinnya di Google, lalu kembali ke
+// PhotoFlow — dan tidak ada satu pun cara memberi tahu PhotoFlow untuk membaca
+// ulang. Satu-satunya jalan keluar adalah menghapus project lalu membuatnya
+// lagi.
+//
+// Pilihan klien yang sudah tersimpan dipertahankan: baris foto yang namanya
+// masih ada di folder tetap membawa is_selected-nya.
+func (h *Handler) ResyncProject(c *gin.Context) {
+	userID := c.GetString(middleware.ContextUserIDKey)
+	projectID := c.Param("id")
+
+	var project models.Project
+	if err := h.DB.Where("id = ? AND user_id = ?", projectID, userID).First(&project).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Project tidak ditemukan atau akses ditolak"})
+		return
+	}
+
+	store, err := h.StoreForUser(c.Request.Context(), userID)
+	if err != nil {
+		if code, ok := driveErrorCode(err); ok {
+			c.JSON(http.StatusConflict, gin.H{"error": code, "code": code})
+			return
+		}
+		log.Printf("🔴 Resync %s: %v", project.ID, err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Google Drive tidak dapat dihubungi"})
+		return
+	}
+
+	files, err := store.ListPhotos(c.Request.Context(), project.DriveFolderID)
+	if err != nil {
+		if code, ok := driveErrorCode(err); ok {
+			c.JSON(http.StatusConflict, gin.H{"error": code, "code": code})
+			return
+		}
+		log.Printf("⚠️ Resync: gagal membaca folder %s: %v", project.DriveFolderID, err)
+		c.JSON(http.StatusBadGateway, gin.H{
+			"error": "Folder Drive tidak dapat dibaca. Pastikan folder dibagikan ke akun Google yang terhubung.",
+			"code":  "folder_unreadable",
+		})
+		return
+	}
+
+	// Nama yang sebelumnya dipilih klien, supaya pilihannya tidak hilang hanya
+	// karena daftarnya ditarik ulang.
+	var terpilih []string
+	if err := h.DB.Model(&models.Photo{}).
+		Where("project_id = ? AND is_selected", project.ID).
+		Pluck("file_name", &terpilih).Error; err != nil {
+		log.Printf("⚠️ Resync: gagal membaca pilihan lama: %v", err)
+	}
+	masihDipilih := make(map[string]bool, len(terpilih))
+	for _, nama := range terpilih {
+		masihDipilih[nama] = true
+	}
+
+	baru := make([]models.Photo, 0, len(files))
+	for _, file := range files {
+		baru = append(baru, models.Photo{
+			ProjectID:    project.ID,
+			FileName:     file.Name,
+			ThumbnailURL: store.ThumbnailURL(file),
+			IsSelected:   masihDipilih[file.Name],
+		})
+	}
+
+	if err := h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("project_id = ?", project.ID).Delete(&models.Photo{}).Error; err != nil {
+			return err
+		}
+		if len(baru) == 0 {
+			return nil
+		}
+		return tx.Create(&baru).Error
+	}); err != nil {
+		log.Printf("🔴 Resync %s: %v", project.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan daftar foto"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":      "Daftar foto diperbarui dari Google Drive",
+		"photos_found": len(baru),
+	})
 }
 
 // UpdateProject mengubah metadata project dan, kalau folder Drive-nya berganti,
