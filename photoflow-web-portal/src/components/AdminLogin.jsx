@@ -92,7 +92,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
       if (error) {
         setFeedback({ type: 'error', message: describeAuthError(error) });
       } else {
-        window.location.href = '/admin';
+        window.location.href = '/dashboard';
       }
     } else {
       // Validasi nomor WhatsApp sebelum registrasi
@@ -360,7 +360,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                 <motion.button
                   whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => window.location.href = '/admin'}
+                  onClick={() => window.location.href = '/dashboard'}
                   className="relative w-full py-3.5 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm overflow-hidden group shadow-sm transition-all duration-300"
                 >
                   <div className="flex items-center justify-center gap-2">

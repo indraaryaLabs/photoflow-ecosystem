@@ -101,6 +101,10 @@ func SetupRouter() (*gin.Engine, error) {
 	r.PUT("/api/projects/:id", requireAuth, h.UpdateProject)
 	r.DELETE("/api/projects/:id", requireAuth, h.DeleteProject)
 
+	// Jalan pulang dari status "submitted". Lihat handlers.ReopenSelection
+	// untuk alasan kenapa ini perlu ada.
+	r.POST("/api/projects/:id/reopen", requireAuth, h.ReopenSelection)
+
 	// --- GOOGLE DRIVE ---
 	// Dipakai desktop app untuk mengunduh berkas aslinya.
 	//
