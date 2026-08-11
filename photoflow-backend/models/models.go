@@ -74,8 +74,11 @@ func (RateLimit) TableName() string {
 // fungsi serverless: permintaan yang memulai alur dan callback yang
 // menyelesaikannya hampir pasti dilayani instance berbeda.
 type OAuthState struct {
-	State     string    `gorm:"column:state;type:text;primaryKey"`
-	UserID    string    `gorm:"column:user_id;type:uuid;not null"`
+	State  string `gorm:"column:state;type:text;primaryKey"`
+	UserID string `gorm:"column:user_id;type:uuid;not null"`
+	// Ke mana user dikembalikan setelah menyetujui di Google. Kosong untuk
+	// aplikasi desktop, yang tidak punya halaman untuk dituju.
+	ReturnTo  string    `gorm:"column:return_to;type:text"`
 	ExpiresAt time.Time `gorm:"column:expires_at;not null;index"`
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 }
