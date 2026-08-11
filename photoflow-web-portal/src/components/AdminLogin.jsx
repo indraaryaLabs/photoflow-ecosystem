@@ -211,7 +211,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
 
   return (
     <div>
-      <div className="relative min-h-screen w-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans selection:bg-indigo-500/30 transition-colors duration-500">
+      <div className="relative min-h-screen w-full flex items-center justify-center bg-ash-50 dark:bg-ash-950 text-ash-900 dark:text-ash-100 overflow-hidden font-sans transition-colors duration-500">
 
         {/* --- THEME TOGGLE BUTTON --- */}
         <ThemeToggle
@@ -226,12 +226,12 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
         <motion.div
           animate={{ scale: [1, 1.2, 1], opacity: [0.15, 0.3, 0.15] }}
           transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full bg-indigo-500/30 dark:bg-indigo-600/20 blur-[120px] pointer-events-none"
+          className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full bg-ash-400/30 dark:bg-white/[0.06] blur-[120px] pointer-events-none"
         />
         <motion.div
           animate={{ scale: [1, 1.5, 1], opacity: [0.1, 0.2, 0.1] }}
           transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-          className="absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] rounded-full bg-violet-500/30 dark:bg-violet-600/20 blur-[150px] pointer-events-none"
+          className="absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] rounded-full bg-ash-300/30 dark:bg-white/[0.04] blur-[150px] pointer-events-none"
         />
 
         <div
@@ -247,7 +247,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
           className="relative z-10 w-full max-w-[420px] px-6 py-12 md:p-0"
         >
           {/* Glass Panel */}
-          <div className="relative backdrop-blur-2xl bg-white/60 dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-white/[0.08] p-8 rounded-3xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] dark:shadow-[0_0_40px_-10px_rgba(0,0,0,0.5)] shadow-indigo-500/5 dark:shadow-indigo-500/10 overflow-hidden transition-colors duration-500">
+          <div className="relative backdrop-blur-2xl bg-white/60 dark:bg-ash-900/40 border border-ash-200/80 dark:border-white/[0.08] p-8 rounded-3xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] dark:shadow-[0_0_40px_-10px_rgba(0,0,0,0.5)] overflow-hidden transition-colors duration-500">
 
             <div className="absolute inset-0 rounded-3xl ring-1 ring-inset ring-white/50 dark:ring-white/[0.02] pointer-events-none transition-colors duration-500"></div>
 
@@ -255,9 +255,11 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
             <div className="flex flex-col items-center mb-8 text-center">
               <motion.div
                 whileHover={{ scale: 1.05, rotate: 5 }}
-                className="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center mb-5 shadow-lg shadow-indigo-500/25 border border-indigo-400/20 dark:border-white/10"
+                className="w-12 h-12 rounded-xl bg-ash-800 dark:bg-ash-100 flex items-center justify-center mb-5 shadow-sm border border-ash-700 dark:border-white/10"
               >
-                <BrandMark size={26} className="text-white" title="PhotoFlow" />
+                {/* Kotaknya ikut terbalik di mode gelap (pekat jadi terang),
+                    jadi lambangnya harus ikut terbalik juga. */}
+                <BrandMark size={26} className="text-white dark:text-ash-950" title="PhotoFlow" />
               </motion.div>
 
               <div className="h-[60px] relative w-full flex flex-col items-center justify-center">
@@ -270,12 +272,12 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                     transition={{ duration: 0.3 }}
                     className="absolute flex flex-col items-center w-full"
                   >
-                    <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white mb-1.5 transition-colors duration-500">
+                    <h1 className="text-2xl font-semibold tracking-tight text-ash-900 dark:text-white mb-1.5 transition-colors duration-500">
                       {isRecovery
                         ? "Ganti password"
                         : (session ? "You're signed in" : (isLoginMode ? "Welcome back" : "Create an account"))}
                     </h1>
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium transition-colors duration-500">
+                    <p className="text-sm text-ash-600 dark:text-ash-400 font-medium transition-colors duration-500">
                       {isRecovery
                         ? "Masukkan password baru untuk akun Anda."
                         : (session
@@ -304,8 +306,8 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                     aria-live="polite"
                     className={`flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-sm ${
                       feedback.type === 'error'
-                        ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300'
-                        : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300'
+                        ? 'border-danger-200 bg-danger-50 text-danger-700 dark:border-danger-500/20 dark:bg-danger-500/10 dark:text-danger-300'
+                        : 'border-success-200 bg-success-50 text-success-700 dark:border-success-500/20 dark:bg-success-500/10 dark:text-success-300'
                     }`}
                   >
                     {feedback.type === 'error'
@@ -334,7 +336,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-ash-500 dark:text-ash-500 hover:text-ash-600 dark:hover:text-ash-300 transition-colors rounded-md focus:outline-none focus:ring-2 focus:ring-ash-400 dark:focus:ring-ash-500"
                     aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
                   >
                     {showPassword ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
@@ -345,7 +347,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                   whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.98 }}
                   disabled={isLoading}
-                  className="relative w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 text-white font-medium text-sm shadow-[0_4px_20px_-5px_rgba(99,102,241,0.4)] transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed border border-indigo-400/20"
+                  className="relative w-full py-3.5 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm shadow-sm transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   <div className="flex items-center justify-center gap-2">
                     {isLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : <span>Simpan password baru</span>}
@@ -359,7 +361,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                   whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => window.location.href = '/admin'}
-                  className="relative w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 text-white font-medium text-sm overflow-hidden group shadow-[0_4px_20px_-5px_rgba(99,102,241,0.4)] hover:shadow-[0_4px_25px_-5px_rgba(99,102,241,0.6)] transition-all duration-300 border border-indigo-400/20"
+                  className="relative w-full py-3.5 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm overflow-hidden group shadow-sm transition-all duration-300"
                 >
                   <div className="flex items-center justify-center gap-2">
                     <LayoutDashboard className="w-4 h-4" />
@@ -372,7 +374,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                   whileTap={{ scale: 0.98 }}
                   onClick={handleLogout}
                   disabled={isLoading}
-                  className="relative w-full py-3.5 rounded-xl bg-zinc-100 dark:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300 font-medium text-sm border border-zinc-200 dark:border-white/10 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all duration-300"
+                  className="relative w-full py-3.5 rounded-xl bg-ash-100 dark:bg-ash-800/50 text-ash-700 dark:text-ash-300 font-medium text-sm border border-ash-200 dark:border-white/10 hover:bg-ash-200 dark:hover:bg-ash-800 transition-all duration-300"
                 >
                   <div className="flex items-center justify-center gap-2">
                     {isLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : <LogOut size={16} strokeWidth={1.75} />}
@@ -444,7 +446,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-ash-500 dark:text-ash-500 hover:text-ash-600 dark:hover:text-ash-300 transition-colors rounded-md focus:outline-none focus:ring-2 focus:ring-ash-400 dark:focus:ring-ash-500"
                     >
                       {showPassword ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
                     </button>
@@ -459,7 +461,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                         type="button"
                         onClick={handleForgotPassword}
                         disabled={isLoading}
-                        className="text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 rounded-sm"
+                        className="text-xs font-medium text-ash-600 dark:text-ash-400 hover:text-ash-900 dark:hover:text-white transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-ash-400 dark:focus:ring-ash-500 rounded-sm"
                       >
                         Lupa password?
                       </button>
@@ -470,7 +472,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.98 }}
                     disabled={isLoading}
-                    className="relative w-full py-3.5 mt-2 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 text-white font-medium text-sm overflow-hidden group shadow-[0_4px_20px_-5px_rgba(99,102,241,0.4)] hover:shadow-[0_4px_25px_-5px_rgba(99,102,241,0.6)] transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed border border-indigo-400/20"
+                    className="relative w-full py-3.5 mt-2 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm overflow-hidden group shadow-sm transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
                     <div className="absolute inset-0 bg-white/20 translate-y-[-100%] group-hover:translate-y-[100%] transition-transform duration-700 ease-in-out pointer-events-none"></div>
 
@@ -488,11 +490,11 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                 </form>
 
                 <div className="mt-8 text-center">
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400 transition-colors duration-500">
+                  <p className="text-sm text-ash-600 dark:text-ash-400 transition-colors duration-500">
                     {isLoginMode ? "Don't have an account? " : "Already have an account? "}
                     <button
                       onClick={toggleMode}
-                      className="text-zinc-900 dark:text-white font-medium hover:text-indigo-500 dark:hover:text-indigo-400 hover:underline underline-offset-4 decoration-indigo-500/30 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/50 rounded-sm"
+                      className="text-ash-900 dark:text-white font-medium hover:text-ash-900 dark:hover:text-white hover:underline underline-offset-4 decoration-ash-400 transition-all focus:outline-none focus:ring-2 focus:ring-ash-400 dark:focus:ring-ash-500 rounded-sm"
                     >
                       {isLoginMode ? "Sign up" : "Sign in"}
                     </button>
@@ -521,11 +523,11 @@ function InputField({ icon: Icon, ...props }) {
   return (
     <div className="relative group">
       <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-        <Icon className="h-4 w-4 text-zinc-400 dark:text-zinc-500 group-focus-within:text-indigo-500 dark:group-focus-within:text-indigo-400 transition-colors duration-300" />
+        <Icon className="h-4 w-4 text-ash-500 dark:text-ash-500 group-focus-within:text-ash-700 dark:group-focus-within:text-ash-200 transition-colors duration-300" />
       </div>
       <input
         {...props}
-        className="w-full pl-10 pr-4 py-3.5 bg-zinc-50/50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/[0.08] rounded-xl text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 focus:bg-white dark:focus:bg-white/[0.05] shadow-sm dark:shadow-none transition-all duration-300"
+        className="w-full pl-10 pr-4 py-3.5 bg-ash-50/50 dark:bg-white/[0.03] border border-ash-200 dark:border-white/[0.08] rounded-xl text-sm text-ash-900 dark:text-white placeholder:text-ash-500 dark:placeholder:text-ash-500 focus:outline-none focus:ring-2 focus:ring-ash-900/15 dark:focus:ring-white/15 focus:border-ash-400 dark:focus:border-ash-500 focus:bg-white dark:focus:bg-white/[0.05] shadow-sm dark:shadow-none transition-all duration-300"
       />
     </div>
   );

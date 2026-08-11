@@ -184,7 +184,10 @@ const PreviewModal = ({
                     "relative max-h-[85vh] w-auto max-w-full object-contain rounded-xl select-none",
                     scale > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in",
                     isImgLoaded ? "opacity-100" : "opacity-0 transition-opacity duration-300",
-                    isSelected && "ring-4 ring-indigo-500 ring-offset-4 ring-offset-black shadow-[0_0_40px_rgba(99,102,241,0.5)]"
+                    // Latar layar ini selalu hitam, jadi celah hitam di antara
+                    // foto dan cincin sudah cukup memisahkan keduanya bahkan
+                    // ketika fotonya terang.
+                    isSelected && "ring-4 ring-white ring-offset-4 ring-offset-black"
                   )}
                   draggable="false"
                 />
@@ -195,7 +198,7 @@ const PreviewModal = ({
                       initial={{ scale: 0, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0, opacity: 0 }}
-                      className="absolute top-8 left-8 sm:top-12 sm:left-12 bg-indigo-500 text-white px-4 py-2 rounded-full font-semibold text-sm flex items-center gap-2 shadow-lg shadow-indigo-500/30 z-20 pointer-events-none"
+                      className="absolute top-8 left-8 sm:top-12 sm:left-12 bg-white text-ash-950 px-4 py-2 rounded-full font-semibold text-sm flex items-center gap-2 shadow-lg shadow-black/30 z-20 pointer-events-none"
                     >
                       <CheckCircle2 size={16} strokeWidth={1.75} />
                       Terpilih
@@ -239,7 +242,7 @@ const PreviewModal = ({
               "px-8 py-3.5 rounded-full font-semibold text-base flex items-center gap-2 transition-all active:scale-95 w-full max-w-[200px] justify-center shadow-xl pointer-events-auto",
               isSelected 
                 ? "bg-white/10 text-white hover:bg-white/20 border border-white/20 backdrop-blur-md" 
-                : "bg-indigo-500 text-white hover:bg-indigo-600 border border-indigo-500/50 shadow-indigo-500/30 hover:shadow-indigo-500/50"
+                : "bg-white text-ash-950 hover:bg-ash-100 border border-white/20 shadow-black/40"
             )}
           >
             {isSelected ? (

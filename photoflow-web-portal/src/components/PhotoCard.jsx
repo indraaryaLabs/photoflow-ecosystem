@@ -17,11 +17,26 @@ const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
       onClick={() => onToggle(photo.id)}
       onDoubleClick={() => onOpenPreview(index)}
       className={cn(
-        "group relative cursor-pointer rounded-2xl overflow-hidden aspect-[2/3] bg-zinc-200 dark:bg-zinc-800 select-none shadow-sm hover:shadow-xl transition-all duration-300",
-        isSelected && "ring-4 ring-indigo-500 ring-offset-2 ring-offset-zinc-50 dark:ring-offset-zinc-950 shadow-[0_0_25px_rgba(99,102,241,0.3)]"
+        "group relative cursor-pointer rounded-2xl overflow-hidden aspect-[2/3] bg-ash-200 dark:bg-ash-800 select-none shadow-sm hover:shadow-xl transition-all duration-300",
+        // Penanda terpilih: dua cincin, terang di dalam dan gelap di luar.
+        //
+        // Dulu ini satu cincin indigo. Warna tunggal bukan penanda yang bisa
+        // diandalkan di sini, karena yang ada di belakangnya adalah foto —
+        // isinya bisa warna apa saja. Cincin indigo hilang di atas foto senja,
+        // dan hampir tak terlihat di atas foto yang memang kebiruan.
+        //
+        // Pasangan terang-gelap selalu terbaca, di mana pun ia jatuh. Di atas
+        // foto gelap, cincin putih yang menonjol. Di atas foto terang, cincin
+        // putih memang menyatu, tapi cincin gelap di sebelah luarnya yang
+        // memisahkan. Hal yang sama berlaku terhadap latar halaman: cincin
+        // gelap terlihat di mode terang, cincin putih terlihat di mode gelap.
+        // Karena itu keduanya sama di kedua mode — tidak ada yang perlu
+        // ditukar.
+        isSelected &&
+          "shadow-[0_0_0_3px_#fff,0_0_0_6px_var(--color-ash-950)] dark:shadow-[0_0_0_3px_#fff,0_0_0_6px_var(--color-ash-950)]"
       )}
     >
-      {!isLoaded && <div className="absolute inset-0 animate-pulse bg-zinc-300 dark:bg-zinc-800" />}
+      {!isLoaded && <div className="absolute inset-0 animate-pulse bg-ash-300 dark:bg-ash-800" />}
 
       <img
         src={photo.thumbnailLink}
@@ -59,7 +74,10 @@ const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-indigo-500/10 mix-blend-multiply dark:mix-blend-normal z-10 pointer-events-none"
+            // Kerudung netral, bukan semburat warna. Fungsinya meredupkan foto
+            // sedikit supaya lencana centang di atasnya menonjol; memberi warna
+            // pada foto orang lain bukan tugas antarmuka ini.
+            className="absolute inset-0 bg-ash-950/30 z-10 pointer-events-none"
           />
         )}
       </AnimatePresence>
@@ -72,7 +90,9 @@ const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
             transition={{ type: "spring", stiffness: 400, damping: 20 }}
-            className="absolute top-3 right-3 bg-indigo-500 text-white rounded-full p-1.5 shadow-lg shadow-indigo-500/40 z-30 pointer-events-none"
+            // Dibalik: isi putih, ikon gelap. Di atas foto sembarang, putih
+            // pekat adalah satu-satunya isian yang selalu menang.
+            className="absolute top-3 right-3 bg-white text-ash-950 rounded-full p-1.5 shadow-lg shadow-black/25 z-30 pointer-events-none"
           >
             <Check size={16} strokeWidth={2.25} aria-hidden="true" />
           </motion.div>
