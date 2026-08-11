@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	neturl "net/url"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -103,6 +105,12 @@ func newOAuthState() (string, error) {
 func (h *Handler) GoogleAuthURL(c *gin.Context) {
 	userID := c.GetString(middleware.ContextUserIDKey)
 
+	// Body-nya opsional: aplikasi desktop memanggil endpoint ini tanpa isi.
+	var input struct {
+		ReturnTo string `json:"return_to"`
+	}
+	_ = c.ShouldBindJSON(&input)
+
 	state, err := newOAuthState()
 	if err != nil {
 		log.Printf("🔴 %v", err)
@@ -126,6 +134,24 @@ func (h *Handler) GoogleAuthURL(c *gin.Context) {
 	// Buang state kedaluwarsa sekalian; tidak butuh cron untuk tabel sekecil ini.
 	if err := h.DB.Where("expires_at < ?", time.Now()).Delete(&models.OAuthState{}).Error; err != nil {
 		log.Printf("⚠️ Gagal membersihkan state OAuth kedaluwarsa: %v", err)
+	}
+
+	// Ke mana user dikembalikan setelah menyetujui. Aplikasi desktop tidak
+	// mengirimnya dan tetap mendapat halaman "berhasil"; dashboard web
+	// mengirimnya supaya orangnya kembali ke tempat ia menekan tombol, bukan
+	// terdampar di halaman backend tanpa jalan pulang.
+	//
+	// Nilainya harus sama persis dengan Origin permintaan ini. Menerima alamat
+	// sembarang akan menjadikan endpoint ini pengalih terbuka.
+	if returnTo := strings.TrimSpace(input.ReturnTo); returnTo != "" {
+		if !sameOrigin(returnTo, c.GetHeader("Origin")) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "return_to tidak diizinkan"})
+			return
+		}
+		if err := h.DB.Model(&models.OAuthState{}).
+			Where("state = ?", state).Update("return_to", returnTo).Error; err != nil {
+			log.Printf("⚠️ Gagal menyimpan return_to: %v", err)
+		}
 	}
 
 	// access_type offline agar Google memberikan refresh token.
@@ -154,7 +180,7 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 		return
 	}
 
-	userID, err := h.consumeOAuthState(state)
+	userID, returnTo, err := h.consumeOAuthState(state)
 	if err != nil {
 		// Pesannya sengaja seragam: pemanggil tidak perlu tahu apakah state-nya
 		// tidak pernah ada, sudah terpakai, atau kedaluwarsa.
@@ -189,7 +215,30 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 		log.Printf("✅ Refresh Token berhasil disimpan untuk user: %s", userID)
 	}
 
+	if returnTo != "" {
+		c.Redirect(http.StatusFound, returnTo)
+		return
+	}
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(oauthSuccessPage))
+}
+
+// sameOrigin melaporkan apakah rawURL punya skema dan host yang sama persis
+// dengan origin. Perbandingannya sengaja ketat: cocok sebagian (misalnya
+// memeriksa awalan string) adalah cara klasik pengalih terbuka lolos, karena
+// "https://photoflow.app.penyerang.com" berawalan sama dengan situs aslinya.
+func sameOrigin(rawURL, origin string) bool {
+	if origin == "" {
+		return false
+	}
+	a, err := neturl.Parse(rawURL)
+	if err != nil || (a.Scheme != "http" && a.Scheme != "https") || a.Host == "" {
+		return false
+	}
+	b, err := neturl.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return a.Scheme == b.Scheme && a.Host == b.Host
 }
 
 // consumeOAuthState menukar state dengan user yang memulainya, sekali pakai.
@@ -198,22 +247,22 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 // bukan SELECT lalu DELETE terpisah. Alasannya sama seperti gallery lock: dua
 // perintah terpisah menyisakan celah bagi dua callback bersamaan untuk
 // sama-sama lolos memakai state yang sama.
-func (h *Handler) consumeOAuthState(state string) (string, error) {
+func (h *Handler) consumeOAuthState(state string) (string, string, error) {
 	var record models.OAuthState
 	err := h.DB.Raw(
-		`DELETE FROM oauth_states WHERE state = ? RETURNING state, user_id, expires_at`,
+		`DELETE FROM oauth_states WHERE state = ? RETURNING state, user_id, expires_at, return_to`,
 		state,
 	).Scan(&record).Error
 	if err != nil {
-		return "", fmt.Errorf("gagal membaca state: %w", err)
+		return "", "", fmt.Errorf("gagal membaca state: %w", err)
 	}
 	if record.UserID == "" {
-		return "", errors.New("state tidak dikenal atau sudah dipakai")
+		return "", "", errors.New("state tidak dikenal atau sudah dipakai")
 	}
 	if time.Now().After(record.ExpiresAt) {
-		return "", errors.New("state sudah kedaluwarsa")
+		return "", "", errors.New("state sudah kedaluwarsa")
 	}
-	return record.UserID, nil
+	return record.UserID, record.ReturnTo, nil
 }
 
 // ensureNoLegacyStateUsage menahan agar tipe gorm.DB tetap terpakai eksplisit
