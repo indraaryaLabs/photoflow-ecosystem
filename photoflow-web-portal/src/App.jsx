@@ -16,9 +16,24 @@ import { useTheme } from './lib/theme';
 
 export default function App() {
   // ─── Variables routing (No hook dependencies) ────────────────
-  const isAdminRoute = window.location.pathname.startsWith('/admin');
-  const token = new URLSearchParams(window.location.search).get('token');
-  const isHome = window.location.pathname === '/';
+  // Ruang kerja fotografer dulu berada di /admin. Namanya menyesatkan: tidak
+  // ada tingkatan hak akses di aplikasi ini sama sekali. Setiap fotografer
+  // membuka jalur yang sama dan melihat proyeknya sendiri, karena datanya
+  // disaring per `user_id` oleh Row Level Security di Supabase. Kata "admin"
+  // menyiratkan ada peran istimewa yang sebenarnya tidak pernah ada.
+  //
+  // /admin tetap dilayani sebagai jalur lama supaya tautan dan bookmark yang
+  // sudah beredar — termasuk tombol "Buka Dashboard" di aplikasi desktop —
+  // tidak mati.
+  const DASHBOARD_PATH = '/dashboard';
+  const LEGACY_DASHBOARD_PATH = '/admin';
+
+  const { pathname, search, hash } = window.location;
+  const isLegacyDashboardRoute = pathname === LEGACY_DASHBOARD_PATH || pathname.startsWith(LEGACY_DASHBOARD_PATH + '/');
+  const isDashboardRoute = pathname === DASHBOARD_PATH || pathname.startsWith(DASHBOARD_PATH + '/');
+
+  const token = new URLSearchParams(search).get('token');
+  const isHome = pathname === '/';
 
   // ─── 1. Auth State ───────────────────────────────────────────
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
@@ -254,8 +269,17 @@ export default function App() {
     return <AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} />;
   }
 
+  // Jalur lama /admin dialihkan, tidak dilayani. Kalau dilayani begitu saja,
+  // dua jalur akan menampilkan halaman yang sama selamanya dan yang lama tidak
+  // akan pernah hilang dari peredaran. `replace` dipakai supaya tombol kembali
+  // tidak memantulkan orangnya ke jalur lama lagi.
+  if (isLegacyDashboardRoute) {
+    window.location.replace(DASHBOARD_PATH + search + hash);
+    return null;
+  }
+
   // Strict Auth Guard Routing
-  if (isAdminRoute) {
+  if (isDashboardRoute) {
     if (isAdminAuthenticated) {
       return <AdminDashboard themeChoice={themeChoice} cycleTheme={cycleTheme} />;
     } else {
@@ -267,7 +291,7 @@ export default function App() {
     if (token) {
       // Biarkan kosong agar proses berlanjut ke bawah (menampilkan galeri klien)
     } else if (isAdminAuthenticated) {
-      window.location.replace('/admin');
+      window.location.replace(DASHBOARD_PATH);
       return null;
     } else {
       return <AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} />;
