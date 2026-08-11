@@ -88,6 +88,15 @@ func (OAuthState) TableName() string {
 // Setelah itu galeri terkunci dan tidak menerima submit lagi.
 const StatusSubmitted = "submitted"
 
+// StatusPending adalah keadaan awal sebuah project: galeri masih terbuka dan
+// klien masih boleh mengubah pilihannya.
+//
+// Sampai sebelum ini nilainya hanya hidup sebagai `default:'pending'` di tag
+// kolom, tanpa nama yang bisa dirujuk kode. Itu cukup selama satu-satunya
+// perpindahan status adalah pending menuju submitted; sejak ada jalan pulang
+// (ReopenSelection), kedua ujungnya perlu sama-sama punya nama.
+const StatusPending = "pending"
+
 // GalleryProject adalah bentuk project yang boleh dilihat klien.
 //
 // Sebelumnya GetGallery mengembalikan baris Project apa adanya. Rute itu

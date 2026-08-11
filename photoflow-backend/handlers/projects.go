@@ -226,3 +226,58 @@ func (h *Handler) DeleteProject(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Project berhasil dihapus"})
 }
+
+// ReopenSelection mengembalikan project yang sudah dikirim ke keadaan pending.
+//
+// Mengirim pilihan sengaja dibuat satu arah: SubmitSelection mengunci status
+// lewat `WHERE status <> 'submitted'` supaya dua klien yang menekan kirim pada
+// saat bersamaan tidak saling menimpa. Yang belum ada sampai sekarang adalah
+// jalan pulangnya. Akibatnya satu klik keliru dari klien membuat galerinya mati
+// permanen, dan satu-satunya perbaikan adalah membuka database langsung.
+//
+// Hanya pemilik project yang boleh melakukannya — sama seperti UpdateProject
+// dan DeleteProject, kepemilikan diperiksa lewat `user_id` yang diambil dari
+// klaim `sub` pada JWT, bukan dari apa pun yang dikirim browser.
+//
+// Pilihan foto ikut dikosongkan. Membuka status tanpa mengosongkan pilihan akan
+// menaruh klien kembali di galeri dengan semua foto sudah tercentang, sehingga
+// pemilihan ulang justru lebih menyulitkan daripada memulai dari nol.
+func (h *Handler) ReopenSelection(c *gin.Context) {
+	userID := c.GetString(middleware.ContextUserIDKey)
+	projectID := c.Param("id")
+
+	var project models.Project
+	if err := h.DB.Where("id = ? AND user_id = ?", projectID, userID).First(&project).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Project tidak ditemukan atau akses ditolak"})
+		return
+	}
+
+	if project.Status != models.StatusSubmitted {
+		// Bukan kegagalan: hasil yang diminta sudah tercapai. Membalasnya
+		// sebagai error akan memaksa frontend membedakan dua keadaan yang
+		// bagi pemakainya sama saja.
+		c.JSON(http.StatusOK, gin.H{"message": "Pemilihan memang masih terbuka"})
+		return
+	}
+
+	// Keduanya dalam satu transaksi. Kalau pengosongan pilihan gagal setelah
+	// status terlanjur dibuka, klien akan masuk ke galeri terbuka yang seluruh
+	// fotonya tercentang — persis keadaan yang ingin dihindari.
+	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.Photo{}).
+			Where("project_id = ?", project.ID).
+			Update("is_selected", false).Error; err != nil {
+			return err
+		}
+		return tx.Model(&models.Project{}).
+			Where("id = ?", project.ID).
+			Update("status", models.StatusPending).Error
+	})
+	if err != nil {
+		log.Printf("reopen selection %s: %v", project.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuka kembali pemilihan"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Pemilihan dibuka kembali"})
+}

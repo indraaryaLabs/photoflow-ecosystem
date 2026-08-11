@@ -4,9 +4,17 @@ Dua antarmuka dalam satu aplikasi React, dibedakan oleh alamat yang dibuka:
 
 | Rute | Untuk siapa | Autentikasi |
 |---|---|---|
-| `/admin` | Fotografer | Supabase Auth, JWT pada setiap permintaan |
+| `/dashboard` | Fotografer | Supabase Auth, JWT pada setiap permintaan |
 | `/?token=<magic link>` | Klien | Tanpa akun — tautan itu sendiri yang jadi kuncinya |
-| `/` | Fotografer | Layar masuk; kalau sudah punya sesi, dialihkan ke `/admin` |
+| `/` | Fotografer | Layar masuk; kalau sudah punya sesi, dialihkan ke `/dashboard` |
+| `/admin` | — | Jalur lama, dialihkan ke `/dashboard` |
+
+Ruang kerja fotografer dulu berada di `/admin`. Nama itu menyesatkan: tidak ada
+tingkatan hak akses di aplikasi ini. Setiap fotografer membuka jalur yang sama
+dan melihat proyeknya sendiri, karena datanya disaring per `user_id` oleh Row
+Level Security di Supabase. Tidak ada peran istimewa yang bisa melihat proyek
+orang lain. `/admin` tetap dilayani sebagai pengalihan supaya tautan lama —
+termasuk tombol "Buka Dashboard" di aplikasi desktop — tidak mati.
 
 Galeri klien sengaja tidak punya login. Yang membuat tautannya tidak dapat
 ditebak adalah entropi 16 byte-nya, dan backend membatasi percobaan gagal per

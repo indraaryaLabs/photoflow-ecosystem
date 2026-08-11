@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Copy, Check, Plus, FolderOpen, Link as LinkIcon, Clock,
   CheckCircle2, Loader2, MoreVertical, Edit, Trash2, X, AlertOctagon,
-  LogOut, MessageCircle
+  LogOut, MessageCircle, ExternalLink, RotateCcw
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { API_BASE } from '../lib/api';
@@ -64,7 +64,13 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [deletingProject, setDeletingProject] = useState(null);
+  const [reopeningProject, setReopeningProject] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Menu titik tiga mana yang sedang terbuka — satu penanda untuk seluruh
+  // daftar, bukan satu state per kartu. Lihat komentar di ProjectCard.
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const closeMenu = useCallback(() => setOpenMenuId(null), []);
 
   // --- HELPERS ---
   const showToast = (message, type = 'success') => {
@@ -166,6 +172,43 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
 
       showToast("Project berhasil dihapus!");
       setDeletingProject(null);
+      fetchProjects();
+    } catch (err) {
+      if (err.message === 'Failed to fetch') {
+        showToast('Server tidak merespon. Coba lagi nanti.', 'error');
+      } else {
+        showToast(err.message, 'error');
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Kembalikan project yang sudah dikirim ke keadaan "pending".
+  //
+  // Sebelum ini, mengirim pilihan bersifat satu arah. Backend memang sengaja
+  // menguncinya supaya dua klien yang menekan kirim bersamaan tidak saling
+  // menimpa, tapi tidak ada satu pun jalan untuk membukanya kembali. Akibatnya
+  // klien yang tidak sengaja menekan kirim membuat galerinya mati permanen,
+  // dan satu-satunya perbaikan adalah membuka database langsung.
+  const handleReopen = async () => {
+    if (!reopeningProject) return;
+    setActionLoading(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+
+      const sendRequest = (accessToken) => fetch(`${API_BASE}/api/projects/${reopeningProject.id}/reopen`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+
+      const checkedRes = await handleApiResponse(await sendRequest(token), sendRequest);
+      if (!checkedRes) return;
+      if (!checkedRes.ok) throw new Error('Gagal membuka kembali pemilihan');
+
+      showToast('Selection reopened.');
+      setReopeningProject(null);
       fetchProjects();
     } catch (err) {
       if (err.message === 'Failed to fetch') {
@@ -523,7 +566,14 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
                       key={project.id}
                       project={project}
                       index={index}
+                      isMenuOpen={openMenuId === project.id}
+                      onToggleMenu={() => setOpenMenuId((current) => (current === project.id ? null : project.id))}
+                      onCloseMenu={closeMenu}
                       onCopy={() => handleCopyLink(project.magic_link_token)}
+                      onOpenGallery={() => {
+                        window.open(`${window.location.origin}/?token=${project.magic_link_token}`, '_blank', 'noopener');
+                      }}
+                      onReopen={() => setReopeningProject(project)}
                       onWhatsApp={() => {
                         const url = `${window.location.origin}/?token=${project.magic_link_token}`;
                         const text = `Halo Kak ${project.client_name},\nBerikut adalah link galeri foto untuk project *${project.project_name}*.\n\nSilakan klik link di bawah ini untuk mulai memilih foto (Maksimal ${project.max_selections} foto):\n${url}\n\nTerima kasih atas kepercayaannya.`;
@@ -616,6 +666,27 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
           </div>
         )}
 
+        {/* KONFIRMASI BUKA KEMBALI PEMILIHAN */}
+        {reopeningProject && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-slide-up-fade">
+            <div className="bg-white dark:bg-ash-900 border border-ash-200 dark:border-white/10 shadow-2xl rounded-2xl p-6 w-full max-w-sm text-center relative">
+              <div className="mx-auto w-12 h-12 rounded-full bg-ash-100 dark:bg-white/5 border border-ash-200 dark:border-white/10 flex items-center justify-center mb-4 text-ash-700 dark:text-ash-200">
+                <RotateCcw size={24} strokeWidth={1.75} />
+              </div>
+              <h2 className="text-xl font-semibold text-ash-900 dark:text-ash-100 mb-2">Reopen selection?</h2>
+              <p className="text-sm text-ash-600 dark:text-ash-400 mb-6">
+                The gallery for <strong className="text-ash-800 dark:text-ash-300">{reopeningProject.client_name}</strong> becomes selectable again, and the saved picks are cleared. Use this when a client submitted by mistake.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setReopeningProject(null)} className="flex-1 px-4 py-3 rounded-xl border border-ash-200 dark:border-ash-700 font-medium text-sm hover:bg-ash-100 dark:hover:bg-ash-800 transition-colors">Cancel</button>
+                <button onClick={handleReopen} disabled={actionLoading} className="flex-1 px-4 py-3 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm shadow-sm transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
+                  {actionLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : "Yes, Reopen"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* TOAST NOTIFICATION */}
         {toast && (
           <div className="fixed bottom-6 right-6 lg:bottom-8 lg:right-8 z-50 animate-toast">
@@ -641,15 +712,54 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
 
 // --- SUB-COMPONENTS ---
 
-function ProjectCard({ project, index, onCopy, onWhatsApp, onEdit, onDelete }) {
+/**
+ * Satu baris proyek.
+ *
+ * `isMenuOpen` sengaja datang dari induk, bukan dari state lokal. Dulu tiap
+ * kartu menyimpan sendiri, sehingga dua menu bisa terbuka bersamaan. Ketika
+ * itu terjadi, kedua kartu sama-sama naik ke z-50 dan kartu yang urutannya
+ * belakangan menang — menu kartu di atasnya terpotong separuh, dan pilihan
+ * "Delete" hilang di baliknya. Dengan satu penanda di induk, hanya satu kartu
+ * yang pernah terangkat, jadi tumpang tindih itu tidak mungkin terjadi lagi.
+ */
+function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, onCopy, onOpenGallery, onWhatsApp, onEdit, onDelete, onReopen }) {
   const [copied, setCopied] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleCopyClick = () => {
     onCopy();
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const menuRef = useRef(null);
+
+  // Menutup menu: lewat Escape, atau lewat klik di luar menu.
+  //
+  // Klik-di-luar dulu ditangani oleh sehelai <div className="fixed inset-0">
+  // yang membentang seluruh layar. Cara itu bekerja, tapi ia menelan kliknya:
+  // menekan titik tiga kartu lain hanya menutup menu yang sedang terbuka dan
+  // tidak pernah membuka yang baru, sehingga tombol itu terasa mati sampai
+  // diklik kedua kalinya.
+  //
+  // Pendengar pointerdown di dokumen tidak menghalangi apa pun. Menu lama
+  // tertutup, dan kliknya tetap sampai ke tombol yang dituju.
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    const onKey = (e) => { if (e.key === 'Escape') onCloseMenu(); };
+    // Klik pada wadah ini sendiri dilewati, supaya tombolnya tetap bisa
+    // dipakai untuk menutup menunya sendiri lewat onToggleMenu.
+    const onPointerDown = (e) => {
+      if (!menuRef.current?.contains(e.target)) onCloseMenu();
+    };
+
+    window.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [isMenuOpen, onCloseMenu]);
 
   const isPending = project.status === 'pending';
 
@@ -697,6 +807,18 @@ function ProjectCard({ project, index, onCopy, onWhatsApp, onEdit, onDelete }) {
           {isPending ? 'Pending Selection' : 'Submitted'}
         </div>
 
+        {/* Buka galeri klien di tab baru. Galeri hanya butuh magic link token,
+            bukan sesi login, jadi ini tetap benar meski dibuka sambil masuk
+            sebagai fotografer. */}
+        <button
+          onClick={onOpenGallery}
+          className="p-2 rounded-xl border border-ash-200 dark:border-white/5 bg-white dark:bg-white/5 text-ash-600 dark:text-ash-400 hover:text-ash-950 dark:hover:text-white hover:border-ash-300 dark:hover:border-white/20 hover:bg-ash-100 dark:hover:bg-white/10 transition-all duration-200 active:scale-90 group/open"
+          title="Open client gallery in a new tab"
+          aria-label="Open client gallery in a new tab"
+        >
+          <ExternalLink size={16} strokeWidth={1.75} className="group-hover/open:scale-110 transition-transform" />
+        </button>
+
         {/* Copy Action */}
         <button
           onClick={handleCopyClick}
@@ -720,26 +842,31 @@ function ProjectCard({ project, index, onCopy, onWhatsApp, onEdit, onDelete }) {
         </button>
 
         {/* Kebab Action */}
-        <div className="relative">
+        <div className="relative" ref={menuRef}>
           <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            onClick={onToggleMenu}
             className="p-2 rounded-xl text-ash-500 hover:bg-ash-100 dark:hover:bg-white/10 hover:text-ash-700 dark:hover:text-ash-200 transition-colors"
+            aria-label={`More actions for ${project.project_name || 'this project'}`}
+            aria-expanded={isMenuOpen}
+            aria-haspopup="menu"
           >
             <MoreVertical size={16} strokeWidth={1.75} />
           </button>
 
           {isMenuOpen && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setIsMenuOpen(false)}></div>
-              <div className="absolute right-0 top-full mt-2 w-36 bg-white dark:bg-ash-900 border border-ash-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden z-20 animate-slide-up-fade origin-top-right">
-                <button onClick={() => { setIsMenuOpen(false); onEdit(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-ash-700 dark:text-ash-300 hover:bg-ash-50 dark:hover:bg-white/5 flex items-center gap-2">
+              <div role="menu" className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-ash-900 border border-ash-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden z-20 animate-slide-up-fade origin-top-right">
+                <button role="menuitem" onClick={() => { onCloseMenu(); onEdit(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-ash-700 dark:text-ash-300 hover:bg-ash-50 dark:hover:bg-white/5 flex items-center gap-2">
                   <Edit size={14} strokeWidth={1.75} /> Edit
                 </button>
-                <button onClick={() => { setIsMenuOpen(false); onDelete(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-danger-600 dark:text-danger-400 hover:bg-danger-50 dark:hover:bg-danger-900/10 flex items-center gap-2">
+                {!isPending && (
+                  <button role="menuitem" onClick={() => { onCloseMenu(); onReopen(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-ash-700 dark:text-ash-300 hover:bg-ash-50 dark:hover:bg-white/5 flex items-center gap-2">
+                    <RotateCcw size={14} strokeWidth={1.75} /> Reopen selection
+                  </button>
+                )}
+                <button role="menuitem" onClick={() => { onCloseMenu(); onDelete(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-danger-600 dark:text-danger-400 hover:bg-danger-50 dark:hover:bg-danger-900/10 flex items-center gap-2">
                   <Trash2 size={14} strokeWidth={1.75} /> Delete
                 </button>
               </div>
-            </>
           )}
         </div>
       </div>
