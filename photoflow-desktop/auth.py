@@ -86,8 +86,8 @@ class TokenStore:
         )
         if self._keyring is None:
             print(
-                "[PhotoFlow] ⚠ Keyring OS tidak tersedia. Sesi disimpan di "
-                f"{self._path} dengan izin 0600."
+                "[PhotoFlow] WARN  OS keyring unavailable. Session stored at "
+                f"{self._path} with 0600 permissions."
             )
 
     def save(self, data):
@@ -97,7 +97,7 @@ class TokenStore:
                 self._keyring.set_password(_KEYRING_SERVICE, _KEYRING_USER, payload)
                 return
             except Exception as exc:
-                print(f"[PhotoFlow] ⚠ Gagal menulis ke keyring: {exc}")
+                print(f"[PhotoFlow] WARN  Could not write to keyring: {exc}")
 
         os.makedirs(os.path.dirname(self._path), exist_ok=True)
         # Berkas dibuat lewat os.open supaya izinnya sudah 0600 sejak detik
@@ -115,7 +115,7 @@ class TokenStore:
                 if raw:
                     return json.loads(raw)
             except Exception as exc:
-                print(f"[PhotoFlow] ⚠ Gagal membaca keyring: {exc}")
+                print(f"[PhotoFlow] WARN  Could not read from keyring: {exc}")
 
         try:
             with open(self._path, "r") as handle:
@@ -200,7 +200,7 @@ class SupabaseSession:
             detail = response.text[:200]
 
         if response.status_code in (400, 401, 403):
-            raise SessionExpired(detail or "Kredensial ditolak Supabase Auth.")
+            raise SessionExpired(detail or "Supabase Auth rejected the credentials.")
         raise AuthError(detail or f"Supabase Auth mengembalikan HTTP {response.status_code}.")
 
     def _adopt(self, data):
@@ -268,7 +268,7 @@ class SupabaseSession:
     def refresh(self):
         with self._lock:
             if not self._refresh_token:
-                raise SessionExpired("Tidak ada refresh token tersimpan.")
+                raise SessionExpired("No saved refresh token.")
             data = self._post_token(
                 "refresh_token", {"refresh_token": self._refresh_token}
             )
@@ -279,7 +279,7 @@ class SupabaseSession:
         """Access token yang dijamin masih berlaku saat dikembalikan."""
         with self._lock:
             if not self._refresh_token:
-                raise SessionExpired("Belum login.")
+                raise SessionExpired("Not signed in.")
             expiring = time.time() >= (self._expires_at - _REFRESH_MARGIN_SECONDS)
             if force_refresh or not self._access_token or expiring:
                 self.refresh()
