@@ -47,6 +47,7 @@ from pathlib import Path
 # unnecessary Cocoa framework initialization on macOS.
 import hashlib
 import threading
+import time
 import concurrent.futures
 # PIL, rawpy, supabase, dan pustaka pelaporan crash TIDAK diimpor di sini.
 #
@@ -208,6 +209,165 @@ SUPPORTED_EXTENSIONS = {
     '.pef',                                                      # Pentax
     '.dng',                                                      # Leica / Universal RAW
 }
+
+# Ekstensi RAW, diurutkan menurut pilihan. Yang asli dari kamera didahulukan;
+# .dng ditaruh terakhir karena hampir selalu salinan hasil konversi, bukan
+# berkas yang keluar dari kartu.
+#
+# Daftar ini dulu ditulis tiga kali di berkas ini dengan isi yang tidak sama:
+# satu memuat .pef, satu tidak, satu lagi memuat .nrw. Sekarang satu tempat.
+RAW_EXTENSIONS = (
+    '.cr3', '.cr2',    # Canon
+    '.nef', '.nrw',    # Nikon
+    '.arw',            # Sony
+    '.raf',            # Fujifilm
+    '.rw2',            # Panasonic
+    '.orf',            # Olympus
+    '.pef',            # Pentax
+    '.dng',            # hasil konversi / Leica
+)
+
+# Mode pemilihan pada resolve_selection.
+PREFER_RAW = 'raw'          # hanya RAW; JPG diabaikan
+PREFER_RAW_JPG = 'raw+jpg'  # RAW beserta JPG pasangannya
+PREFER_ANY = 'any'          # apa pun yang namanya cocok
+
+
+# ── Pencocokan pilihan klien ke berkas di komputer ──────────
+#
+# Klien memilih dari JPG di Google Drive; yang dibutuhkan fotografer adalah RAW
+# di komputernya. Yang menghubungkan keduanya adalah nama dasarnya, karena
+# fotografer menjaga JPG hasil konversi bernama persis sama dengan RAW-nya.
+#
+# Versi sebelumnya menyalin sambil berjalan: satu os.walk, dan berkas pertama
+# yang nama dasarnya cocok langsung disalin lalu namanya dicoret dari daftar.
+# Itu punya satu cacat yang tidak bersuara. Karena JPG hasil konversi bernama
+# sama dengan RAW-nya -- justru karena disiplin penamaan itu dijaga -- keduanya
+# sama-sama cocok, dan yang menang adalah mana pun yang lebih dulu ditemukan
+# os.walk. Urutan itu urutan filesystem: bukan abjad, dan tidak sama antar
+# komputer. Jadi kadang yang tersalin RAW, kadang JPG, tanpa satu pun tanda.
+#
+# Sekarang dipisah dua tahap: telusuri dulu SELURUH folder jadi indeks, baru
+# putuskan. Pemisahan itu yang membuat hasilnya bisa diramalkan, dan sekaligus
+# membuat seluruh keputusan dapat ditunjukkan sebelum satu bita pun disalin.
+
+_indeks_cache = {}
+_INDEKS_TTL_DETIK = 120
+
+
+def _muat_indeks(source_folder, pakai_cache=False):
+    """Petakan nama dasar (huruf kecil) ke seluruh berkas yang memakainya."""
+    kunci = os.path.abspath(source_folder)
+
+    if pakai_cache:
+        tersimpan = _indeks_cache.get(kunci)
+        if tersimpan and (time.time() - tersimpan[0]) < _INDEKS_TTL_DETIK:
+            return tersimpan[1]
+
+    indeks = {}
+    for root_dir, _, files in os.walk(source_folder):
+        for nama in files:
+            dasar, ext = os.path.splitext(nama)
+            if ext.lower() not in SUPPORTED_EXTENSIONS:
+                continue
+            indeks.setdefault(dasar.lower(), []).append(os.path.join(root_dir, nama))
+
+    _indeks_cache[kunci] = (time.time(), indeks)
+    return indeks
+
+
+def buang_indeks_cache():
+    """Dipanggil saat folder sumber dipindai ulang."""
+    _indeks_cache.clear()
+
+
+def _urutan_raw(path):
+    """Kunci pengurutan: makin kecil makin didahulukan."""
+    ext = os.path.splitext(path)[1].lower()
+    return RAW_EXTENSIONS.index(ext) if ext in RAW_EXTENSIONS else len(RAW_EXTENSIONS)
+
+
+def resolve_selection(selected_filenames, source_folder, prefer=PREFER_RAW, pakai_cache=False):
+    """Petakan nama pilihan klien ke berkas sungguhan di komputer.
+
+    Hasilnya menggolongkan tiap nama ke satu dari empat keadaan, dan tiga di
+    antaranya menuntut tindakan berbeda dari fotografer:
+
+      matched    berkasnya ketemu, siap disalin
+      raw_absent JPG-nya ada tapi RAW-nya tidak -- arsip dan folder ekspor
+                 tidak sinkron, bukan sekadar berkas hilang
+      missing    nama dasarnya tidak ada sama sekali di folder ini
+      ambiguous  nama dasar yang sama ada di lebih dari satu folder; dua kartu
+                 yang sama-sama mulai dari IMG_0001 itu keadaan biasa, dan
+                 menebak salah satunya berarti mengedit foto yang keliru
+
+    `pakai_cache` hanya untuk pratinjau. Penyalinan sungguhan selalu membaca
+    ulang folder-nya, supaya yang disalin tidak pernah ditentukan oleh isi
+    folder dua menit yang lalu.
+    """
+    indeks = _muat_indeks(source_folder, pakai_cache=pakai_cache)
+
+    matched, raw_absent, missing, ambiguous = [], [], [], []
+    sudah = set()
+
+    for nama_asli in selected_filenames:
+        if not nama_asli:
+            continue
+        dasar = os.path.splitext(nama_asli)[0].lower()
+        if dasar in sudah:
+            continue
+        sudah.add(dasar)
+
+        kandidat = indeks.get(dasar, [])
+        if not kandidat:
+            missing.append(nama_asli)
+            continue
+
+        raws = sorted([p for p in kandidat if os.path.splitext(p)[1].lower() in RAW_EXTENSIONS],
+                      key=_urutan_raw)
+        bukan_raw = [p for p in kandidat if p not in raws]
+
+        if prefer == PREFER_ANY:
+            incar = raws + bukan_raw
+        elif not raws:
+            # Namanya ada, tapi hanya sebagai JPG. Ini bukan "tidak ketemu":
+            # arsip RAW-nya yang tidak ada di folder ini.
+            raw_absent.append(nama_asli)
+            continue
+        else:
+            incar = raws
+
+        # Ambigu diukur dari jumlah FOLDER, bukan jumlah berkas. CR3 dan DNG
+        # berdampingan di satu folder bukan keraguan -- keduanya foto yang
+        # sama, dan urutan ekstensi sudah memilihkan. Yang benar-benar meragukan
+        # adalah nama dasar yang sama muncul di dua folder berbeda.
+        folder = {os.path.dirname(p) for p in incar}
+        if len(folder) > 1:
+            ambiguous.append({"name": nama_asli, "paths": sorted(incar)})
+            continue
+
+        terpilih = [incar[0]]
+        if prefer == PREFER_RAW_JPG and bukan_raw:
+            pasangan = [p for p in bukan_raw if os.path.dirname(p) == os.path.dirname(incar[0])]
+            if pasangan:
+                terpilih.append(sorted(pasangan)[0])
+
+        matched.append({"name": nama_asli, "paths": terpilih})
+
+    return {
+        "matched": matched,
+        "raw_absent": raw_absent,
+        "missing": missing,
+        "ambiguous": ambiguous,
+        "paths": [p for m in matched for p in m["paths"]],
+        "counts": {
+            "requested": len(sudah),
+            "matched": len(matched),
+            "raw_absent": len(raw_absent),
+            "missing": len(missing),
+            "ambiguous": len(ambiguous),
+        },
+    }
 
 
 # ── Exposed Backend Functions ───────────────────────────────
@@ -433,6 +593,10 @@ def scan_directory(folder_path):
         return
 
     print(f"[PhotoFlow] Scanning: {folder_path} ...")
+
+    # Indeks nama dasar milik folder lama tidak berlaku lagi begitu folder
+    # sumbernya berganti atau dipindai ulang.
+    buang_indeks_cache()
 
     chunk = []
     total = 0
@@ -877,72 +1041,85 @@ def upload_files_to_drive(local_file_paths, target_folder_id, mode='preview', us
     return {"success": True, "message": f"Turbo upload triggered ({mode} mode) via OS thread"}
 
 @eel.expose
-def auto_gather_raws(selected_filenames, source_folder, project_name="Selected_RAWs"):
+def preflight_selection(selected_filenames, source_folder, prefer=PREFER_RAW):
+    """Tunjukkan hasil pencocokan sebelum satu berkas pun disalin.
+
+    Sampai sekarang fotografer baru tahu ada yang tidak ketemu SESUDAH
+    penyalinan selesai, dan yang diberitahukan hanya jumlahnya. Nama-namanya
+    dicetak ke stdout -- dan pada bundel --windowed, Windows tidak melampirkan
+    konsol sama sekali, jadi keterangan itu hilang seluruhnya.
+    """
+    if not source_folder or not os.path.isdir(source_folder):
+        return {"success": False, "message": "Choose a source folder first."}
+    try:
+        hasil = resolve_selection(selected_filenames, source_folder, prefer, pakai_cache=True)
+        return {"success": True, "result": hasil}
+    except (OSError, PermissionError) as e:
+        print(f"[PhotoFlow] Preflight failed: {e}")
+        return {"success": False, "message": str(e)}
+
+
+@eel.expose
+def auto_gather_raws(selected_filenames, source_folder, project_name="Selected_RAWs", prefer=PREFER_RAW):
     import traceback
 
+    if not source_folder or not os.path.isdir(source_folder):
+        return {"success": False, "message": "Choose a source folder first."}
+
     dest_folder = _choose_folder_native(f"Select Export Destination for {project_name}")
-    
+
     if not dest_folder:
-        return {"success": False, "message": "Operation cancelled by user."}
+        return {"success": False, "message": "Operation cancelled."}
 
     def _gather_worker():
-        print(f"\n[PhotoFlow] 🚀 MENGAKTIFKAN MESIN PEMANEN RAW: {project_name}")
-        print(f"Target: {len(selected_filenames)} file dari database.")
-        
-        try:
-            # 1. Bersihkan base name target (hilangkan ekstensi & kecilkan huruf)
-            target_bases = {os.path.splitext(f)[0].lower() for f in selected_filenames if f}
-            
-            # 2. Buat sub-folder proyek (Aman dari karakter aneh)
-            safe_project_name = "".join([c for c in project_name if c.isalpha() or c.isdigit() or c==' ']).rstrip()
-            target_dir = os.path.join(dest_folder, safe_project_name)
-            os.makedirs(target_dir, exist_ok=True)
-            print(f"Folder tujuan disiapkan: {target_dir}")
+        print(f"\n[PhotoFlow] Collecting selected files for: {project_name}")
 
-            found_count = 0
-            
-            # 3. Pindai folder sumber
-            print(f"Memindai direktori sumber: {source_folder} ...")
-            for root, _, files in os.walk(source_folder):
-                for file in files:
-                    base = os.path.splitext(file)[0].lower()
-                    if base in target_bases:
-                        src_path = os.path.join(root, file)
-                        dst_path = os.path.join(target_dir, file)
-                        
-                        # Copy file dengan metadata
-                        shutil.copy2(src_path, dst_path)
-                        found_count += 1
-                        print(f"  -> Copied: {file}")
-                        
-                        # Hapus dari set agar tidak tertimpa jika ada duplikat di subfolder lain
-                        target_bases.discard(base)
-                        
-                        # Update UI
-                        percent = int((found_count / len(selected_filenames)) * 100)
-                        try:
-                            eel.update_sync_progress(percent)()
-                        except:
-                            pass
-                            
-            print(f"[PhotoFlow] OK    Collected {found_count} RAW/JPG file(s).")
-            if target_bases:
-                print(f"[PhotoFlow] WARN  {len(target_bases)} file(s) not found on this computer.")
-                
+        hasil = None
+        disalin = 0
+        gagal = []
+        try:
+            # Sengaja TANPA cache. Pratinjau boleh sedikit basi; yang benar-benar
+            # disalin tidak boleh ditentukan oleh isi folder dua menit lalu.
+            hasil = resolve_selection(selected_filenames, source_folder, prefer, pakai_cache=False)
+
+            aman = "".join(c for c in project_name if c.isalnum() or c in " -_").strip()
+            target_dir = os.path.join(dest_folder, aman or "Selected")
+            os.makedirs(target_dir, exist_ok=True)
+
+            total = len(hasil["paths"]) or 1
+            for src in hasil["paths"]:
+                try:
+                    shutil.copy2(src, os.path.join(target_dir, os.path.basename(src)))
+                    disalin += 1
+                except (OSError, shutil.Error) as e:
+                    print(f"[PhotoFlow] Could not copy {src}: {e}")
+                    gagal.append(os.path.basename(src))
+                try:
+                    eel.update_sync_progress(int((disalin + len(gagal)) / total * 100))()
+                except Exception:
+                    pass
+
+            c = hasil["counts"]
+            print(f"[PhotoFlow] Copied {disalin} file(s) into {target_dir}. "
+                  f"{c['missing']} missing, {c['raw_absent']} without a RAW, {c['ambiguous']} ambiguous.")
+
         except Exception as e:
-            print(f"[PhotoFlow] ✗ FATAL ERROR di Mesin Pemanen: {e}")
+            print(f"[PhotoFlow] Collect failed: {e}")
             traceback.print_exc()
+            telemetry.capture(e)
         finally:
             try:
-                # Gunakan 0 sebagai fallback jika error terjadi sebelum variabel ini dibuat
-                fc = found_count if 'found_count' in locals() else 0
-                mc = len(target_bases) if 'target_bases' in locals() else 0
-                eel.auto_gather_complete(fc, mc)()
+                eel.auto_gather_complete({
+                    "copied": disalin,
+                    "failed": gagal,
+                    "destination": dest_folder,
+                    "result": hasil or {"counts": {}, "missing": [], "raw_absent": [], "ambiguous": []},
+                })()
             except Exception as e:
-                print(f"[PhotoFlow] WARN  Could not notify the UI: {e}")
+                print(f"[PhotoFlow] Could not notify the UI: {e}")
 
     threading.Thread(target=_gather_worker, daemon=True).start()
-    return {"success": True, "message": "Pemanen RAW berjalan di latar belakang"}
+    return {"success": True, "message": "Collecting files in the background."}
 
 @eel.expose
 def download_drive_files(file_ids_list, local_dest_folder, user_id=None):
@@ -1033,7 +1210,7 @@ def open_google_login(user_id=None):
 
         auth_url = response.json().get("auth_url")
         if not auth_url:
-            print("[PhotoFlow] ✗ Backend tidak mengirimkan auth_url.")
+            print("[PhotoFlow] The backend did not return an auth_url.")
             return False
 
         print("[PhotoFlow] Membuka alur OAuth Google di browser.")

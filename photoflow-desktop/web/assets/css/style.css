@@ -1999,6 +1999,110 @@ body {
         linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
 }
 
+/* ==========================================================================
+   PANEL HASIL PENCOCOKAN (PREFLIGHT)
+   ========================================================================== */
+.preflight-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.preflight-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-light);
+    background: var(--bg-hover);
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
+.preflight-chip strong {
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+.preflight-chip.ok {
+    border-color: color-mix(in srgb, var(--success) 35%, transparent);
+    background: color-mix(in srgb, var(--success) 12%, transparent);
+    color: var(--success);
+}
+
+.preflight-chip.warn {
+    border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+    background: color-mix(in srgb, var(--warning) 12%, transparent);
+    color: var(--warning);
+}
+
+.preflight-group {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.preflight-group > summary {
+    cursor: pointer;
+    padding: 10px 14px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-main);
+    background: var(--bg-hover);
+    list-style: none;
+}
+
+.preflight-group > summary::-webkit-details-marker {
+    display: none;
+}
+
+.preflight-group > summary::before {
+    content: "▸ ";
+    color: var(--text-placeholder);
+}
+
+.preflight-group[open] > summary::before {
+    content: "▾ ";
+}
+
+.preflight-names {
+    margin: 0;
+    padding: 10px 14px;
+    max-height: 160px;
+    overflow-y: auto;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.75rem;
+    line-height: 1.7;
+    color: var(--text-muted);
+    word-break: break-all;
+}
+
+.preflight-hint {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin-top: 14px;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: var(--text-muted);
+}
+
+.preflight-hint svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.preflight-hint strong {
+    color: var(--text-main);
+    font-weight: 600;
+}
+
 /* Sama seperti di aplikasi web: pojok kanan atas, di atas kisi latarnya. */
 .login-theme-toggle {
     position: absolute;
