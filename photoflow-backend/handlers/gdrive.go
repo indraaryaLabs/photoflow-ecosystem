@@ -135,3 +135,35 @@ func (h *Handler) respondWithStoredPhotos(c *gin.Context, project models.Project
 		"reason": reason,
 	})
 }
+
+// DriveStatus melaporkan apakah pemanggil sudah menghubungkan Google Drive.
+//
+// Dashboard web tidak punya cara lain mengetahuinya. Tanpa endpoint ini ia
+// hanya bisa menebak dari kegagalan yang muncul belakangan — dan itulah yang
+// terjadi selama ini: fotografer baru mendaftar, membuat project, lalu bingung
+// kenapa fotonya tidak pernah muncul, tanpa pernah diberi tahu bahwa Drive-nya
+// memang belum pernah dihubungkan.
+//
+// Yang dikembalikan hanya keadaan terhubung atau tidak. Token, alamat email
+// akun Google, maupun cakupan izinnya tidak ikut, karena tak satu pun
+// diperlukan untuk menggambar antarmukanya.
+func (h *Handler) DriveStatus(c *gin.Context) {
+	userID := c.GetString(middleware.ContextUserIDKey)
+
+	_, err := storage.GetUserAccessToken(c.Request.Context(), h.DB, userID)
+	if err != nil {
+		code, known := driveErrorCode(err)
+		if !known {
+			// Drive mungkin sedang tidak dapat dihubungi. Itu bukan berarti
+			// izinnya tidak ada, jadi jangan laporkan sebagai "belum terhubung"
+			// — nanti fotografer diminta menghubungkan ulang tanpa alasan.
+			log.Printf("⚠️ Status Drive user %s: %v", userID, err)
+			c.JSON(http.StatusOK, gin.H{"connected": false, "unknown": true})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"connected": false, "code": code})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"connected": true})
+}
