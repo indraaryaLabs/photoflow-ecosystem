@@ -380,6 +380,52 @@ func (h *Handler) DeleteProject(c *gin.Context) {
 // Pilihan foto ikut dikosongkan. Membuka status tanpa mengosongkan pilihan akan
 // menaruh klien kembali di galeri dengan semua foto sudah tercentang, sehingga
 // pemilihan ulang justru lebih menyulitkan daripada memulai dari nol.
+// ListSelections mengembalikan nama berkas yang dipilih klien pada satu proyek.
+//
+// Sampai sekarang daftar ini hanya bisa diambil aplikasi desktop, yang membaca
+// Supabase langsung. Padahal justru di dashboard web-lah fotografer berada saat
+// pemberitahuan masuk — dan yang dibutuhkannya di detik itu cuma daftar nama,
+// untuk ditempel ke penyaring Lightroom. Menuntutnya memasang aplikasi desktop
+// dulu hanya untuk menyalin teks adalah ongkos yang tidak perlu.
+//
+// Urutannya sengaja mengikuti nama berkas, bukan waktu pembuatan baris. Yang
+// membaca daftar ini membandingkannya dengan isi folder, dan folder disusun
+// menurut nama.
+func (h *Handler) ListSelections(c *gin.Context) {
+	userID := c.GetString(middleware.ContextUserIDKey)
+	projectID := c.Param("id")
+
+	var project models.Project
+	if err := h.DB.Where("id = ? AND user_id = ?", projectID, userID).First(&project).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Project not found, or you do not have access to it"})
+		return
+	}
+
+	var fileNames []string
+	if err := h.DB.Model(&models.Photo{}).
+		Where("project_id = ? AND is_selected = ?", project.ID, true).
+		Order("file_name").
+		Pluck("file_name", &fileNames).Error; err != nil {
+		log.Printf("list selections %s: %v", project.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not read the client's selection"})
+		return
+	}
+
+	// Pluck mengembalikan nil untuk hasil kosong, dan nil ter-serialisasi jadi
+	// `null` — bukan `[]`. Frontend yang memanggil .length atasnya akan pecah.
+	if fileNames == nil {
+		fileNames = []string{}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"project_name": project.ProjectName,
+		"client_name":  project.ClientName,
+		"status":       project.Status,
+		"count":        len(fileNames),
+		"file_names":   fileNames,
+	})
+}
+
 func (h *Handler) ReopenSelection(c *gin.Context) {
 	userID := c.GetString(middleware.ContextUserIDKey)
 	projectID := c.Param("id")
