@@ -131,7 +131,7 @@ export function useTheme() {
 
 /** Label tombol, dipakai sebagai `title` dan `aria-label`. */
 export function themeLabel(choice) {
-  if (choice === 'light') return 'Tema: terang. Klik untuk gelap.';
-  if (choice === 'dark') return 'Tema: gelap. Klik untuk mengikuti sistem.';
-  return 'Tema: mengikuti sistem. Klik untuk terang.';
+  if (choice === 'light') return 'Theme: light. Click for dark.';
+  if (choice === 'dark') return 'Theme: dark. Click to follow your system.';
+  return 'Theme: following your system. Click for light.';
 }
