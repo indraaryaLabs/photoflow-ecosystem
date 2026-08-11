@@ -50,6 +50,11 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Null berarti daftarnya dibaca langsung dari Google Drive. Berisi nilai
+  // berarti Drive tidak terbaca dan yang tampil adalah salinan database, yang
+  // bisa tertinggal dari isi folder sebenarnya.
+  const [photoSource, setPhotoSource] = useState(null);
+
   // ─── 3. UI State ─────────────────────────────────────────────
   // Tiga keadaan: mengikuti sistem (default), terang, gelap. Seluruh logikanya
   // — termasuk kapan boleh menulis ke localStorage — ada di lib/theme.js.
@@ -144,12 +149,20 @@ export default function App() {
           if (!photosRes.ok) throw new Error(`status ${photosRes.status}`);
           const photosData = await photosRes.json();
           setPhotos(photosData.files || []);
+          // Backend memberi tahu dari mana daftar ini berasal. Sampai sekarang
+          // keterangan itu dibuang, dan akibatnya galeri yang jatuh ke salinan
+          // database tampil sebagai deretan kotak kosong tanpa satu pun
+          // petunjuk kenapa. Yang terlihat hanya "fotonya hilang".
+          setPhotoSource(photosData.source === 'stored'
+            ? { stored: true, reason: photosData.reason }
+            : null);
         } catch (photosErr) {
           // Galeri tidak boleh mati hanya karena daftar foto gagal diambil:
           // salinannya ikut terkirim bersama data project. Bentuknya diselaraskan
           // di sini karena baris database memakai file_name dan thumbnail_url,
           // sedangkan galeri membaca name dan thumbnailLink.
           console.warn('Gagal memuat daftar foto, memakai salinan tersimpan:', photosErr);
+          setPhotoSource({ stored: true, reason: 'photos_endpoint_failed' });
           setPhotos(
             (data.photos || []).map(p => ({
               id: p.id,
@@ -347,6 +360,25 @@ export default function App() {
             Maksimal <strong className="text-ash-700 dark:text-ash-200">{project.max_selections}</strong> foto.
           </p>
         </div>
+
+        {/* Galeri yang jatuh ke salinan database dulu tampil sebagai deretan
+            kotak kosong tanpa penjelasan apa pun — yang terlihat cuma "fotonya
+            hilang". Backend selalu mengirim tahu dari mana daftarnya berasal;
+            sekarang keterangan itu dipakai. */}
+        {photoSource?.stored && (
+          <div
+            role="status"
+            className="mb-8 flex items-start gap-3 rounded-xl border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-ash-800 dark:border-warning-400/20 dark:bg-warning-400/10 dark:text-ash-100"
+          >
+            <AlertTriangle size={18} strokeWidth={1.75} className="mt-0.5 shrink-0 text-warning-500 dark:text-warning-400" aria-hidden="true" />
+            <span>
+              Google Drive sedang tidak dapat dibaca, jadi daftar ini diambil dari
+              salinan tersimpan. Isinya bisa tertinggal dari folder aslinya, dan
+              sebagian gambar mungkin tidak muncul. Hubungi fotografer Anda kalau
+              ada foto yang hilang.
+            </span>
+          </div>
+        )}
 
         <motion.div
           className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6"

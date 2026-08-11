@@ -110,6 +110,28 @@ const PreviewModal = ({
             <span className="text-white/50 text-sm font-medium">
               {index + 1} / {photos.length}
             </span>
+
+            {/* Penanda "Terpilih" duduk di baris ini, bukan melayang di pojok
+                kiri atas foto. Di posisi lamanya (top-8 left-8) ia jatuh tepat
+                di belakang bilah header, yang ber-z-50 sementara lencananya
+                z-20 — jadi tulisannya tertutup separuh. Menaikkan z-index-nya
+                saja hanya menukar siapa yang menutupi siapa; keduanya memang
+                berebut petak yang sama. Di sini ia sebaris dengan nomor foto,
+                yang juga keterangan tentang foto yang sedang dibuka. */}
+            <AnimatePresence>
+              {isSelected && (
+                <motion.span
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-ash-950 text-xs font-semibold shadow-lg shadow-black/30"
+                >
+                  <CheckCircle2 size={14} strokeWidth={2} aria-hidden="true" />
+                  Terpilih
+                </motion.span>
+              )}
+            </AnimatePresence>
           </div>
           
           <button
@@ -192,19 +214,6 @@ const PreviewModal = ({
                   draggable="false"
                 />
 
-                <AnimatePresence>
-                  {isSelected && (
-                    <motion.div
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      className="absolute top-8 left-8 sm:top-12 sm:left-12 bg-white text-ash-950 px-4 py-2 rounded-full font-semibold text-sm flex items-center gap-2 shadow-lg shadow-black/30 z-20 pointer-events-none"
-                    >
-                      <CheckCircle2 size={16} strokeWidth={1.75} />
-                      Terpilih
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </div>
             </motion.div>
           </AnimatePresence>
