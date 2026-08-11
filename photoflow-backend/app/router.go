@@ -101,6 +101,10 @@ func SetupRouter() (*gin.Engine, error) {
 	r.PUT("/api/projects/:id", requireAuth, h.UpdateProject)
 	r.DELETE("/api/projects/:id", requireAuth, h.DeleteProject)
 
+	// Daftar nama berkas yang dipilih klien, untuk ditempel ke penyaring
+	// Lightroom. Lihat handlers.ListSelections.
+	r.GET("/api/projects/:id/selections", requireAuth, h.ListSelections)
+
 	// Jalan pulang dari status "submitted". Lihat handlers.ReopenSelection
 	// untuk alasan kenapa ini perlu ada.
 	r.POST("/api/projects/:id/reopen", requireAuth, h.ReopenSelection)
