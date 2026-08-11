@@ -108,9 +108,88 @@ func submitSelection(db *gorm.DB, projectID string, photos []models.Photo) error
 			return errGalleryLocked
 		}
 
-		if err := tx.Where("project_id = ?", projectID).Delete(&models.Photo{}).Error; err != nil {
-			return err
-		}
-		return tx.Create(&photos).Error
+		return markSelection(tx, projectID, photos)
 	})
+}
+
+// markSelection menandai foto mana yang dipilih klien, tanpa membuang sisanya.
+//
+// Sebelumnya langkah ini menghapus SELURUH baris foto project lalu menyisipkan
+// ulang hanya yang dipilih. Tabel photos memikul dua tugas sekaligus — salinan
+// daftar isi folder Drive, sekaligus catatan pilihan klien — dan submit
+// meleburkan yang pertama ke dalam yang kedua. Empat foto yang dipilih satu
+// menyisakan satu baris; tiga sisanya hilang dari database untuk selamanya.
+//
+// Selama Drive terbaca, kerusakan itu tidak kelihatan: galeri membaca Drive
+// lebih dulu dan tetap menampilkan keempat fotonya. Ia baru muncul ketika Drive
+// tidak terbaca dan galeri jatuh ke salinan database — yang isinya tinggal satu
+// foto, dan tanpa thumbnail karena baris sisipan submit memang tidak
+// membawanya. Itu persis yang terlihat: galeri menyusut dan gambarnya kosong.
+//
+// Menandai, bukan mengganti, juga yang membuat "buka kembali pemilihan"
+// bermakna. Membuka status project tidak ada gunanya kalau baris fotonya sudah
+// dihapus — tidak ada yang bisa dipilih ulang.
+//
+// Aplikasi desktop tetap bekerja tanpa perubahan: ia membaca photos dengan
+// saringan is_selected, bukan menganggap seluruh isi tabel sebagai pilihan.
+func markSelection(tx *gorm.DB, projectID string, selected []models.Photo) error {
+	if err := tx.Model(&models.Photo{}).
+		Where("project_id = ?", projectID).
+		Update("is_selected", false).Error; err != nil {
+		return err
+	}
+
+	names := make([]string, 0, len(selected))
+	seen := make(map[string]struct{}, len(selected))
+	for _, photo := range selected {
+		if _, ada := seen[photo.FileName]; ada {
+			continue
+		}
+		seen[photo.FileName] = struct{}{}
+		names = append(names, photo.FileName)
+	}
+	if len(names) == 0 {
+		return nil
+	}
+
+	if err := tx.Model(&models.Photo{}).
+		Where("project_id = ? AND file_name IN ?", projectID, names).
+		Update("is_selected", true).Error; err != nil {
+		return err
+	}
+
+	// Nama yang tidak punya baris di database tetap harus tercatat, kalau tidak
+	// aplikasi desktop tidak akan pernah tahu foto itu dipilih. Ini terjadi
+	// ketika daftar isi folder berubah setelah project dibuat, atau ketika
+	// project dibuat saat Drive sedang tidak terbaca sehingga salinannya kosong.
+	var tersimpan []string
+	if err := tx.Model(&models.Photo{}).
+		Where("project_id = ? AND file_name IN ?", projectID, names).
+		Pluck("file_name", &tersimpan).Error; err != nil {
+		return err
+	}
+	ada := make(map[string]struct{}, len(tersimpan))
+	for _, nama := range tersimpan {
+		ada[nama] = struct{}{}
+	}
+
+	kurang := make([]models.Photo, 0)
+	for _, nama := range names {
+		if _, ok := ada[nama]; ok {
+			continue
+		}
+		kurang = append(kurang, models.Photo{
+			ProjectID:  projectID,
+			FileName:   nama,
+			IsSelected: true,
+			// Thumbnail-nya tidak diketahui di jalur ini: yang dikirim klien
+			// hanya nama berkas. Baris yang lahir dari sini memang tidak punya
+			// gambar, tapi keberadaannya yang penting.
+			ThumbnailURL: "",
+		})
+	}
+	if len(kurang) == 0 {
+		return nil
+	}
+	return tx.Create(&kurang).Error
 }
