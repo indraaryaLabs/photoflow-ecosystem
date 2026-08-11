@@ -283,8 +283,13 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                         : (session
                           ? session.user.email
                           : (isLoginMode
-                            ? "Enter your details to access PhotoFlow Admin."
-                            : "Start managing your gallery like a pro."))}
+                            // Bukan "PhotoFlow Admin": tidak ada peran
+                            // administrator di sini, dan jalurnya pun sudah
+                            // bukan /admin lagi. Kalimatnya sekarang menyebut
+                            // pekerjaan yang sebenarnya dilakukan di balik
+                            // layar ini.
+                            ? "Sign in to manage your client galleries."
+                            : "Create an account to start sharing galleries with your clients."))}
                     </p>
                   </motion.div>
                 </AnimatePresence>
