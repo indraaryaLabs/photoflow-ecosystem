@@ -2,20 +2,39 @@
   Lambang PhotoFlow untuk tab peramban.
 
   Bentuknya sama persis dengan src/components/BrandMark.jsx, hanya digambar
-  putih di atas kotak indigo supaya tetap terbaca baik di bilah tab terang
-  maupun gelap — tanpa perlu prefers-color-scheme, yang dukungannya untuk
-  favicon masih tidak merata antar peramban.
+  sebagai kotak pekat dengan lambang terang di atasnya.
+
+  Kotak pekat sendirian punya satu kelemahan: ia lenyap di bilah tab yang
+  gelap. Karena itu ada aturan prefers-color-scheme yang membalik keduanya.
+  Chrome dan Firefox menghormatinya pada favicon SVG; Safari tidak, dan di
+  sana yang tampil adalah kotak pekat. Itu masih aman, karena bilah tab
+  Safari memang terang secara bawaan.
+
+  Catatan buat yang menyunting berkas ini nanti: jangan pakai tanda hubung
+  ganda di dalam komentar. XML melarangnya, dan seluruh berkas jadi gagal
+  diurai tanpa pesan error yang jelas; peramban hanya menampilkan ikon rusak.
 
   Guratannya sedikit lebih tebal daripada versi di aplikasi: pada 16x16
   piksel, ketebalan aslinya menghilang.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none">
-  <rect width="40" height="40" rx="9" fill="#6366f1"/>
+  <style>
+    /* Nilai bawaan: kotak pekat, lambang terang. */
+    .kotak  { fill: #212529; }
+    .lambang { stroke: #f8f9fa; }
+
+    @media (prefers-color-scheme: dark) {
+      .kotak  { fill: #e9ecef; }
+      .lambang { stroke: #16191c; }
+    }
+  </style>
+
+  <rect class="kotak" width="40" height="40" rx="9"/>
   <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="40" height="40">
     <rect width="40" height="40" fill="white"/>
     <path d="M9.75 26 26.25 9.5" stroke="black" stroke-width="5.4"/>
   </mask>
-  <path d="M14.75 30.5v-20h9a6.5 6.5 0 0 1 0 13h-9"
-        stroke="white" stroke-width="3.2" stroke-linecap="square" mask="url(#cut)"/>
-  <path d="M9.75 26 26.25 9.5" stroke="white" stroke-width="2.8" stroke-linecap="square"/>
+  <path class="lambang" d="M14.75 30.5v-20h9a6.5 6.5 0 0 1 0 13h-9"
+        stroke-width="3.2" stroke-linecap="square" mask="url(#cut)"/>
+  <path class="lambang" d="M9.75 26 26.25 9.5" stroke-width="2.8" stroke-linecap="square"/>
 </svg>
