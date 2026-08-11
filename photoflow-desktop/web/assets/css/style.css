@@ -1999,6 +1999,19 @@ body {
         linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
 }
 
+/* Sama seperti di aplikasi web: pojok kanan atas, di atas kisi latarnya. */
+.login-theme-toggle {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    z-index: 1;
+}
+
+.login-theme-toggle svg {
+    width: 18px;
+    height: 18px;
+}
+
 .login-overlay.hidden {
     opacity: 0;
     visibility: hidden;
