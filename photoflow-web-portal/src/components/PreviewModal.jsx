@@ -128,7 +128,7 @@ const PreviewModal = ({
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-ash-950 text-xs font-semibold shadow-lg shadow-black/30"
                 >
                   <CheckCircle2 size={14} strokeWidth={2} aria-hidden="true" />
-                  Terpilih
+                  Selected
                 </motion.span>
               )}
             </AnimatePresence>
@@ -180,7 +180,8 @@ const PreviewModal = ({
                 {!isImgLoaded && (
                   <img 
                     src={thumbUrl} 
-                    alt="placeholder"
+                    alt=""
+                    aria-hidden="true"
                     referrerPolicy="no-referrer"
                     className="absolute max-h-[85vh] w-auto max-w-full object-contain blur-xl opacity-60 scale-105" 
                   />
@@ -193,7 +194,7 @@ const PreviewModal = ({
 
                 <motion.img
                   src={highResUrl}
-                  alt={`Preview ${index}`}
+                  alt={currentPhoto.name || `Photo ${index + 1} of ${photos.length}`}
                   referrerPolicy="no-referrer"
                   onLoad={() => setIsImgLoaded(true)}
                   // Hanya bisa didrag/pan jika sedang di-zoom
@@ -257,12 +258,12 @@ const PreviewModal = ({
             {isSelected ? (
               <>
                 <X size={20} strokeWidth={1.75} />
-                Batal Pilih
+                Deselect
               </>
             ) : (
               <>
                 <Check size={20} strokeWidth={1.75} />
-                Pilih Foto
+                Select photo
               </>
             )}
           </button>
