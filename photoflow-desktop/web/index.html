@@ -10,7 +10,7 @@
     <link rel="icon" type="image/x-icon" href="assets/icon.ico?v=3">
     <link rel="shortcut icon" type="image/x-icon" href="assets/icon.ico?v=3">
     <!-- Font dan ikon dibundel lokal: aplikasi ini punya mode offline, jadi
-         tidak boleh ada aset yang diambil dari jaringan saat dibuka. -->
+         no asset may be fetched over the network at launch. -->
     <link rel="stylesheet" href="assets/vendor/inter.css">
     <script src="assets/vendor/lucide.min.js"></script>
 
@@ -19,19 +19,29 @@
 
 <body>
 
-    <!-- LOGIN OVERLAY (Hybrid SaaS) -->
+    <!-- LOGIN -->
     <div class="login-overlay" id="login-overlay">
         <div class="login-card">
             <div class="login-brand">
-                <i data-lucide="aperture"></i>
-                <span>PhotoFlow</span>
+                <div class="login-brand-mark">
+                    <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                        <mask id="brandmark-login" maskUnits="userSpaceOnUse" x="0" y="0" width="32" height="32">
+                            <rect width="32" height="32" fill="white"/>
+                            <path d="M4 21.5 20.5 5" stroke="black" stroke-width="4.5"/>
+                        </mask>
+                        <path d="M9 26V6h9a6.5 6.5 0 0 1 0 13H9" stroke="currentColor" stroke-width="2.6"
+                              stroke-linecap="square" mask="url(#brandmark-login)"/>
+                        <path d="M4 21.5 20.5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"/>
+                    </svg>
+                </div>
+                <div class="login-title">Welcome back</div>
             </div>
-            <p class="login-subtitle">Sign in to your account</p>
+            <p class="login-subtitle">Sign in to manage your client galleries.</p>
 
             <div class="login-form">
                 <div class="login-field">
                     <label for="login-email">Email</label>
-                    <input type="email" id="login-email" placeholder="your@email.com" autocomplete="email">
+                    <input type="email" id="login-email" placeholder="you@studio.com" autocomplete="email">
                 </div>
                 <div class="login-field">
                     <label for="login-password">Password</label>
@@ -39,20 +49,17 @@
                 </div>
                 <div class="login-error" id="login-error" style="display: none;"></div>
                 <button class="login-btn" id="btn-login">
-                    <i data-lucide="log-in" style="width: 18px; height: 18px;"></i>
+                    <i data-lucide="arrow-right" style="width: 18px; height: 18px;"></i>
                     <span id="login-btn-text">Sign In</span>
                 </button>
 
-                <div style="text-align: center; margin-top: 16px;">
-                    <p style="color: #9ca3af; font-size: 0.85em; margin-bottom: 8px;">Tidak ada koneksi internet?</p>
-                    <button type="button" id="btn-offline-mode"
-                        style="background: transparent; border: 1px solid #4b5563; color: #d1d5db; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.9em; transition: all 0.2s;">
-                        Gunakan Mode Offline (Lokal)
-                    </button>
+                <div class="login-alt">
+                    <p>No internet connection?</p>
+                    <button type="button" id="btn-offline-mode">Continue offline</button>
                 </div>
             </div>
 
-            <p class="login-footer">Powered by PhotoFlow Cloud</p>
+            <p class="login-footer">PhotoFlow for Desktop</p>
         </div>
     </div>
 
@@ -62,7 +69,17 @@
     <!-- SIDEBAR NAVIGATION & ACTIONS -->
     <aside class="sidebar">
         <div class="brand">
-            <i data-lucide="aperture"></i>
+            <span class="brand-mark">
+                <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                    <mask id="brandmark-sidebar" maskUnits="userSpaceOnUse" x="0" y="0" width="32" height="32">
+                        <rect width="32" height="32" fill="white"/>
+                        <path d="M4 21.5 20.5 5" stroke="black" stroke-width="4.5"/>
+                    </mask>
+                    <path d="M9 26V6h9a6.5 6.5 0 0 1 0 13H9" stroke="currentColor" stroke-width="2.6"
+                          stroke-linecap="square" mask="url(#brandmark-sidebar)"/>
+                    <path d="M4 21.5 20.5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"/>
+                </svg>
+            </span>
             <span>PhotoFlow</span>
         </div>
 
@@ -81,7 +98,7 @@
             </button>
 
             <button class="nav-item" id="nav-cloud-workspace" style="margin-top: 8px;">
-                <i data-lucide="cloud" style="color: #60a5fa; width: 18px; height: 18px;"></i> Cloud Workspace
+                <i data-lucide="cloud" style="color: var(--text-muted); width: 18px; height: 18px;"></i> Cloud Workspace
             </button>
         </div>
 
@@ -97,7 +114,7 @@
             </button>
             <!-- WEB ADMIN PORTAL SHORTCUT -->
             <button class="folder-btn" id="btn-open-web-admin" data-requires-online="true" data-requires-pro="true">
-                <div class="folder-label" style="color: var(--accent-hover, #818cf8);">
+                <div class="folder-label" style="color: var(--text-muted);">
                     <i data-lucide="external-link"></i> Manage Client Projects
                 </div>
                 <div class="folder-path" style="color: var(--text-muted); padding-left: 24px; white-space: normal;">Open
@@ -176,7 +193,7 @@
                     <div class="filter-panel" id="format-filter-panel">
                         <div class="filter-panel-header">
                             <i data-lucide="camera" style="width: 18px; height: 18px;"></i>
-                            <span>Pilih tipe file RAW:</span>
+                            <span>RAW file types</span>
                         </div>
                         <div class="filter-grid" id="format-checkboxes">
                             <label class="checkbox-label"><input type="checkbox" value="ARW" checked><span
@@ -184,7 +201,7 @@
                             <label class="checkbox-label"><input type="checkbox" value="CR2" checked><span
                                     class="checkmark"></span>Canon (.CR2)</label>
                             <label class="checkbox-label"><input type="checkbox" value="CR3" checked><span
-                                    class="checkmark"></span>Canon (baru) (.CR3)</label>
+                                    class="checkmark"></span>Canon (newer) (.CR3)</label>
                             <label class="checkbox-label"><input type="checkbox" value="NEF" checked><span
                                     class="checkmark"></span>Nikon (.NEF)</label>
                             <label class="checkbox-label"><input type="checkbox" value="NRW" checked><span
@@ -294,7 +311,7 @@
                                 style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Execution
                                 Status</span>
                             <button id="btn-clear-log"
-                                style="background: transparent; border: none; color: #818cf8; display: flex; align-items: center; gap: 4px; font-size: 0.75rem; cursor: pointer; padding: 0; outline: none;">
+                                style="background: transparent; border: none; color: var(--text-main); display: flex; align-items: center; gap: 4px; font-size: 0.75rem; cursor: pointer; padding: 0; outline: none;">
                                 <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i> Clear
                             </button>
                         </div>
@@ -311,7 +328,7 @@
             <div style="padding: 24px 32px 0 32px;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px;">
                     <h1 class="grid-title" style="display: flex; align-items: center; gap: 10px; margin-bottom: 0;">
-                        <i data-lucide="cloud" style="color: #60a5fa;"></i> Google Drive
+                        <i data-lucide="cloud" style="color: var(--text-muted);"></i> Google Drive
                     </h1>
                     <div style="display: flex; align-items: center; gap: 16px;">
                         <span id="drive-new-folder"
@@ -468,7 +485,7 @@
             <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5;">This
                 feature is disabled. You can only sort local files.</p>
             <button id="btn-relogin-offline"
-                style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.4); padding: 10px; border-radius: 8px; font-size: 0.85em; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; transition: all 0.2s; backdrop-filter: blur(4px);">
+                style="background: var(--accent-light); color: var(--text-main); border: 1px solid var(--border-medium); padding: 10px; border-radius: 8px; font-size: 0.85em; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; transition: all 0.2s; backdrop-filter: blur(4px);">
                 <i data-lucide="log-in" style="width: 16px; height: 16px;"></i> Connect Account
             </button>
         </div>
