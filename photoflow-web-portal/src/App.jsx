@@ -242,8 +242,8 @@ export default function App() {
 
   if (isAuthChecking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <Loader2 size={32} strokeWidth={1.75} className="text-indigo-500 animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-ash-50 dark:bg-ash-950">
+        <Loader2 size={32} strokeWidth={1.75} className="text-ash-600 dark:text-ash-400 animate-spin" />
       </div>
     );
   }
@@ -276,12 +276,12 @@ export default function App() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300">
-        <Loader2 size={40} strokeWidth={1.75} className="text-indigo-500 animate-spin mb-6" aria-hidden="true" />
-        <p className="text-lg font-medium text-zinc-600 dark:text-zinc-300 tracking-wide">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-ash-50 dark:bg-ash-950 transition-colors duration-300">
+        <Loader2 size={40} strokeWidth={1.75} className="text-ash-600 dark:text-ash-400 animate-spin mb-6" aria-hidden="true" />
+        <p className="text-lg font-medium text-ash-600 dark:text-ash-300 tracking-wide">
           Memuat Galeri...
         </p>
-        <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-1">
+        <p className="text-sm text-ash-500 dark:text-ash-500 mt-1">
           Mohon tunggu sebentar
         </p>
       </div>
@@ -290,14 +290,14 @@ export default function App() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300 px-6 text-center">
-        <div className="w-16 h-16 rounded-full bg-red-500/10 dark:bg-red-500/20 flex items-center justify-center mb-6">
-          <AlertTriangle size={32} strokeWidth={1.75} className="text-red-500" />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-ash-50 dark:bg-ash-950 transition-colors duration-300 px-6 text-center">
+        <div className="w-16 h-16 rounded-full bg-danger-500/10 dark:bg-danger-500/20 flex items-center justify-center mb-6">
+          <AlertTriangle size={32} strokeWidth={1.75} className="text-danger-500" />
         </div>
-        <h1 className="text-xl font-semibold text-zinc-800 dark:text-zinc-100 mb-2">
+        <h1 className="text-xl font-semibold text-ash-800 dark:text-ash-100 mb-2">
           Gagal Memuat Galeri
         </h1>
-        <p className="text-zinc-500 dark:text-zinc-400 max-w-md">
+        <p className="text-ash-600 dark:text-ash-400 max-w-md">
           {error}
         </p>
       </div>
@@ -308,19 +308,19 @@ export default function App() {
   //  MAIN RENDER — Data loaded successfully
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300 font-sans selection:bg-indigo-500/30">
+    <div className="min-h-screen bg-ash-50 dark:bg-ash-950 transition-colors duration-300 font-sans ">
       <Toast toasts={toasts} />
 
       <Header project={project} themeChoice={themeChoice} cycleTheme={cycleTheme} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28">
         <div className="mb-8 flex flex-col gap-2">
-          <h2 className="text-2xl sm:text-3xl font-semibold text-zinc-900 dark:text-white tracking-tight">
+          <h2 className="text-2xl sm:text-3xl font-semibold text-ash-900 dark:text-white tracking-tight">
             Pilih Foto Favorit
           </h2>
-          <p className="text-zinc-500 dark:text-zinc-400 text-sm sm:text-base max-w-2xl">
+          <p className="text-ash-600 dark:text-ash-400 text-sm sm:text-base max-w-2xl">
             Klik gambar untuk memilih, atau tekan ikon <strong>👁 (Mata)</strong> untuk melihat resolusi tinggi secara utuh.
-            Maksimal <strong className="text-zinc-700 dark:text-zinc-200">{project.max_selections}</strong> foto.
+            Maksimal <strong className="text-ash-700 dark:text-ash-200">{project.max_selections}</strong> foto.
           </p>
         </div>
 

@@ -12,9 +12,9 @@ import { useId } from 'react';
  * 2. Celah antara garis diagonal dan badan "P" dibuat dengan `<mask>`
  *    sungguhan, bukan dengan menimpa garis memakai warna latar. Menimpa
  *    warna latar hanya berhasil kalau latarnya benar-benar warna itu; di
- *    sini lambangnya dipakai di atas kartu abu, di atas kotak indigo
- *    transparan, dan di atas gradien tombol masuk. Mask bekerja di
- *    semuanya karena yang dihapus adalah pikselnya, bukan ditutupi.
+ *    sini lambangnya dipakai di atas kartu terang, di atas kotak abu
+ *    tembus pandang, dan di atas kotak pekat di layar masuk. Mask bekerja
+ *    di semuanya karena yang dihapus adalah pikselnya, bukan ditutupi.
  *
  * Warnanya selalu `currentColor`, jadi pewarnaan diatur oleh kelas Tailwind
  * pada elemen pembungkusnya — sama seperti ikon lain di aplikasi ini.
