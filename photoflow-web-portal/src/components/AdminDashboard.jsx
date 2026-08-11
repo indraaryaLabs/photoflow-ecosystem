@@ -130,7 +130,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
       }
     }
 
-    showToast('Sesi berakhir. Silakan login kembali.', 'error');
+    showToast('Your session has expired. Please sign in again.', 'error');
     await supabase.auth.signOut();
     setTimeout(() => { window.location.href = '/'; }, 1000);
     return null;
@@ -152,12 +152,12 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
       const checkedRes = await handleApiResponse(await sendRequest(token), sendRequest);
       if (!checkedRes) return;
 
-      if (!checkedRes.ok) throw new Error('Gagal memuat data project');
+      if (!checkedRes.ok) throw new Error('Could not load your projects.');
       const data = await checkedRes.json();
       setProjects(data || []);
     } catch (err) {
       if (err.message === 'Failed to fetch') {
-        showToast('Tidak dapat terhubung ke server. Periksa koneksi internet Anda.', 'error');
+        showToast('Could not reach the server. Check your internet connection.', 'error');
       } else {
         showToast(err.message, 'error');
       }
@@ -200,13 +200,13 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
         },
         body: JSON.stringify({ return_to: `${window.location.origin}/dashboard` })
       });
-      if (!res.ok) throw new Error('Gagal memulai koneksi Google Drive');
+      if (!res.ok) throw new Error('Could not start the Google Drive connection.');
 
       const { auth_url: authUrl } = await res.json();
-      if (!authUrl) throw new Error('Gagal memulai koneksi Google Drive');
+      if (!authUrl) throw new Error('Could not start the Google Drive connection.');
       window.location.href = authUrl;
     } catch (err) {
-      showToast(err.message || 'Gagal memulai koneksi Google Drive', 'error');
+      showToast(err.message || 'Could not start the Google Drive connection.', 'error');
       setConnectingDrive(false);
     }
   };
@@ -230,19 +230,19 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
         // yang lain menuntut membetulkan izin folder. Tindakannya tidak sama.
         if (body?.code === 'drive_not_connected' || body?.code === 'drive_reconnect_required') {
           setDriveConnected(false);
-          showToast('Google Drive belum terhubung. Hubungkan dulu lewat tombol di atas.', 'error');
+          showToast('Google Drive is not connected yet. Use the button above to connect it first.', 'error');
           return;
         }
-        throw new Error(body?.error || 'Gagal menarik ulang foto');
+        throw new Error(body?.error || 'Could not re-sync the photos.');
       }
 
       await fetchProjects();
       const jumlah = body?.photos_found ?? 0;
-      if (jumlah > 0) showToast(`${jumlah} foto ditarik dari Drive.`);
-      else showToast('Foldernya terbaca, tapi tidak ada foto di dalamnya.', 'error');
+      if (jumlah > 0) showToast(`${jumlah} photos pulled from Drive.`);
+      else showToast('The folder was read, but it contains no photos.', 'error');
     } catch (err) {
       if (err.message === 'Failed to fetch') {
-        showToast('Server tidak merespon. Coba lagi nanti.', 'error');
+        showToast('The server did not respond. Please try again later.', 'error');
       } else {
         showToast(err.message, 'error');
       }
@@ -308,14 +308,14 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
 
       const checkedRes = await handleApiResponse(await sendRequest(token), sendRequest);
       if (!checkedRes) return;
-      if (!checkedRes.ok) throw new Error('Gagal menghapus project');
+      if (!checkedRes.ok) throw new Error('Could not delete the project.');
 
-      showToast("Project berhasil dihapus!");
+      showToast('Project deleted.');
       setDeletingProject(null);
       fetchProjects();
     } catch (err) {
       if (err.message === 'Failed to fetch') {
-        showToast('Server tidak merespon. Coba lagi nanti.', 'error');
+        showToast('The server did not respond. Please try again later.', 'error');
       } else {
         showToast(err.message, 'error');
       }
@@ -345,14 +345,14 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
 
       const checkedRes = await handleApiResponse(await sendRequest(token), sendRequest);
       if (!checkedRes) return;
-      if (!checkedRes.ok) throw new Error('Gagal membuka kembali pemilihan');
+      if (!checkedRes.ok) throw new Error('Could not reopen the selection.');
 
       showToast('Selection reopened.');
       setReopeningProject(null);
       fetchProjects();
     } catch (err) {
       if (err.message === 'Failed to fetch') {
-        showToast('Server tidak merespon. Coba lagi nanti.', 'error');
+        showToast('The server did not respond. Please try again later.', 'error');
       } else {
         showToast(err.message, 'error');
       }
@@ -368,7 +368,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
     // Validasi nomor WhatsApp klien
     const editWa = editingProject.client_whatsapp || '';
     if (!editWa.startsWith('62') || editWa.length < 10 || editWa.length > 15 || !/^\d+$/.test(editWa)) {
-      showToast('Nomor WhatsApp tidak valid. Pastikan nomor benar (min. 10 angka).', 'error');
+      showToast('That WhatsApp number is not valid. Use at least 10 digits.', 'error');
       return;
     }
 
@@ -401,14 +401,14 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
 
       if (!checkedRes.ok) {
         const errorData = await checkedRes.json().catch(() => null);
-        throw new Error(errorData?.error || 'Gagal mengupdate project');
+        throw new Error(errorData?.error || 'Could not update the project.');
       }
-      showToast("Project berhasil diupdate!");
+      showToast('Project updated.');
       setEditingProject(null);
       fetchProjects();
     } catch (err) {
       if (err.message === 'Failed to fetch') {
-        showToast('Server tidak merespon. Coba lagi nanti.', 'error');
+        showToast('The server did not respond. Please try again later.', 'error');
       } else {
         showToast(err.message, 'error');
       }
@@ -424,7 +424,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
     // Validasi nomor WhatsApp klien
     const clientWa = formData.clientWa || '';
     if (!clientWa.startsWith('62') || clientWa.length < 10 || clientWa.length > 15 || !/^\d+$/.test(clientWa)) {
-      showToast('Nomor WhatsApp tidak valid. Pastikan nomor benar (min. 10 angka).', 'error');
+      showToast('That WhatsApp number is not valid. Use at least 10 digits.', 'error');
       return;
     }
 
@@ -458,7 +458,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
 
       if (!checkedRes.ok) {
         const errorData = await checkedRes.json().catch(() => null);
-        throw new Error(errorData?.error || errorData?.message || 'Gagal membuat project');
+        throw new Error(errorData?.error || errorData?.message || 'Could not create the project.');
       }
 
       // Backend membedakan "dibuat dan fotonya tertarik" dari "dibuat, tapi
@@ -473,18 +473,18 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
       setFormData({ projectName: '', clientName: '', maxSelection: 50, driveLink: '', clientWa: '' });
 
       if (typeof jumlahFoto === 'number' && jumlahFoto > 0) {
-        showToast(`Project dibuat. ${jumlahFoto} foto ditarik dari Drive.`);
+        showToast(`Project created. ${jumlahFoto} photos pulled from Drive.`);
       } else {
         showToast(
-          body?.message || 'Project dibuat, tapi tidak ada foto yang bisa ditarik dari Drive.',
+          body?.message || 'Project created, but no photos could be pulled from Drive.',
           'error'
         );
       }
     } catch (err) {
       if (err.message === 'Failed to fetch') {
-        showToast('Tidak dapat terhubung ke server. Periksa koneksi internet Anda.', 'error');
+        showToast('Could not reach the server. Check your internet connection.', 'error');
       } else {
-        showToast(err.message || "Terjadi kesalahan", 'error');
+        showToast(err.message || 'Something went wrong.', 'error');
       }
     } finally {
       setIsSubmitting(false);
@@ -501,10 +501,10 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
     textArea.select();
     try {
       document.execCommand('copy');
-      showToast("Magic link berhasil disalin!");
+      showToast('Magic link copied to clipboard.');
     } catch (err) {
       console.error('Failed to copy', err);
-      showToast("Gagal menyalin link", 'error');
+      showToast('Could not copy the link.', 'error');
     }
     document.body.removeChild(textArea);
   };
@@ -532,10 +532,10 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
         <style>{globalStyles}</style>
         <Loader2 size={36} strokeWidth={1.75} className="text-ash-600 dark:text-ash-400 animate-spin" aria-hidden="true" />
         <div>
-          <p className="text-lg font-semibold text-ash-900 dark:text-ash-100">Menghubungkan Google Drive</p>
+          <p className="text-lg font-semibold text-ash-900 dark:text-ash-100">Connecting Google Drive</p>
           <p className="text-sm text-ash-600 dark:text-ash-400 mt-1 max-w-sm">
-            Anda akan dibawa ke halaman persetujuan Google. Pilih akun yang menyimpan
-            folder foto klien Anda.
+            You will be taken to Google's consent screen. Choose the account that holds
+            your client photo folders.
           </p>
         </div>
       </div>
@@ -568,7 +568,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
               <button
                 onClick={handleLogout}
                 className="p-2.5 rounded-full bg-ash-100 dark:bg-white/5 border border-transparent dark:border-white/5 hover:bg-danger-50 dark:hover:bg-danger-500/10 text-ash-600 dark:text-ash-400 hover:text-danger-500 dark:hover:text-danger-400 transition-all duration-300 hover:scale-105 active:scale-95"
-                title="Logout"
+                title="Sign out"
               >
                 <LogOut size={16} strokeWidth={1.75} />
               </button>
@@ -590,10 +590,10 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
             >
               <AlertTriangle size={20} strokeWidth={1.75} className="shrink-0 text-warning-500 dark:text-warning-400" aria-hidden="true" />
               <div className="flex-1">
-                <p className="text-sm font-semibold text-ash-900 dark:text-ash-100">Google Drive belum terhubung</p>
+                <p className="text-sm font-semibold text-ash-900 dark:text-ash-100">Google Drive is not connected</p>
                 <p className="text-sm text-ash-600 dark:text-ash-300 mt-0.5">
-                  PhotoFlow perlu izin membaca Drive Anda untuk menarik daftar foto. Sampai
-                  itu diberikan, setiap project yang dibuat akan kosong.
+                  PhotoFlow needs permission to read your Drive before it can pull in photos.
+                  Until you grant it, every project you create will be empty.
                 </p>
               </div>
               <button
@@ -604,7 +604,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
                 {connectingDrive
                   ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
                   : <LinkIcon size={16} strokeWidth={1.75} />}
-                Hubungkan Google Drive
+                Connect Google Drive
               </button>
             </div>
           )}
@@ -785,7 +785,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
                       onResync={() => handleResync(project)}
                       onWhatsApp={() => {
                         const url = `${window.location.origin}/?token=${project.magic_link_token}`;
-                        const text = `Halo Kak ${project.client_name},\nBerikut adalah link galeri foto untuk project *${project.project_name}*.\n\nSilakan klik link di bawah ini untuk mulai memilih foto (Maksimal ${project.max_selections} foto):\n${url}\n\nTerima kasih atas kepercayaannya.`;
+                        const text = `Hi ${project.client_name},\nHere is the photo gallery link for the *${project.project_name}* project.\n\nOpen the link below to start choosing your photos (up to ${project.max_selections}):\n${url}\n\nThank you.`;
                         window.open(`https://wa.me/${project.client_whatsapp}?text=${encodeURIComponent(text)}`, '_blank');
                       }}
                       onEdit={() => setEditingProject({ ...project, drive_folder_url: project.drive_folder_url, project_name: project.project_name })}
@@ -1000,8 +1000,8 @@ function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, on
             <span className="w-1 h-1 rounded-full bg-ash-300 dark:bg-ash-700"></span>
             <span className={jumlahFoto === 0 ? 'text-warning-600 dark:text-warning-400 font-semibold' : undefined}>
               {jumlahFoto === 0
-                ? 'Belum ada foto'
-                : `${jumlahFoto} foto · maks ${project.max_selections} pilihan`}
+                ? 'No photos yet'
+                : `${jumlahFoto} photos · up to ${project.max_selections} picks`}
             </span>
           </div>
         </div>
