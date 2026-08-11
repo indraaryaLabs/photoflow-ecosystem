@@ -6,6 +6,67 @@
 /* --- Custom Theme Configuration --- */
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Palet netral.
+   *
+   * Sembilan warna pertama diambil apa adanya dari palet yang dipilih; semuanya
+   * duduk di hue 210° dengan saturasi 7-17%, jadi tidak ada abu hangat yang
+   * menyelinap masuk. Sebelumnya aplikasi memakai `zinc` bawaan Tailwind
+   * (hue 240°) — konsisten juga, hanya keluarga yang berbeda.
+   *
+   * Dua yang terakhir bukan bagian dari palet aslinya. Palet itu tangga untuk
+   * mode terang: yang paling gelap #212529 setara lightness 14,5%, terlalu
+   * terang untuk jadi latar halaman gelap di aplikasi galeri foto — foto perlu
+   * latar yang lebih dalam supaya menonjol. Keduanya diekstrapolasi pada hue
+   * yang sama, dengan jarak yang cukup agar kartu benar-benar terpisah dari
+   * halaman di belakangnya (ΔL* 6,5; sedikit lebih lega daripada 5,9 yang
+   * dihasilkan pasangan zinc lama).
+   */
+  --color-ash-50: #f8f9fa;
+  --color-ash-100: #e9ecef;
+  --color-ash-200: #dee2e6;
+  --color-ash-300: #ced4da;
+  --color-ash-400: #adb5bd;
+  --color-ash-500: #6c757d;
+  --color-ash-600: #495057;
+  --color-ash-700: #343a40;
+  --color-ash-800: #212529;
+  --color-ash-900: #181c20;
+  --color-ash-950: #0b0d0f;
+
+  /* Warna yang membawa arti, bukan hiasan.
+   *
+   * Palet netral tidak punya aksen sama sekali, dan itu memang disengaja —
+   * tindakan utama ditandai oleh isi pekat, bukan warna. Tapi "Hapus proyek"
+   * dan "Berhasil terkirim" harus tetap bisa dibedakan tanpa membaca, jadi
+   * merah dan hijau tetap ada.
+   *
+   * Saturasinya ditahan di kisaran 27-60%, jauh di bawah merah/hijau bawaan
+   * Tailwind yang 70-90%. Di sebelah abu 7-17%, warna sekencang itu menjerit.
+   */
+  --color-danger-50: #fdf4f3;
+  --color-danger-100: #fae7e4;
+  --color-danger-200: #f0cdc8;
+  --color-danger-300: #e2a79f;
+  --color-danger-400: #cf6a5e;
+  --color-danger-500: #b34437;
+  --color-danger-600: #94342a;
+  --color-danger-700: #7a2b23;
+  --color-danger-900: #4a1a15;
+
+  --color-success-50: #f1f7f3;
+  --color-success-200: #c8e0d1;
+  --color-success-300: #a3cab3;
+  --color-success-400: #5da280;
+  --color-success-500: #377a59;
+  --color-success-600: #2e694d;
+  --color-success-700: #26563f;
+
+  --color-warning-50: #fbf5e9;
+  --color-warning-200: #edd9ac;
+  --color-warning-400: #d09b46;
+  --color-warning-500: #b3812c;
+  --color-warning-600: #936922;
 }
 
 /* --- Base Layer Resets --- */
@@ -24,17 +85,23 @@
     -moz-osx-font-smoothing: grayscale;
     scroll-behavior: smooth;
     font-family: var(--font-sans);
-    background-color: #fafafa; /* zinc-50 */
+    background-color: var(--color-ash-50);
   }
 
   .dark html,
   .dark body,
   html.dark,
   html.dark body {
-    background-color: #09090b; /* zinc-950 */
+    background-color: var(--color-ash-950);
   }
 
+  /* Sorotan teks ikut netral. Dulu ini rgba indigo — satu-satunya tempat
+   * warna aksen bocor ke luar komponen. */
   ::selection {
-    background-color: rgba(99, 102, 241, 0.3);
+    background-color: color-mix(in srgb, var(--color-ash-800) 18%, transparent);
+  }
+
+  .dark ::selection {
+    background-color: color-mix(in srgb, var(--color-ash-200) 22%, transparent);
   }
 }

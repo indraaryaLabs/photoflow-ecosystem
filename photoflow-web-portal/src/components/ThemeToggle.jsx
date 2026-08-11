@@ -25,11 +25,11 @@ export default function ThemeToggle({ choice, onCycle, className }) {
       aria-label={label}
       className={cn(
         'inline-flex h-9 w-9 items-center justify-center rounded-lg',
-        'text-zinc-500 dark:text-zinc-400',
-        'hover:bg-zinc-100 hover:text-zinc-900',
-        'dark:hover:bg-white/5 dark:hover:text-zinc-100',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400',
-        'dark:focus-visible:ring-zinc-500 transition-colors',
+        'text-ash-600 dark:text-ash-400',
+        'hover:bg-ash-100 hover:text-ash-900',
+        'dark:hover:bg-white/5 dark:hover:text-ash-100',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ash-400',
+        'dark:focus-visible:ring-ash-500 transition-colors',
         className,
       )}
     >
