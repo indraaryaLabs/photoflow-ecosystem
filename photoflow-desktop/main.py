@@ -115,7 +115,7 @@ def _attach_supabase_session():
         )
         print(f"[PhotoFlow] ✓ Supabase RLS session attached (uid: {current_user_id()})")
     except Exception as exc:
-        print(f"[PhotoFlow] ⚠ Gagal memasang sesi Supabase: {exc}")
+        print(f"[PhotoFlow] WARN  Could not restore Supabase session: {exc}")
 
 # ── Internet Connectivity Check ─────────────────────────────
 def check_internet():
@@ -170,10 +170,10 @@ def _async_startup_tasks():
         #    password lagi. Kegagalannya tidak fatal: user tinggal login.
         try:
             if auth.session.restore():
-                print(f"[PhotoFlow] ✓ Sesi dipulihkan untuk {auth.session.email}")
+                print(f"[PhotoFlow] OK    Session restored for {auth.session.email}")
                 _attach_supabase_session()
         except Exception as e:
-            print(f"[PhotoFlow] ⚠ Gagal memulihkan sesi: {e}")
+            print(f"[PhotoFlow] WARN  Could not restore session: {e}")
     else:
         print("[PhotoFlow] Supabase init skipped (offline).")
 
@@ -269,13 +269,13 @@ def login_to_server(email, password):
         return {
             "success": False,
             "error": "offline",
-            "message": "Tidak ada koneksi internet. Gunakan sesi tersimpan jika tersedia.",
+            "message": "No internet connection. Your saved session will be used if one exists.",
         }
 
     try:
         result = auth.session.sign_in(email, password)
         _attach_supabase_session()
-        print(f"[PhotoFlow] ✓ Login berhasil untuk {email}")
+        print(f"[PhotoFlow] OK    Signed in as {email}")
         # Access token sengaja tidak ikut dikembalikan. Frontend tidak
         # memanggil backend langsung — setiap permintaan lewat fungsi
         # @eel.expose di proses ini — jadi menyerahkan JWT ke konteks browser
@@ -289,27 +289,27 @@ def login_to_server(email, password):
         # Pesan asli dari Supabase sengaja tidak diteruskan ke UI: ia
         # membedakan email tidak terdaftar dari password salah, dan perbedaan
         # itu memberi tahu penebak akun mana yang ada.
-        print("[PhotoFlow] ✗ Login ditolak: kredensial tidak valid")
+        print("[PhotoFlow] ERROR Sign-in rejected: invalid credentials")
         return {
             "success": False,
             "error": "unauthorized",
             "message": "Email atau password salah.",
         }
     except requests.exceptions.Timeout:
-        print("[PhotoFlow] ✗ Login timeout — server tidak merespons")
+        print("[PhotoFlow] ERROR Sign-in timed out: no response from server")
         is_offline = True
         return {
             "success": False,
             "error": "timeout",
-            "message": "Server tidak merespons. Coba lagi nanti.",
+            "message": "The server is not responding. Please try again shortly.",
         }
     except requests.exceptions.RequestException as e:
-        print(f"[PhotoFlow] ✗ Login gagal karena jaringan: {e}")
+        print(f"[PhotoFlow] ERROR Sign-in failed, network error: {e}")
         is_offline = True
         return {
             "success": False,
             "error": "offline",
-            "message": "Tidak dapat menghubungi server autentikasi.",
+            "message": "Could not reach the authentication server.",
         }
     except AuthError as e:
         print(f"[PhotoFlow] ✗ Login error: {e}")
@@ -330,7 +330,7 @@ def logout_from_server():
             supabase_client.auth.sign_out()
         except Exception:
             pass
-    print("[PhotoFlow] ✓ Sesi diakhiri.")
+    print("[PhotoFlow] OK    Signed out.")
     return True
 
 
@@ -665,7 +665,7 @@ def start_drive_upload(file_paths, user_id=None):
         result = gdrive.upload_files_to_drive(file_paths, 'root')
         return result
     except PermissionError:
-        return {"success": False, "error": "Sesi cloud berakhir. Mohon login ulang."}
+        return {"success": False, "error": "Your session has expired. Please sign in again."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive upload failed: {e}")
         telemetry.capture(e)
@@ -678,7 +678,7 @@ def get_drive_contents(folder_id='root', user_id=None):
     try:
         return gdrive.list_files(folder_id)
     except PermissionError:
-        return {"error": "Sesi cloud berakhir. Mohon login ulang."}
+        return {"error": "Your session has expired. Please sign in again."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive explorer failed: {e}")
         telemetry.capture(e)
@@ -689,7 +689,7 @@ def get_drive_folders_only(folder_id='root', user_id=None):
     try:
         return gdrive.list_folders_only(folder_id)
     except PermissionError:
-        return {"error": "Sesi cloud berakhir. Mohon login ulang."}
+        return {"error": "Your session has expired. Please sign in again."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive folders fetch failed: {e}")
         telemetry.capture(e)
@@ -700,7 +700,7 @@ def execute_drive_move(file_ids, current_parent, target_parent, user_id=None):
     try:
         return gdrive.move_drive_files(file_ids, current_parent, target_parent)
     except PermissionError:
-        return {"success": False, "error": "Sesi cloud berakhir. Mohon login ulang."}
+        return {"success": False, "error": "Your session has expired. Please sign in again."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive move failed: {e}")
         telemetry.capture(e)
@@ -711,7 +711,7 @@ def execute_drive_copy(file_ids, target_parent, user_id=None):
     try:
         return gdrive.copy_drive_files(file_ids, target_parent)
     except PermissionError:
-        return {"success": False, "error": "Sesi cloud berakhir. Mohon login ulang."}
+        return {"success": False, "error": "Your session has expired. Please sign in again."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive copy failed: {e}")
         telemetry.capture(e)
@@ -722,7 +722,7 @@ def create_new_drive_folder(folder_name, parent_id='root', user_id=None):
     try:
         return gdrive.create_drive_folder(folder_name, parent_id)
     except PermissionError:
-        return {"success": False, "error": "Sesi cloud berakhir. Mohon login ulang."}
+        return {"success": False, "error": "Your session has expired. Please sign in again."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive create folder failed: {e}")
         telemetry.capture(e)
@@ -733,7 +733,7 @@ def trash_drive_files(file_ids, user_id=None):
     try:
         return gdrive.trash_drive_files(file_ids)
     except PermissionError:
-        return {"success": False, "error": "Sesi cloud berakhir. Mohon login ulang."}
+        return {"success": False, "error": "Your session has expired. Please sign in again."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive trash failed: {e}")
         telemetry.capture(e)
@@ -744,7 +744,7 @@ def rename_drive_item(file_id, new_name, user_id=None):
     try:
         return gdrive.rename_drive_item(file_id, new_name)
     except PermissionError:
-        return {"success": False, "error": "Sesi cloud berakhir. Mohon login ulang."}
+        return {"success": False, "error": "Your session has expired. Please sign in again."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive rename failed: {e}")
         telemetry.capture(e)
@@ -780,13 +780,13 @@ def upload_files_to_drive(local_file_paths, target_folder_id, mode='preview', us
             service = gdrive.get_drive_service()
         except PermissionError as e:
             print(f"[PhotoFlow] ✗ Auth error: {e}")
-            eel.showAdvancedToast("Sesi cloud berakhir. Mohon login ulang.", "error")
+            eel.showAdvancedToast("Your session has expired. Please sign in again.", "error")
             eel.resetUploadState()
             return
         except Exception as e:
             print(f"[PhotoFlow] ✗ Token fetch error: {e}")
             telemetry.capture(e)
-            eel.showAdvancedToast(f"Gagal terhubung ke cloud: {e}", "error")
+            eel.showAdvancedToast(f"Could not reach the PhotoFlow service: {e}", "error")
             eel.resetUploadState()
             return
 
@@ -913,7 +913,7 @@ def auto_gather_raws(selected_filenames, source_folder, project_name="Selected_R
                         # Copy file dengan metadata
                         shutil.copy2(src_path, dst_path)
                         found_count += 1
-                        print(f"  -> Disalin: {file}")
+                        print(f"  -> Copied: {file}")
                         
                         # Hapus dari set agar tidak tertimpa jika ada duplikat di subfolder lain
                         target_bases.discard(base)
@@ -925,9 +925,9 @@ def auto_gather_raws(selected_filenames, source_folder, project_name="Selected_R
                         except:
                             pass
                             
-            print(f"[PhotoFlow] ✓ Selesai! Berhasil memanen {found_count} file RAW/JPG.")
+            print(f"[PhotoFlow] OK    Collected {found_count} RAW/JPG file(s).")
             if target_bases:
-                print(f"[WARNING] Ada {len(target_bases)} file yang TIDAK DITEMUKAN di hardisk Anda!")
+                print(f"[PhotoFlow] WARN  {len(target_bases)} file(s) not found on this computer.")
                 
         except Exception as e:
             print(f"[PhotoFlow] ✗ FATAL ERROR di Mesin Pemanen: {e}")
@@ -939,7 +939,7 @@ def auto_gather_raws(selected_filenames, source_folder, project_name="Selected_R
                 mc = len(target_bases) if 'target_bases' in locals() else 0
                 eel.auto_gather_complete(fc, mc)()
             except Exception as e:
-                print(f"[PhotoFlow] Gagal mengirim sinyal ke UI: {e}")
+                print(f"[PhotoFlow] WARN  Could not notify the UI: {e}")
 
     threading.Thread(target=_gather_worker, daemon=True).start()
     return {"success": True, "message": "Pemanen RAW berjalan di latar belakang"}
@@ -950,7 +950,7 @@ def download_drive_files(file_ids_list, local_dest_folder, user_id=None):
     try:
         return gdrive.download_drive_files(file_ids_list, local_dest_folder)
     except PermissionError:
-        return {"success": False, "error": "Sesi cloud berakhir. Mohon login ulang."}
+        return {"success": False, "error": "Your session has expired. Please sign in again."}
     except Exception as e:
         print(f"[PhotoFlow] ✗ Drive download failed: {e}")
         telemetry.capture(e)
@@ -960,12 +960,12 @@ def download_drive_files(file_ids_list, local_dest_folder, user_id=None):
 def check_drive_auth(user_id=None):
     """Test if the user's Drive connection is actually working by requesting a token."""
     if not auth.session.is_signed_in():
-        print("[PhotoFlow] Auth Polling: belum login.")
+        print("[PhotoFlow] Auth polling: not signed in.")
         return False
     try:
         return gdrive.get_drive_service() is not None
     except gdrive.DriveNotConnected as e:
-        print(f"[PhotoFlow] Drive belum terhubung: {e.code}")
+        print(f"[PhotoFlow] Google Drive not connected: {e.code}")
         return False
     except Exception as e:
         print(f"[PhotoFlow] Auth Polling Error: {e}")
@@ -1018,7 +1018,7 @@ def open_google_login(user_id=None):
     patah; nilainya diabaikan.
     """
     if not auth.session.is_signed_in():
-        print("[PhotoFlow] ✗ Tidak bisa membuka Google Login: belum login.")
+        print("[PhotoFlow] ERROR Cannot start Google sign-in: not signed in.")
         return False
 
     try:
@@ -1028,7 +1028,7 @@ def open_google_login(user_id=None):
             timeout=15,
         )
         if response.status_code != 200:
-            print(f"[PhotoFlow] ✗ Gagal meminta URL OAuth (HTTP {response.status_code})")
+            print(f"[PhotoFlow] ERROR Could not request the OAuth URL (HTTP {response.status_code})")
             return False
 
         auth_url = response.json().get("auth_url")
@@ -1040,7 +1040,7 @@ def open_google_login(user_id=None):
         webbrowser.open(auth_url)
         return True
     except SessionExpired:
-        print("[PhotoFlow] ✗ Sesi berakhir saat membuka Google Login.")
+        print("[PhotoFlow] ERROR Session expired while starting Google sign-in.")
         return False
     except Exception as e:
         print(f"[PhotoFlow] ✗ Google Login error: {e}")
@@ -1160,7 +1160,7 @@ def check_for_updates():
         # error membuat setiap kali aplikasi dibuka terlihat seperti ada yang
         # rusak.
         if e.code == 404:
-            print("[PhotoFlow] Belum ada rilis yang dipublikasikan.")
+            print("[PhotoFlow] No published releases yet.")
         else:
             print(f"[PhotoFlow] Update check failed: HTTP {e.code}")
         return None

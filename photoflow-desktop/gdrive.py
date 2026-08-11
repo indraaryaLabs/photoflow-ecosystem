@@ -44,9 +44,9 @@ class DriveNotConnected(Exception):
     def __init__(self, code="drive_not_connected"):
         self.code = code
         super().__init__(
-            "Google Drive belum terhubung. Hubungkan akun Google Anda terlebih dahulu."
+            "Google Drive is not connected. Connect your Google account first."
             if code == "drive_not_connected"
-            else "Koneksi Google Drive perlu diperbarui. Hubungkan ulang akun Google Anda."
+            else "Your Google Drive access needs renewing. Reconnect your Google account."
         )
 
 
@@ -69,7 +69,7 @@ def _fetch_access_token(force_refresh=False):
     if response.status_code == 200:
         token = response.json().get("access_token")
         if not token:
-            raise ValueError("Server tidak mengirimkan access token.")
+            raise ValueError("The server did not return an access token.")
         return token
 
     body = {}
@@ -87,7 +87,7 @@ def _fetch_access_token(force_refresh=False):
     if response.status_code == 401:
         if body.get("code") == "token_expired" and not force_refresh:
             return _fetch_access_token(force_refresh=True)
-        raise PermissionError("Sesi cloud berakhir. Mohon login ulang.")
+        raise PermissionError("Your session has expired. Please sign in again.")
 
     raise PermissionError(f"Backend Error {response.status_code}: {response.text[:200]}")
 
