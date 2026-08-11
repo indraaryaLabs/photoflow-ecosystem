@@ -28,7 +28,7 @@ def init(dsn):
         _sentry = sentry_sdk
         return True
     except Exception as exc:
-        print(f"[PhotoFlow] ✗ Sentry init gagal (tidak fatal): {exc}")
+        print(f"[PhotoFlow] WARN  Sentry init failed (non-fatal): {exc}")
         return False
 
 

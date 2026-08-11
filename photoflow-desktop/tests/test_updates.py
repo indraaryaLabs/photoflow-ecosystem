@@ -91,7 +91,7 @@ class CheckForUpdatesTest(unittest.TestCase):
                 self.assertIsNone(self.main.check_for_updates())
 
         printed = buffer.getvalue()
-        self.assertIn("Belum ada rilis", printed)
+        self.assertIn("No published releases", printed)
         self.assertNotIn("failed", printed.lower())
 
     def test_gagal_jaringan_tidak_melempar(self):
