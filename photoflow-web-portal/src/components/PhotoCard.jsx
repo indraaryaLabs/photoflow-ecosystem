@@ -52,7 +52,7 @@ const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
       {adaGambar ? (
         <img
           src={photo.thumbnailLink}
-          alt={photo.name || 'Foto galeri'}
+          alt={photo.name || 'Gallery photo'}
           loading="lazy"
           referrerPolicy="no-referrer"
           onLoad={() => setIsLoaded(true)}
@@ -66,7 +66,7 @@ const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-3 text-center bg-ash-200 dark:bg-ash-800">
           <ImageOff size={22} strokeWidth={1.75} className="text-ash-500 dark:text-ash-400" aria-hidden="true" />
           <span className="text-[11px] leading-snug font-medium text-ash-600 dark:text-ash-400 break-all line-clamp-3">
-            {photo.name || 'Pratinjau tidak tersedia'}
+            {photo.name || 'Preview unavailable'}
           </span>
         </div>
       )}
@@ -82,7 +82,8 @@ const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
             onOpenPreview(index);
           }}
           className="p-4 rounded-full bg-white/20 hover:bg-white/40 backdrop-blur-md text-white shadow-xl border border-white/20 transition-transform hover:scale-110 pointer-events-auto active:scale-95"
-          title="Lihat Detail"
+          title="View larger"
+          aria-label="View larger"
         >
           <Eye size={24} strokeWidth={1.75} />
         </button>

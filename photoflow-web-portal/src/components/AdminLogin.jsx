@@ -22,21 +22,21 @@ import ThemeToggle from './ThemeToggle';
  */
 function describeAuthError(error) {
   if (!error?.status || error.name === 'AuthRetryableFetchError') {
-    return 'Tidak dapat menghubungi server. Periksa koneksi internet Anda.';
+    return 'Could not reach the server. Check your internet connection.';
   }
   if (error.code === 'email_not_confirmed') {
-    return 'Email belum dikonfirmasi. Buka dulu tautan konfirmasi yang kami kirim.';
+    return 'Your email is not confirmed yet. Open the confirmation link we sent you first.';
   }
   if (error.status === 400 || error.status === 401) {
-    return 'Email atau password salah.';
+    return 'Incorrect email or password.';
   }
   if (error.status === 422) {
-    return error.message || 'Data yang dikirim tidak valid.';
+    return error.message || 'The details you entered are not valid.';
   }
   if (error.status === 429) {
-    return 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi.';
+    return 'Too many attempts. Please try again in a few minutes.';
   }
-  return 'Server sedang bermasalah. Coba lagi sebentar lagi.';
+  return 'The server is having trouble. Please try again shortly.';
 }
 
 export default function AdminLogin({ themeChoice, cycleTheme }) {
@@ -100,7 +100,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
       if (!wa.startsWith('62') || wa.length < 10 || wa.length > 15 || !/^\d+$/.test(wa)) {
         setFeedback({
           type: 'error',
-          message: 'Nomor WhatsApp tidak valid. Mulai dengan 62, 10–15 angka.'
+          message: 'That WhatsApp number is not valid. Start with 62 and use 10–15 digits.'
         });
         setIsLoading(false);
         return;
@@ -126,7 +126,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
         // (FINDINGS.md F-17). Sekarang penulisannya dibiarkan pada trigger.
         setFeedback({
           type: 'success',
-          message: 'Registrasi berhasil. Cek email untuk konfirmasi, lalu masuk.'
+          message: 'Account created. Check your email for the confirmation link, then sign in.'
         });
         setIsLoginMode(true);
       }
@@ -139,7 +139,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
   const handleForgotPassword = async () => {
     const email = formData.email.trim();
     if (!email) {
-      setFeedback({ type: 'error', message: 'Isi email dulu, lalu tekan "Lupa password".' });
+      setFeedback({ type: 'error', message: 'Enter your email address first, then choose "Forgot password".' });
       return;
     }
 
@@ -158,7 +158,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
     } else {
       setFeedback({
         type: 'success',
-        message: `Kalau ${email} terdaftar, tautan pemulihan sudah dikirim ke sana.`
+        message: `If ${email} is registered, a reset link is on its way to that address.`
       });
     }
     setIsLoading(false);
@@ -168,7 +168,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
   const handleUpdatePassword = async (e) => {
     e.preventDefault();
     if (newPassword.length < 6) {
-      setFeedback({ type: 'error', message: 'Password baru minimal 6 karakter.' });
+      setFeedback({ type: 'error', message: 'Your new password must be at least 6 characters.' });
       return;
     }
 
@@ -190,7 +190,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
     // Tautan pemulihan membawa serta sesi yang sah. Membuangnya memaksa
     // password baru itu benar-benar dipakai sekali sebelum masuk.
     await supabase.auth.signOut();
-    setFeedback({ type: 'success', message: 'Password berhasil diganti. Silakan masuk.' });
+    setFeedback({ type: 'success', message: 'Password updated. You can sign in now.' });
     setIsLoading(false);
   };
 
@@ -274,12 +274,12 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                   >
                     <h1 className="text-2xl font-semibold tracking-tight text-ash-900 dark:text-white mb-1.5 transition-colors duration-500">
                       {isRecovery
-                        ? "Ganti password"
+                        ? "Set a new password"
                         : (session ? "You're signed in" : (isLoginMode ? "Welcome back" : "Create an account"))}
                     </h1>
                     <p className="text-sm text-ash-600 dark:text-ash-400 font-medium transition-colors duration-500">
                       {isRecovery
-                        ? "Masukkan password baru untuk akun Anda."
+                        ? "Choose a new password for your account."
                         : (session
                           ? session.user.email
                           : (isLoginMode
@@ -332,7 +332,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                   <InputField
                     icon={KeyRound}
                     type={showPassword ? "text" : "password"}
-                    placeholder="Password baru (min. 6 karakter)"
+                    placeholder="New password (at least 6 characters)"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     autoComplete="new-password"
@@ -342,7 +342,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-ash-500 dark:text-ash-500 hover:text-ash-600 dark:hover:text-ash-300 transition-colors rounded-md focus:outline-none focus:ring-2 focus:ring-ash-400 dark:focus:ring-ash-500"
-                    aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
                   </button>
@@ -355,7 +355,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                   className="relative w-full py-3.5 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm shadow-sm transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   <div className="flex items-center justify-center gap-2">
-                    {isLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : <span>Simpan password baru</span>}
+                    {isLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : <span>Save new password</span>}
                   </div>
                 </motion.button>
               </form>
@@ -412,7 +412,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                         <InputField
                           icon={Phone}
                           type="tel"
-                          placeholder="WhatsApp (Contoh: 62812...)"
+                          placeholder="WhatsApp number (e.g. 62812...)"
                           value={formData.whatsapp}
                           onChange={(e) => {
                             let val = e.target.value;
@@ -468,7 +468,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                         disabled={isLoading}
                         className="text-xs font-medium text-ash-600 dark:text-ash-400 hover:text-ash-900 dark:hover:text-white transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-ash-400 dark:focus:ring-ash-500 rounded-sm"
                       >
-                        Lupa password?
+                        Forgot password?
                       </button>
                     </div>
                   )}
