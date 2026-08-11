@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Copy, Check, Plus, FolderOpen, Link as LinkIcon, Clock,
   CheckCircle2, Loader2, MoreVertical, Edit, Trash2, X, AlertOctagon,
-  LogOut, MessageCircle, ExternalLink, RotateCcw
+  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { API_BASE } from '../lib/api';
@@ -71,6 +71,20 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
   // daftar, bukan satu state per kartu. Lihat komentar di ProjectCard.
   const [openMenuId, setOpenMenuId] = useState(null);
   const closeMenu = useCallback(() => setOpenMenuId(null), []);
+
+  // Keadaan koneksi Google Drive.
+  //
+  // Sampai sekarang dashboard web tidak pernah menyinggung Google Drive sama
+  // sekali: tidak ada tombol untuk menghubungkan, dan tidak ada tanda kalau
+  // belum terhubung. Alur OAuth-nya sudah ada di backend sejak lama, tapi
+  // satu-satunya yang pernah memanggilnya adalah aplikasi desktop. Akibatnya
+  // siapa pun yang mendaftar lewat web tidak punya jalan untuk memberi izin,
+  // dan setiap project yang ia buat kosong tanpa penjelasan.
+  //
+  // null berarti belum diketahui, bukan belum terhubung — keduanya harus
+  // dibedakan supaya spanduknya tidak berkedip muncul saat halaman dimuat.
+  const [driveConnected, setDriveConnected] = useState(null);
+  const [connectingDrive, setConnectingDrive] = useState(false);
 
   // --- HELPERS ---
   const showToast = (message, type = 'success') => {
@@ -147,8 +161,92 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
     }
   };
 
+  const fetchDriveStatus = async () => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const res = await fetch(`${API_BASE}/api/gdrive/status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      // `unknown` berarti Drive tidak dapat dihubungi, bukan izinnya tidak ada.
+      // Memperlakukannya sebagai "belum terhubung" akan meminta fotografer
+      // menghubungkan ulang padahal tidak ada yang salah dengan izinnya.
+      setDriveConnected(data.unknown ? null : Boolean(data.connected));
+    } catch {
+      // Diamkan: keadaan koneksi bukan alasan menggagalkan seluruh dashboard.
+    }
+  };
+
+  // Mulai alur persetujuan Google. `return_to` membawa orangnya kembali ke
+  // halaman ini setelah menyetujui, bukan mendarat di halaman backend.
+  const handleConnectDrive = async () => {
+    setConnectingDrive(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+
+      const res = await fetch(`${API_BASE}/api/auth/google/url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ return_to: `${window.location.origin}/dashboard` })
+      });
+      if (!res.ok) throw new Error('Gagal memulai koneksi Google Drive');
+
+      const { auth_url: authUrl } = await res.json();
+      if (!authUrl) throw new Error('Gagal memulai koneksi Google Drive');
+      window.location.href = authUrl;
+    } catch (err) {
+      showToast(err.message || 'Gagal memulai koneksi Google Drive', 'error');
+      setConnectingDrive(false);
+    }
+  };
+
+  const handleResync = async (project) => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+
+      const sendRequest = (accessToken) => fetch(`${API_BASE}/api/projects/${project.id}/resync`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+
+      const checkedRes = await handleApiResponse(await sendRequest(token), sendRequest);
+      if (!checkedRes) return;
+
+      const body = await checkedRes.json().catch(() => null);
+      if (!checkedRes.ok) {
+        // Kode dari backend dibedakan: yang satu menuntut menghubungkan Drive,
+        // yang lain menuntut membetulkan izin folder. Tindakannya tidak sama.
+        if (body?.code === 'drive_not_connected' || body?.code === 'drive_reconnect_required') {
+          setDriveConnected(false);
+          showToast('Google Drive belum terhubung. Hubungkan dulu lewat tombol di atas.', 'error');
+          return;
+        }
+        throw new Error(body?.error || 'Gagal menarik ulang foto');
+      }
+
+      await fetchProjects();
+      const jumlah = body?.photos_found ?? 0;
+      if (jumlah > 0) showToast(`${jumlah} foto ditarik dari Drive.`);
+      else showToast('Foldernya terbaca, tapi tidak ada foto di dalamnya.', 'error');
+    } catch (err) {
+      if (err.message === 'Failed to fetch') {
+        showToast('Server tidak merespon. Coba lagi nanti.', 'error');
+      } else {
+        showToast(err.message, 'error');
+      }
+    }
+  };
+
   useEffect(() => {
     fetchProjects();
+    fetchDriveStatus();
   }, []);
 
   // --- HANDLERS ---
@@ -321,9 +419,25 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
         throw new Error(errorData?.error || errorData?.message || 'Gagal membuat project');
       }
 
+      // Backend membedakan "dibuat dan fotonya tertarik" dari "dibuat, tapi
+      // Drive gagal dibaca" — dan sampai sekarang perbedaan itu dibuang di
+      // sini, diganti satu kalimat hijau. Fotografer diberi tahu berhasil untuk
+      // project yang isinya nol foto, lalu mengirim galeri kosong ke kliennya.
+      const body = await checkedRes.json().catch(() => null);
+      const jumlahFoto = body?.photos_found;
+
       await fetchProjects();
+      await fetchDriveStatus();
       setFormData({ projectName: '', clientName: '', maxSelection: 50, driveLink: '', clientWa: '' });
-      showToast("Project berhasil dibuat!");
+
+      if (typeof jumlahFoto === 'number' && jumlahFoto > 0) {
+        showToast(`Project dibuat. ${jumlahFoto} foto ditarik dari Drive.`);
+      } else {
+        showToast(
+          body?.message || 'Project dibuat, tapi tidak ada foto yang bisa ditarik dari Drive.',
+          'error'
+        );
+      }
     } catch (err) {
       if (err.message === 'Failed to fetch') {
         showToast('Tidak dapat terhubung ke server. Periksa koneksi internet Anda.', 'error');
@@ -401,6 +515,37 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
 
         {/* CONTENT GRID */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
+
+          {/* Tanpa koneksi Google Drive, tidak ada satu pun foto yang bisa
+              ditarik — dan sampai sekarang tidak ada apa pun di layar ini yang
+              mengatakannya. Spanduk ini muncul lebih dulu daripada kegagalan,
+              bukan sesudahnya. */}
+          {driveConnected === false && (
+            <div
+              role="status"
+              className="mb-8 flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl border border-warning-200 bg-warning-50 px-5 py-4 dark:border-warning-400/20 dark:bg-warning-400/10"
+            >
+              <AlertTriangle size={20} strokeWidth={1.75} className="shrink-0 text-warning-500 dark:text-warning-400" aria-hidden="true" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-ash-900 dark:text-ash-100">Google Drive belum terhubung</p>
+                <p className="text-sm text-ash-600 dark:text-ash-300 mt-0.5">
+                  PhotoFlow perlu izin membaca Drive Anda untuk menarik daftar foto. Sampai
+                  itu diberikan, setiap project yang dibuat akan kosong.
+                </p>
+              </div>
+              <button
+                onClick={handleConnectDrive}
+                disabled={connectingDrive}
+                className="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 text-sm font-semibold shadow-sm transition-colors disabled:opacity-50"
+              >
+                {connectingDrive
+                  ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
+                  : <LinkIcon size={16} strokeWidth={1.75} />}
+                Hubungkan Google Drive
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
             {/* LEFT PANEL: FORM */}
@@ -574,6 +719,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
                         window.open(`${window.location.origin}/?token=${project.magic_link_token}`, '_blank', 'noopener');
                       }}
                       onReopen={() => setReopeningProject(project)}
+                      onResync={() => handleResync(project)}
                       onWhatsApp={() => {
                         const url = `${window.location.origin}/?token=${project.magic_link_token}`;
                         const text = `Halo Kak ${project.client_name},\nBerikut adalah link galeri foto untuk project *${project.project_name}*.\n\nSilakan klik link di bawah ini untuk mulai memilih foto (Maksimal ${project.max_selections} foto):\n${url}\n\nTerima kasih atas kepercayaannya.`;
@@ -722,7 +868,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
  * "Delete" hilang di baliknya. Dengan satu penanda di induk, hanya satu kartu
  * yang pernah terangkat, jadi tumpang tindih itu tidak mungkin terjadi lagi.
  */
-function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, onCopy, onOpenGallery, onWhatsApp, onEdit, onDelete, onReopen }) {
+function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, onCopy, onOpenGallery, onWhatsApp, onEdit, onDelete, onReopen, onResync }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopyClick = () => {
@@ -762,6 +908,7 @@ function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, on
   }, [isMenuOpen, onCloseMenu]);
 
   const isPending = project.status === 'pending';
+  const jumlahFoto = project.photo_count ?? 0;
 
   return (
     <div
@@ -788,7 +935,11 @@ function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, on
               {new Date(project.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
             </span>
             <span className="w-1 h-1 rounded-full bg-ash-300 dark:bg-ash-700"></span>
-            <span>{project.max_selections} Photos</span>
+            <span className={jumlahFoto === 0 ? 'text-warning-600 dark:text-warning-400 font-semibold' : undefined}>
+              {jumlahFoto === 0
+                ? 'Belum ada foto'
+                : `${jumlahFoto} foto · maks ${project.max_selections} pilihan`}
+            </span>
           </div>
         </div>
       </div>
@@ -857,6 +1008,9 @@ function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, on
               <div role="menu" className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-ash-900 border border-ash-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden z-20 animate-slide-up-fade origin-top-right">
                 <button role="menuitem" onClick={() => { onCloseMenu(); onEdit(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-ash-700 dark:text-ash-300 hover:bg-ash-50 dark:hover:bg-white/5 flex items-center gap-2">
                   <Edit size={14} strokeWidth={1.75} /> Edit
+                </button>
+                <button role="menuitem" onClick={() => { onCloseMenu(); onResync(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-ash-700 dark:text-ash-300 hover:bg-ash-50 dark:hover:bg-white/5 flex items-center gap-2 whitespace-nowrap">
+                  <RefreshCw size={14} strokeWidth={1.75} /> Re-sync from Drive
                 </button>
                 {!isPending && (
                   <button role="menuitem" onClick={() => { onCloseMenu(); onReopen(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-ash-700 dark:text-ash-300 hover:bg-ash-50 dark:hover:bg-white/5 flex items-center gap-2">

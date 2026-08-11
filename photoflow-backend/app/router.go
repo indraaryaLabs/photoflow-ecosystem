@@ -105,6 +105,10 @@ func SetupRouter() (*gin.Engine, error) {
 	// untuk alasan kenapa ini perlu ada.
 	r.POST("/api/projects/:id/reopen", requireAuth, h.ReopenSelection)
 
+	// Menarik ulang daftar foto dari Drive untuk project yang sudah ada. Tanpa
+	// ini, membetulkan izin folder setelah project dibuat tidak ada gunanya.
+	r.POST("/api/projects/:id/resync", requireAuth, h.ResyncProject)
+
 	// --- GOOGLE DRIVE ---
 	// Dipakai desktop app untuk mengunduh berkas aslinya.
 	//
@@ -114,6 +118,10 @@ func SetupRouter() (*gin.Engine, error) {
 	// terjangkau service account. Penggantinya GET /api/p/:magic_link/photos,
 	// yang menentukan pemilik lewat galeri yang diminta.
 	r.GET("/api/gdrive/token", requireAuth, h.DriveToken)
+
+	// Dipakai dashboard web untuk tahu apakah Drive sudah terhubung, sebelum
+	// kegagalan pertama terjadi.
+	r.GET("/api/gdrive/status", requireAuth, h.DriveStatus)
 
 	return r, nil
 }
