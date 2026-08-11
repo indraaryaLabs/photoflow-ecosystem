@@ -72,7 +72,7 @@ async function handleLogin() {
     const password = passwordInput.value;
 
     if (!email || !password) {
-        loginError.textContent = 'Mohon isi email dan password.';
+        loginError.textContent = 'Enter your email and password.';
         loginError.style.display = 'block';
         return;
     }
@@ -109,13 +109,13 @@ async function handleLogin() {
             if (savedToken) {
                 setLoginOverlayVisible(false);
                 applyOfflineMode(true);
-                showAdvancedToast('Mode Offline: Menggunakan sesi tersimpan. Beberapa fitur cloud dinonaktifkan.', 'warning');
+                showAdvancedToast('Offline mode. Using your saved session; cloud features are unavailable.', 'warning');
             } else {
-                loginError.textContent = 'Tidak ada koneksi internet dan tidak ada sesi tersimpan. Hubungkan internet untuk login pertama kali.';
+                loginError.textContent = 'No internet connection and no saved session. Your first sign-in needs to be online.';
                 loginError.style.display = 'block';
             }
         } else {
-            loginError.textContent = result?.message || 'Login gagal. Periksa email dan password Anda.';
+            loginError.textContent = result?.message || 'Sign-in failed. Check your email and password.';
             loginError.style.display = 'block';
         }
     } catch (err) {
@@ -125,9 +125,9 @@ async function handleLogin() {
         if (savedToken) {
             setLoginOverlayVisible(false);
             applyOfflineMode(true);
-            showAdvancedToast('Mode Offline: Menggunakan sesi tersimpan.', 'warning');
+            showAdvancedToast('Offline mode. Using your saved session.', 'warning');
         } else {
-            loginError.textContent = 'Koneksi ke backend gagal. Pastikan aplikasi berjalan dengan benar.';
+            loginError.textContent = 'Could not reach the PhotoFlow service. Check your connection and try again.';
             loginError.style.display = 'block';
         }
     } finally {
@@ -325,41 +325,82 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ---------------------------------------------------------
-// THEME MANAGEMENT (Light / Dark Mode)
+// THEME MANAGEMENT (Light / Dark / Follow system)
 // ---------------------------------------------------------
+//
+// Disamakan dengan src/lib/theme.js di aplikasi web. Ada TIGA keadaan, bukan
+// dua: `system`, `light`, dan `dark`. Yang membedakan `system` dari keduanya
+// adalah TIDAK ADANYA nilai tersimpan -- bukan sebuah nilai bernama "system".
+//
+// Versi sebelumnya hanya punya dua keadaan. Preferensi sistem memang dibaca
+// saat aplikasi dibuka, tapi begitu tombolnya ditekan sekali, nilai tersimpan
+// itu menang selamanya dan tidak ada lagi jalan kembali mengikuti perangkat.
+// Perubahan tema di sistem operasi saat aplikasi sedang terbuka juga tidak
+// pernah diikuti.
 const themeBtn = document.getElementById('btn-theme-toggle');
-const themeIcon = themeBtn.querySelector('i');
+const themeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+const THEME_CYCLE = ['system', 'light', 'dark'];
 
-// Check local storage or system preference
-const savedTheme = localStorage.getItem('theme');
-const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    updateThemeIcon('dark');
+function readThemeChoice() {
+    try {
+        const saved = localStorage.getItem('theme');
+        return saved === 'light' || saved === 'dark' ? saved : 'system';
+    } catch {
+        return 'system';
+    }
 }
 
-themeBtn.addEventListener('click', () => {
-    const currentTheme = document.documentElement.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+function resolveTheme(choice) {
+    if (choice === 'system') return themeQuery.matches ? 'dark' : 'light';
+    return choice;
+}
 
-    if (newTheme === 'dark') {
+function applyTheme(choice) {
+    const resolved = resolveTheme(choice);
+    if (resolved === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
     } else {
         document.documentElement.removeAttribute('data-theme');
     }
+    // Supaya scrollbar, kotak isian, dan menu bawaan Chromium ikut temanya.
+    document.documentElement.style.colorScheme = resolved;
+    updateThemeIcon(choice);
+}
 
-    localStorage.setItem('theme', newTheme);
-    updateThemeIcon(newTheme);
-});
-
-function updateThemeIcon(theme) {
-    // Re-render icon based on theme
-    themeBtn.innerHTML = theme === 'dark'
-        ? '<i data-lucide="sun"></i>'
-        : '<i data-lucide="moon"></i>';
+function updateThemeIcon(choice) {
+    const icon = choice === 'light' ? 'sun' : choice === 'dark' ? 'moon' : 'monitor';
+    const label = choice === 'light'
+        ? 'Theme: light. Click for dark.'
+        : choice === 'dark'
+            ? 'Theme: dark. Click to follow your system.'
+            : 'Theme: following your system. Click for light.';
+    themeBtn.innerHTML = `<i data-lucide="${icon}"></i>`;
+    themeBtn.title = label;
+    themeBtn.setAttribute('aria-label', label);
     lucide.createIcons();
 }
+
+themeBtn.addEventListener('click', () => {
+    const current = readThemeChoice();
+    const next = THEME_CYCLE[(THEME_CYCLE.indexOf(current) + 1) % THEME_CYCLE.length];
+    try {
+        // Mengikuti sistem berarti tidak menyimpan apa pun, bukan menyimpan
+        // kata "system". Menghapusnya adalah cara keadaan itu diraih kembali.
+        if (next === 'system') localStorage.removeItem('theme');
+        else localStorage.setItem('theme', next);
+    } catch {
+        // Tidak bisa menyimpan bukan alasan untuk tidak menerapkan temanya.
+    }
+    applyTheme(next);
+});
+
+// Perubahan tema di sistem operasi selagi aplikasi terbuka. Hanya berlaku
+// ketika belum ada pilihan tersimpan; pilihan yang disengaja tetap menang.
+themeQuery.addEventListener('change', () => {
+    if (readThemeChoice() === 'system') applyTheme('system');
+});
+
+applyTheme(readThemeChoice());
 
 // ---------------------------------------------------------
 // STATE & DATA
@@ -991,7 +1032,7 @@ btnCopy.addEventListener('click', async () => {
             const failedSet = new Set(failed_files);
             const statusList = document.getElementById('bulk-status-list');
             if (statusList) {
-                statusList.innerHTML = ''; // Kosongkan daftar sebelum eksekusi baru
+                statusList.innerHTML = ''; // Clear the list before a new run
                 filePaths.forEach(fp => {
                     const fname = fp.split(/[\\/]/).pop();
                     if (failedSet.has(fname)) {
@@ -1355,7 +1396,7 @@ function renderGlobalBanner() {
 
     if (allVisibleSelected && !state.isGlobalSelected && state.validFiles.length > state.pageSize) {
         banner.style.display = 'block';
-        banner.innerHTML = `Semua foto di halaman ini terpilih. <a href="#" id="link-global-select">Pilih semua ${state.validFiles.length} foto di folder ini</a>`;
+        banner.innerHTML = `Every photo on this page is selected. <a href="#" id="link-global-select">Select all ${state.validFiles.length} photos in this folder</a>`;
         document.getElementById('link-global-select').addEventListener('click', (e) => {
             e.preventDefault();
             state.isGlobalSelected = true;
@@ -1364,7 +1405,7 @@ function renderGlobalBanner() {
         });
     } else if (state.isGlobalSelected) {
         banner.style.display = 'block';
-        banner.innerHTML = `Semua ${state.validFiles.length} foto telah terpilih. <a href="#" id="link-global-clear">Bersihkan pilihan</a>`;
+        banner.innerHTML = `All ${state.validFiles.length} photos are selected. <a href="#" id="link-global-clear">Clear selection</a>`;
         document.getElementById('link-global-clear').addEventListener('click', (e) => {
             e.preventDefault();
             state.isGlobalSelected = false;
@@ -1722,7 +1763,7 @@ async function openDriveFolder(folderId, folderName) {
     // Show Loading
     driveGrid.innerHTML = `
         <div style="grid-column: 1 / -1; display: flex; justify-content: center; padding: 40px;">
-            <div class="spinner-ring" style="border-color: rgba(96, 165, 250, 0.2); border-top-color: #60a5fa;"></div>
+            <div class="spinner-ring" style="border-color: var(--border-light); border-top-color: var(--text-main);"></div>
         </div>
     `;
     
@@ -1885,7 +1926,7 @@ function renderDriveContents() {
         }
         
         const iconHtml = isFolder 
-            ? '<i data-lucide="folder" style="width: 16px; height: 16px; margin-right: 8px; vertical-align: middle; color: #60a5fa;"></i>'
+            ? '<i data-lucide="folder" style="width: 16px; height: 16px; margin-right: 8px; vertical-align: middle; color: var(--text-muted);"></i>'
             : '<i data-lucide="file" style="width: 16px; height: 16px; margin-right: 8px; vertical-align: middle;"></i>';
 
         row.innerHTML = `
@@ -1944,7 +1985,7 @@ function renderDriveContents() {
             const nameEl = row.querySelector('.drive-item-name');
             const currentName = nameEl ? nameEl.innerText : "";
             
-            const newName = prompt("Masukkan nama baru:", currentName);
+            const newName = prompt("New name", currentName);
             if (newName && newName.trim() !== "" && newName.trim() !== currentName) {
                 try {
                     const result = await eel.rename_drive_item(fileId, newName.trim(), localStorage.getItem('user_id'))();
@@ -2031,9 +2072,9 @@ function auto_gather_complete(foundCount, missingCount) {
     
     // Tampilkan notifikasi pintar
     if (missingCount > 0) {
-        showAdvancedToast(`Pemanenan Selesai: ${foundCount} file berhasil disalin. PERINGATAN: ${missingCount} file tidak ditemukan di Hardisk Anda.`, "warning");
+        showAdvancedToast(`Collected ${foundCount} file${foundCount === 1 ? "" : "s"}. ${missingCount} could not be found on this computer.`, "warning");
     } else {
-        showAdvancedToast(`Pemanenan Sukses! ${foundCount} file berhasil dikumpulkan.`, "success");
+        showAdvancedToast(`Collected ${foundCount} file${foundCount === 1 ? "" : "s"}.`, "success");
     }
 }
 
@@ -2175,7 +2216,7 @@ async function loadModalFolder(folderId) {
     state.modalCurrentFolder = folderId;
     renderModalBreadcrumbs();
     
-    modalFolderList.innerHTML = `<div style="text-align:center; padding: 20px;"><div class="spinner-ring" style="border-color: rgba(96, 165, 250, 0.2); border-top-color: #60a5fa; width: 24px; height: 24px;"></div></div>`;
+    modalFolderList.innerHTML = `<div style="text-align:center; padding: 20px;"><div class="spinner-ring" style="border-color: var(--border-light); border-top-color: var(--text-main); width: 24px; height: 24px;"></div></div>`;
     
     try {
         const folders = await eel.get_drive_folders_only(folderId, localStorage.getItem('user_id'))();
@@ -2227,7 +2268,7 @@ function renderModalFolderItems(folders) {
         const item = document.createElement('div');
         item.className = 'modal-folder-item';
         item.innerHTML = `
-            <i data-lucide="folder" style="color: #60a5fa; fill: rgba(96, 165, 250, 0.1); width: 20px; height: 20px;"></i>
+            <i data-lucide="folder" style="color: var(--text-muted); fill: var(--accent-light); width: 20px; height: 20px;"></i>
             <span>${f.name}</span>
         `;
         
@@ -2521,7 +2562,7 @@ async function runUpdateCheck() {
     try {
         const updateInfo = await eel.check_for_updates()();
         if (updateInfo && updateInfo.latest_version) {
-            const confirmed = confirm(`Versi baru tersedia (v${updateInfo.latest_version})!\nApakah Anda ingin mengunduhnya sekarang?`);
+            const confirmed = confirm(`PhotoFlow ${updateInfo.latest_version} is available.\n\nDownload it now?`);
             if (confirmed && updateInfo.download_url) {
                 eel.open_url(updateInfo.download_url)();
             }
@@ -2590,7 +2631,7 @@ if (btnDriveAccount) {
 
         if (isConnected) {
             // ─── DISCONNECT FLOW ───────────────────────────
-            const logoutConfirm = confirm("Anda sudah terhubung. Apakah Anda ingin Logout dan mengganti akun Google Drive?");
+            const logoutConfirm = confirm("Google Drive is already connected.\n\nDisconnect and sign in with a different Google account?");
             if (!logoutConfirm) return;
 
             await eel.logout_drive_account(localStorage.getItem('user_id'))();
@@ -2620,7 +2661,7 @@ if (btnDriveAccount) {
                 state.selectedDriveFiles.clear();
             }
 
-            showAdvancedToast("Google Drive berhasil di-disconnect.", "info");
+            showAdvancedToast("Google Drive disconnected.", "info");
             return;
         }
 
@@ -2635,7 +2676,7 @@ if (btnDriveAccount) {
         const userId = localStorage.getItem('user_id');
         await eel.open_google_login(userId)();
 
-        showAdvancedToast("Browser dibuka untuk login Google Drive. Silakan selesaikan proses di browser Anda.", "info");
+        showAdvancedToast("Your browser is open. Finish granting access to Google Drive there.", "info");
 
         // Poll: check every 3s, max 20 attempts (60s)
         let attempts = 0;
@@ -2656,13 +2697,13 @@ if (btnDriveAccount) {
                     btnDriveAccount.style.opacity = '';
                     btnDriveAccount.style.pointerEvents = '';
                     await updateDriveAuthUI();
-                    showAdvancedToast("Google Drive berhasil terhubung!", "success");
+                    showAdvancedToast("Google Drive connected.", "success");
 
                     // Clear stale workspace and force-reload root
                     const driveGridReload = document.getElementById('drive-grid');
                     if (driveGridReload) {
                         driveGridReload.innerHTML = `<div style="grid-column: 1/-1; display: flex; justify-content: center; padding: 40px;">
-                            <div class="spinner-ring" style="border-color: rgba(96, 165, 250, 0.2); border-top-color: #60a5fa;"></div>
+                            <div class="spinner-ring" style="border-color: var(--border-light); border-top-color: var(--text-main);"></div>
                         </div>`;
                     }
                     if (typeof openDriveFolder === 'function') {
@@ -2730,7 +2771,7 @@ async function openSyncSelectionsModal() {
     btnConsolidateRaws.disabled = true;
     
     projectSyncModal.style.display = 'flex';
-    projectListContainer.innerHTML = '<div style="text-align:center; padding: 20px;"><div class="spinner-ring" style="border-color: rgba(96, 165, 250, 0.2); border-top-color: #60a5fa; width: 24px; height: 24px;"></div></div>';
+    projectListContainer.innerHTML = '<div style="text-align:center; padding: 20px;"><div class="spinner-ring" style="border-color: var(--border-light); border-top-color: var(--text-main); width: 24px; height: 24px;"></div></div>';
     setTimeout(() => { projectSyncModal.classList.add('active'); }, 10);
     
     let res = await eel.get_submitted_projects()();
@@ -2747,9 +2788,9 @@ async function openSyncSelectionsModal() {
                 card.style.alignItems = 'flex-start';
                 card.style.gap = '4px';
                 card.innerHTML = `
-                    <div style="font-weight: 500; font-size: 1.1em; color: var(--text-primary);"><i data-lucide="folder-check" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 6px; color: #60a5fa;"></i>${proj.project_name}</div>
+                    <div style="font-weight: 500; font-size: 1.1em; color: var(--text-primary);"><i data-lucide="folder-check" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 6px; color: var(--text-muted);"></i>${proj.project_name}</div>
                     <div style="color: var(--text-muted); font-size: 0.9em;">Client: ${proj.client_name}</div>
-                    <div style="color: #60a5fa; font-size: 0.85em; font-weight: 500;">Shortlisted Assets: ${proj.selection_count || 0}</div>
+                    <div style="color: var(--text-muted); font-size: 0.85em; font-weight: 500;">Shortlisted Assets: ${proj.selection_count || 0}</div>
                 `;
                 card.addEventListener('click', () => {
                     document.querySelectorAll('#project-list-container .modal-folder-item').forEach(el => el.classList.remove('active'));
@@ -2786,7 +2827,7 @@ if (btnConsolidateRaws) {
         
         // Validasi Source Folder TERLEBIH DAHULU
         if (!state.sourcePath) {
-            showAdvancedToast("Mohon klik tombol 'Source Folder' di sidebar kiri dan pilih folder Anda terlebih dahulu.", "warning");
+            showAdvancedToast("Choose a source folder first, using the button in the left sidebar.", "warning");
             closeSyncSelectionsModal();
             return;
         }
@@ -2801,12 +2842,12 @@ if (btnConsolidateRaws) {
         try {
             let fileRes = await eel.get_project_filenames(selectedSyncProjectId)();
             if (!fileRes || !fileRes.success || fileRes.data.length === 0) {
-                showAdvancedToast("Tidak ada foto yang dipilih klien atau koneksi gagal.", "warning");
+                showAdvancedToast("No client selections found, or the service could not be reached.", "warning");
                 throw new Error("No files");
             }
 
             // Hapus pemanggilan destFolder dari Frontend, dipindah ke OS Backend
-            showAdvancedToast("Mohon pilih folder tujuan export di jendela yang muncul...", "info");
+            showAdvancedToast("Choose where to save the collected files in the window that just opened.", "info");
             
             const result = await eel.auto_gather_raws(fileRes.data, state.sourcePath, selectedSyncProjectName)();
             
