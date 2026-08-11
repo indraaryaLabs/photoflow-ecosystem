@@ -657,9 +657,15 @@ bulkTextarea.addEventListener('input', () => {
         cleanLines.push(cleanName);
         
         // 3. Validasi Eksistensi (Cross-reference dengan file lokal yang sudah di-scan)
-        // state.scannedFiles holds {filename, path}
-        const fileExists = state.scannedFiles && state.scannedFiles.some(f => f.filename.toLowerCase() === cleanName.toLowerCase());
-        
+        //
+        // Dicocokkan pada NAMA DASARNYA, bukan nama lengkapnya. Daftar yang
+        // ditempel di sini datang dari klien, dan klien memilih dari JPG --
+        // sementara folder yang dipindai fotografer berisi RAW. Pencocokan
+        // nama-lengkap membuat `IMG_1234.jpg` tidak pernah bertemu
+        // `IMG_1234.CR3`, jadi seluruh daftar dilaporkan "not found" persis
+        // pada keadaan yang paling sering terjadi.
+        const fileExists = basenameIndex().has(stripExtension(cleanName).toLowerCase());
+
         if (fileExists) {
             validCount++;
         } else {
@@ -1165,6 +1171,50 @@ btnMove.addEventListener('click', async () => {
 // ---------------------------------------------------------
 // BULK MODE: Resolve filenames to absolute paths
 // ---------------------------------------------------------
+// Ekstensi RAW, urut menurut pilihan. Salinan dari RAW_EXTENSIONS di main.py;
+// yang asli dari kamera didahulukan, .dng terakhir karena hampir selalu hasil
+// konversi.
+const RAW_EXT_ORDER = ['cr3', 'cr2', 'nef', 'nrw', 'arw', 'raf', 'rw2', 'orf', 'pef', 'dng'];
+
+function extensionOf(name) {
+    const titik = name.lastIndexOf('.');
+    return titik > 0 ? name.slice(titik + 1).toLowerCase() : '';
+}
+
+/**
+ * Petakan nama dasar ke seluruh berkas hasil pindai yang memakainya.
+ *
+ * Dibangun ulang hanya ketika daftar hasil pindai berubah -- validasi bulk
+ * berjalan pada setiap ketikan, dan menelusuri ribuan berkas tiap huruf akan
+ * terasa.
+ */
+let _basenameIndex = null;
+let _basenameIndexSrc = null;
+let _basenameIndexFor = -1;
+
+function basenameIndex() {
+    const files = state.scannedFiles || [];
+    // Dua penanda sekaligus. Panjangnya berubah saat potongan hasil pindai
+    // berdatangan; identitas array-nya berganti saat folder baru dipilih
+    // (state.scannedFiles diisi array kosong yang baru). Memakai panjang saja
+    // akan meleset kalau folder baru kebetulan berisi jumlah berkas yang sama.
+    if (_basenameIndex && _basenameIndexSrc === files && _basenameIndexFor === files.length) {
+        return _basenameIndex;
+    }
+
+    const peta = new Map();
+    files.forEach(f => {
+        const dasar = stripExtension(f.filename).toLowerCase();
+        if (!peta.has(dasar)) peta.set(dasar, []);
+        peta.get(dasar).push(f);
+    });
+
+    _basenameIndex = peta;
+    _basenameIndexSrc = files;
+    _basenameIndexFor = files.length;
+    return peta;
+}
+
 function getBulkFilePaths() {
     const rawText = bulkTextarea.value.trim();
     if (!rawText) return [];
@@ -1173,20 +1223,31 @@ function getBulkFilePaths() {
         return name.replace(/^(\d+[\.\)]\s*|[-\*]\s*)/, '').trim();
     }).filter(name => name.length > 0);
 
-    const uniqueNames = [...new Set(cleanFilenames)];
+    // Nama dasar yang sama diminta dua kali (`IMG_1.jpg` dan `IMG_1.jpeg`)
+    // tetap satu berkas.
+    const uniqueBases = [...new Set(cleanFilenames.map(n => stripExtension(n).toLowerCase()))];
 
-    // Match typed filenames against real scanned files to get full paths
-    const pathMap = {};
-    state.scannedFiles.forEach(f => { pathMap[f.filename.toLowerCase()] = f.path; });
-
+    const indeks = basenameIndex();
     const resolved = [];
-    uniqueNames.forEach(name => {
-        const match = pathMap[name.toLowerCase()];
-        if (match) resolved.push(match);
+    let missing = 0;
+
+    uniqueBases.forEach(dasar => {
+        const kandidat = indeks.get(dasar);
+        if (!kandidat || !kandidat.length) { missing += 1; return; }
+
+        // RAW menang atas JPG. Folder yang dipindai fotografer biasanya memuat
+        // keduanya dengan nama dasar yang sama -- justru karena disiplin
+        // penamaan itu dijaga -- dan yang dibutuhkan untuk mengedit adalah
+        // RAW-nya.
+        const terurut = [...kandidat].sort((a, b) => {
+            const pa = RAW_EXT_ORDER.indexOf(extensionOf(a.filename));
+            const pb = RAW_EXT_ORDER.indexOf(extensionOf(b.filename));
+            return (pa < 0 ? RAW_EXT_ORDER.length : pa) - (pb < 0 ? RAW_EXT_ORDER.length : pb);
+        });
+        resolved.push(terurut[0].path);
     });
 
-    if (resolved.length < uniqueNames.length) {
-        const missing = uniqueNames.length - resolved.length;
+    if (missing > 0) {
         console.warn(`[PhotoFlow] Bulk: ${missing} filename(s) could not be matched to scanned files.`);
     }
 
@@ -2064,25 +2125,37 @@ function sync_complete() {
 }
 
 eel.expose(auto_gather_complete);
-function auto_gather_complete(foundCount, missingCount) {
+function auto_gather_complete(payload) {
     const btn = document.getElementById('btn-consolidate-raws');
     if (btn) {
-        btn.innerHTML = 'Consolidate RAW Files';
+        btn.innerHTML = 'Check selection';
         btn.disabled = false;
         lucide.createIcons();
     }
-    
-    // Tutup modal
+
     const modal = document.getElementById('project-sync-modal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-    
-    // Tampilkan notifikasi pintar
-    if (missingCount > 0) {
-        showAdvancedToast(`Collected ${foundCount} file${foundCount === 1 ? "" : "s"}. ${missingCount} could not be found on this computer.`, "warning");
+    if (modal) modal.style.display = 'none';
+
+    const disalin = payload?.copied ?? 0;
+    const gagal = payload?.failed || [];
+    const c = payload?.result?.counts || {};
+    const noun = disalin === 1 ? 'file' : 'files';
+
+    // Yang tidak ketemu sudah ditampilkan berikut namanya di layar pemeriksaan
+    // sebelum penyalinan dimulai, jadi di sini cukup ringkasannya. Nama berkas
+    // yang GAGAL disalin tetap dirinci: itu kejadian baru, bukan sesuatu yang
+    // sudah dilihat orangnya.
+    const sisa = (c.missing || 0) + (c.raw_absent || 0) + (c.ambiguous || 0);
+
+    if (gagal.length > 0) {
+        showAdvancedToast(
+            `Collected ${disalin} ${noun}. ${gagal.length} could not be copied.`,
+            "warning", gagal,
+        );
+    } else if (sisa > 0) {
+        showAdvancedToast(`Collected ${disalin} ${noun}. ${sisa} skipped, as listed before.`, "warning");
     } else {
-        showAdvancedToast(`Collected ${foundCount} file${foundCount === 1 ? "" : "s"}.`, "success");
+        showAdvancedToast(`Collected ${disalin} ${noun}.`, "success");
     }
 }
 
@@ -2097,7 +2170,7 @@ function resetUploadState() {
     }
     if (btnPreview) {
         btnPreview.disabled = false;
-        btnPreview.innerHTML = "Quick Preview (Kompres)";
+        btnPreview.innerHTML = "Quick Preview (compressed)";
     }
     if (btnBackup) {
         btnBackup.disabled = false;
@@ -2209,7 +2282,7 @@ function closeDriveMoveModal() {
     }
     if (btnPreview) {
         btnPreview.disabled = false;
-        btnPreview.innerHTML = "Quick Preview (Kompres)";
+        btnPreview.innerHTML = "Quick Preview (compressed)";
         btnPreview.style.display = 'none';
     }
     if (btnBackup) {
@@ -2421,7 +2494,7 @@ if (btnModalPreview) {
             showAdvancedToast(`Upload Error: ${err.message || err}`, "error");
             btnModalPreview.disabled = false;
             if (btnModalBackup) btnModalBackup.disabled = false;
-            btnModalPreview.innerHTML = "Quick Preview (Kompres)";
+            btnModalPreview.innerHTML = "Quick Preview (compressed)";
         }
     });
 }
@@ -2729,7 +2802,7 @@ if (btnDriveAccount) {
                     icon.style.color = '#ef4444';
                     lucide.createIcons();
                     btnDriveAccount.dataset.connected = 'false';
-                    showAdvancedToast("Waktu login habis atau dibatalkan.", "warning");
+                    showAdvancedToast("Sign-in timed out or was cancelled.", "warning");
                 }
             } catch (error) {
                 console.error("[PhotoFlow] Polling error, retrying...", error);
@@ -2745,7 +2818,7 @@ if (btnDriveAccount) {
                     icon.style.color = '#ef4444';
                     lucide.createIcons();
                     btnDriveAccount.dataset.connected = 'false';
-                    showAdvancedToast("Koneksi ke server bermasalah. Coba lagi nanti.", "warning");
+                    showAdvancedToast("Could not reach the server. Please try again later.", "warning");
                 }
             }
         }, 3000);
@@ -2767,17 +2840,117 @@ if (btnOpenWebAdmin) {
     });
 }
 
-const btnSyncSelections = document.getElementById('btn-sync-selections');
+// Tombolnya bernama btn-fetch-selections di HTML. Berkas ini mencari
+// 'btn-sync-selections' -- id yang tidak pernah ada -- sehingga
+// getElementById mengembalikan null, penjaga `if (btnSyncSelections)` di
+// bawah menelannya tanpa suara, dan SELURUH alur "Fetch Client Selections"
+// tidak pernah bisa dibuka sama sekali. Modalnya lengkap, kodenya jalan,
+// hanya tidak ada yang memanggilnya.
+const btnSyncSelections = document.getElementById('btn-fetch-selections');
 const projectSyncModal = document.getElementById('project-sync-modal');
 const projectListContainer = document.getElementById('project-list-container');
 const btnConsolidateRaws = document.getElementById('btn-consolidate-raws');
 const btnProjectSyncCancel = document.getElementById('btn-project-sync-cancel');
+const btnPreflightBack = document.getElementById('btn-preflight-back');
+const btnCopyLightroom = document.getElementById('btn-copy-lightroom');
+const btnCollectConfirm = document.getElementById('btn-collect-confirm');
+const preflightPanel = document.getElementById('preflight-panel');
+const preflightSummary = document.getElementById('preflight-summary');
+const preflightDetail = document.getElementById('preflight-detail');
+
+// Nama pilihan klien dan hasil pencocokannya, disimpan di antara langkah
+// "periksa" dan langkah "salin".
+let selectedSyncFilenames = [];
+let preflightResult = null;
+
+/** Buang ekstensi. Lihat catatan di showPreflight() untuk alasannya. */
+function stripExtension(name) {
+    const titik = name.lastIndexOf('.');
+    return titik > 0 ? name.slice(0, titik) : name;
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+}
+
+function preflightGroup(judul, nama, terbuka) {
+    if (!nama.length) return '';
+    const isi = nama.map(escapeHtml).join('<br>');
+    return `<details class="preflight-group"${terbuka ? ' open' : ''}>
+        <summary>${escapeHtml(judul)} (${nama.length})</summary>
+        <div class="preflight-names">${isi}</div>
+    </details>`;
+}
+
+/**
+ * Tampilkan hasil pencocokan sebelum satu berkas pun disalin.
+ *
+ * Empat golongan sengaja dibedakan, karena tindakan yang dituntut tidak sama:
+ * yang ketemu siap disalin; "no RAW next to it" berarti arsip dan folder
+ * ekspor tidak sinkron; "not found" berarti kemungkinan salah folder sumber;
+ * dan yang ambigu menuntut orangnya sendiri yang memutuskan, karena menebak
+ * berarti mengedit foto yang keliru.
+ */
+function showPreflight(hasil) {
+    preflightResult = hasil;
+    const c = hasil.counts || {};
+
+    const chip = (label, nilai, kelas) =>
+        `<span class="preflight-chip ${kelas || ''}"><strong>${nilai}</strong> ${escapeHtml(label)}</span>`;
+
+    const chips = [chip('ready to collect', c.matched || 0, (c.matched || 0) > 0 ? 'ok' : '')];
+    if (c.raw_absent) chips.push(chip('without a RAW', c.raw_absent, 'warn'));
+    if (c.missing) chips.push(chip('not found', c.missing, 'warn'));
+    if (c.ambiguous) chips.push(chip('ambiguous', c.ambiguous, 'warn'));
+    preflightSummary.innerHTML = chips.join('');
+
+    preflightDetail.innerHTML = [
+        preflightGroup('Not found in this folder', hasil.missing || [], true),
+        preflightGroup('Found as JPG, but no RAW next to it', hasil.raw_absent || [], true),
+        preflightGroup(
+            'Same name in more than one folder',
+            (hasil.ambiguous || []).map((a) => `${a.name}  →  ${a.paths.join('  |  ')}`),
+            true,
+        ),
+        preflightGroup('Ready to collect', (hasil.matched || []).map((m) => m.paths.join('  +  ')), false),
+    ].join('');
+
+    const judul = document.getElementById('project-sync-title-text');
+    if (judul) judul.textContent = selectedSyncProjectName || 'Selection check';
+
+    projectListContainer.style.display = 'none';
+    preflightPanel.style.display = 'block';
+    btnConsolidateRaws.style.display = 'none';
+    btnPreflightBack.style.display = '';
+    btnCopyLightroom.style.display = '';
+    btnCollectConfirm.style.display = '';
+    btnCollectConfirm.disabled = !(c.matched > 0);
+    lucide.createIcons();
+}
+
+function hidePreflight() {
+    preflightResult = null;
+    const judul = document.getElementById('project-sync-title-text');
+    if (judul) judul.textContent = 'Select Project Workspace';
+    projectListContainer.style.display = 'flex';
+    preflightPanel.style.display = 'none';
+    btnConsolidateRaws.style.display = '';
+    btnPreflightBack.style.display = 'none';
+    btnCopyLightroom.style.display = 'none';
+    btnCollectConfirm.style.display = 'none';
+}
 
 async function openSyncSelectionsModal() {
     selectedSyncProjectId = null;
     selectedSyncProjectName = null;
+    selectedSyncFilenames = [];
     btnConsolidateRaws.disabled = true;
-    
+    // Dibuka selalu dari daftar proyek, tidak pernah dari panel pemeriksaan
+    // milik proyek yang dibuka sebelumnya.
+    hidePreflight();
+
     projectSyncModal.style.display = 'flex';
     projectListContainer.innerHTML = '<div style="text-align:center; padding: 20px;"><div class="spinner-ring" style="border-color: var(--border-light); border-top-color: var(--text-main); width: 24px; height: 24px;"></div></div>';
     setTimeout(() => { projectSyncModal.classList.add('active'); }, 10);
@@ -2840,34 +3013,89 @@ if (btnConsolidateRaws) {
             return;
         }
 
-        btn.innerHTML = '<i data-lucide="loader" style="animation: spin 1s linear infinite;"></i> Identifying...';
+        btn.innerHTML = '<i data-lucide="loader" style="animation: spin 1s linear infinite;"></i> Checking...';
         btn.disabled = true;
         lucide.createIcons();
-        
-        // Tutup instan modal agar notifikasi proses terlihat tanpa tertutup modal
-        closeSyncSelectionsModal();
 
         try {
-            let fileRes = await eel.get_project_filenames(selectedSyncProjectId)();
+            const fileRes = await eel.get_project_filenames(selectedSyncProjectId)();
             if (!fileRes || !fileRes.success || fileRes.data.length === 0) {
                 showAdvancedToast("No client selections found, or the service could not be reached.", "warning");
-                throw new Error("No files");
+                return;
             }
+            selectedSyncFilenames = fileRes.data;
 
-            // Hapus pemanggilan destFolder dari Frontend, dipindah ke OS Backend
-            showAdvancedToast("Choose where to save the collected files in the window that just opened.", "info");
-            
-            const result = await eel.auto_gather_raws(fileRes.data, state.sourcePath, selectedSyncProjectName)();
-            
-            if (result && !result.success) {
-                showAdvancedToast(result.message || "Proses dibatalkan.", "warning");
+            // Diperiksa lebih dulu, tanpa menyalin apa pun. Yang tidak ketemu
+            // ditampilkan beserta namanya di sini -- dulu ia hanya angka di
+            // dalam toast, dan nama-namanya dicetak ke konsol yang pada bundel
+            // --windowed tidak ada sama sekali di Windows.
+            const pre = await eel.preflight_selection(selectedSyncFilenames, state.sourcePath)();
+            if (!pre || !pre.success) {
+                showAdvancedToast(pre?.message || "Could not read the source folder.", "warning");
+                return;
             }
+            showPreflight(pre.result);
 
         } catch (err) {
             console.error("[PhotoFlow] UI Consolidate Error:", err);
+            showAdvancedToast("Something went wrong while checking the selection.", "warning");
         } finally {
-            btn.innerHTML = 'Consolidate RAW Files';
+            btn.innerHTML = 'Check selection';
             btn.disabled = false;
+            lucide.createIcons();
+        }
+    });
+}
+
+if (btnPreflightBack) {
+    btnPreflightBack.addEventListener('click', hidePreflight);
+}
+
+// Daftar nama untuk ditempel ke penyaring Lightroom.
+//
+// Tanpa ekstensi, dan itu bukan penyederhanaan: penyaring Lightroom memakai
+// "Contains", jadi `IMG_1234` cocok ke `IMG_1234.CR3` di katalog. Klien memilih
+// dari JPG, katalognya berisi RAW -- membuang ekstensinya membuat keduanya
+// bertemu tanpa siapa pun perlu menebak ekstensi mana yang benar.
+if (btnCopyLightroom) {
+    btnCopyLightroom.addEventListener('click', () => {
+        const nama = [...new Set(selectedSyncFilenames.map(stripExtension))];
+        if (!nama.length) return;
+
+        const area = document.createElement('textarea');
+        area.value = nama.join(', ');
+        document.body.appendChild(area);
+        area.select();
+        try {
+            document.execCommand('copy');
+            showAdvancedToast(`${nama.length} filename${nama.length === 1 ? '' : 's'} copied.`, "success");
+        } catch (err) {
+            console.error("[PhotoFlow] Clipboard error:", err);
+            showAdvancedToast("Could not copy the list.", "warning");
+        }
+        document.body.removeChild(area);
+    });
+}
+
+if (btnCollectConfirm) {
+    btnCollectConfirm.addEventListener('click', async () => {
+        if (!preflightResult) return;
+
+        btnCollectConfirm.disabled = true;
+        closeSyncSelectionsModal();
+        showAdvancedToast("Choose where to save the collected files in the window that just opened.", "info");
+
+        try {
+            const result = await eel.auto_gather_raws(
+                selectedSyncFilenames, state.sourcePath, selectedSyncProjectName,
+            )();
+            if (result && !result.success) {
+                showAdvancedToast(result.message || "Operation cancelled.", "warning");
+            }
+        } catch (err) {
+            console.error("[PhotoFlow] UI Collect Error:", err);
+        } finally {
+            btnCollectConfirm.disabled = false;
         }
     });
 }

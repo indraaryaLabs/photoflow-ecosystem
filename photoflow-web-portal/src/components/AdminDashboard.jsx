@@ -2,13 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Copy, Check, Plus, FolderOpen, Link as LinkIcon, Clock,
   CheckCircle2, Loader2, MoreVertical, Edit, Trash2, X, AlertOctagon,
-  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw
+  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { API_BASE } from '../lib/api';
 import { sudahDitawari, tandaiSudahDitawari } from '../lib/driveOnboarding';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
+import SelectionListModal from './SelectionListModal';
 
 // --- STYLES & ANIMATIONS ---
 const globalStyles = `
@@ -66,6 +67,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
   const [editingProject, setEditingProject] = useState(null);
   const [deletingProject, setDeletingProject] = useState(null);
   const [reopeningProject, setReopeningProject] = useState(null);
+  const [listingProject, setListingProject] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Menu titik tiga mana yang sedang terbuka — satu penanda untuk seluruh
@@ -210,6 +212,24 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
       setConnectingDrive(false);
     }
   };
+
+  // Nama berkas yang dipilih klien. Dipakai layar "Filenames for Lightroom",
+  // yang memuatnya sendiri saat dibuka — daftar ini bisa panjang, dan tidak ada
+  // gunanya ikut ditarik pada setiap pemuatan dashboard.
+  const fetchSelections = useCallback(async (projectId) => {
+    const token = await getAccessToken();
+    if (!token) throw new Error('Your session has expired.');
+
+    const sendRequest = (accessToken) => fetch(`${API_BASE}/api/projects/${projectId}/selections`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    const checkedRes = await handleApiResponse(await sendRequest(token), sendRequest);
+    if (!checkedRes) throw new Error('Your session has expired.');
+    if (!checkedRes.ok) throw new Error("Could not read the client's selection.");
+    return checkedRes.json();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleResync = async (project) => {
     try {
@@ -783,6 +803,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
                       }}
                       onReopen={() => setReopeningProject(project)}
                       onResync={() => handleResync(project)}
+                      onCopyList={() => setListingProject(project)}
                       onWhatsApp={() => {
                         const url = `${window.location.origin}/?token=${project.magic_link_token}`;
                         const text = `Hi ${project.client_name},\nHere is the photo gallery link for the *${project.project_name}* project.\n\nOpen the link below to start choosing your photos (up to ${project.max_selections}):\n${url}\n\nThank you.`;
@@ -896,6 +917,16 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
           </div>
         )}
 
+        {/* DAFTAR NAMA BERKAS UNTUK LIGHTROOM */}
+        {listingProject && (
+          <SelectionListModal
+            project={listingProject}
+            onClose={() => setListingProject(null)}
+            onFetch={fetchSelections}
+            onToast={showToast}
+          />
+        )}
+
         {/* TOAST NOTIFICATION */}
         {toast && (
           <div className="fixed bottom-6 right-6 lg:bottom-8 lg:right-8 z-50 animate-toast">
@@ -931,7 +962,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
  * "Delete" hilang di baliknya. Dengan satu penanda di induk, hanya satu kartu
  * yang pernah terangkat, jadi tumpang tindih itu tidak mungkin terjadi lagi.
  */
-function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, onCopy, onOpenGallery, onWhatsApp, onEdit, onDelete, onReopen, onResync }) {
+function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, onCopy, onOpenGallery, onWhatsApp, onEdit, onDelete, onReopen, onResync, onCopyList }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopyClick = () => {
@@ -1075,6 +1106,14 @@ function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, on
                 <button role="menuitem" onClick={() => { onCloseMenu(); onResync(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-ash-700 dark:text-ash-300 hover:bg-ash-50 dark:hover:bg-white/5 flex items-center gap-2 whitespace-nowrap">
                   <RefreshCw size={14} strokeWidth={1.75} /> Re-sync from Drive
                 </button>
+                {/* Hanya muncul setelah klien mengirim pilihannya: sebelum itu
+                    daftarnya kosong, dan menawarkan tindakan yang pasti tidak
+                    membuahkan apa pun hanya membuang waktu orang. */}
+                {!isPending && (
+                  <button role="menuitem" onClick={() => { onCloseMenu(); onCopyList(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-ash-700 dark:text-ash-300 hover:bg-ash-50 dark:hover:bg-white/5 flex items-center gap-2 whitespace-nowrap">
+                    <ListChecks size={14} strokeWidth={1.75} /> Filenames for Lightroom
+                  </button>
+                )}
                 {!isPending && (
                   <button role="menuitem" onClick={() => { onCloseMenu(); onReopen(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-ash-700 dark:text-ash-300 hover:bg-ash-50 dark:hover:bg-white/5 flex items-center gap-2">
                     <RotateCcw size={14} strokeWidth={1.75} /> Reopen selection
