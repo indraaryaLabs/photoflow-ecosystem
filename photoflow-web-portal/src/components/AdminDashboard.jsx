@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Copy, Check, Plus, FolderOpen, Link as LinkIcon, Clock,
   CheckCircle2, Loader2, MoreVertical, Edit, Trash2, X, AlertOctagon,
-  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks
+  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks, KeyRound
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { API_BASE } from '../lib/api';
@@ -10,6 +10,7 @@ import { sudahDitawari, tandaiSudahDitawari } from '../lib/driveOnboarding';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
 import SelectionListModal from './SelectionListModal';
+import { sudahDilihat, tandaiDilihat, waktuRelatif } from '../lib/submissions';
 
 // --- STYLES & ANIMATIONS ---
 const globalStyles = `
@@ -68,6 +69,11 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
   const [deletingProject, setDeletingProject] = useState(null);
   const [reopeningProject, setReopeningProject] = useState(null);
   const [listingProject, setListingProject] = useState(null);
+  const [rotatingProject, setRotatingProject] = useState(null);
+  // Project yang kirimannya sudah pernah dibuka fotografer. Disimpan di
+  // peramban, bukan di database: ini catatan "sudah saya lihat" milik satu
+  // orang di satu perangkat, bukan keadaan project.
+  const [dilihat, setDilihat] = useState(() => sudahDilihat());
   const [actionLoading, setActionLoading] = useState(false);
 
   // Menu titik tiga mana yang sedang terbuka — satu penanda untuk seluruh
@@ -230,6 +236,36 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
     return checkedRes.json();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleRotateLink = async () => {
+    if (!rotatingProject) return;
+    setActionLoading(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+
+      const sendRequest = (accessToken) => fetch(`${API_BASE}/api/projects/${rotatingProject.id}/rotate-link`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+
+      const checkedRes = await handleApiResponse(await sendRequest(token), sendRequest);
+      if (!checkedRes) return;
+      if (!checkedRes.ok) throw new Error('Could not issue a new link.');
+
+      showToast('New link issued. The old one no longer works.');
+      setRotatingProject(null);
+      fetchProjects();
+    } catch (err) {
+      if (err.message === 'Failed to fetch') {
+        showToast('The server did not respond. Please try again later.', 'error');
+      } else {
+        showToast(err.message, 'error');
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const handleResync = async (project) => {
     try {
@@ -821,7 +857,13 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
                       }}
                       onReopen={() => setReopeningProject(project)}
                       onResync={() => handleResync(project)}
-                      onCopyList={() => setListingProject(project)}
+                      onCopyList={() => {
+                        setListingProject(project);
+                        // Membuka kirimannya berarti sudah dilihat.
+                        setDilihat(tandaiDilihat(project.id, project.submitted_at));
+                      }}
+                      onRotateLink={() => setRotatingProject(project)}
+                      isNew={Boolean(project.submitted_at) && dilihat[project.id] !== project.submitted_at}
                       onWhatsApp={() => {
                         const url = `${window.location.origin}/?token=${project.magic_link_token}`;
                         const text = `Hi ${project.client_name},\nHere is the photo gallery link for the *${project.project_name}* project.\n\nOpen the link below to start choosing your photos (up to ${project.max_selections}):\n${url}\n\nThank you.`;
@@ -935,6 +977,28 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
           </div>
         )}
 
+        {/* TERBITKAN ULANG MAGIC LINK */}
+        {rotatingProject && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-slide-up-fade">
+            <div className="bg-white dark:bg-ash-900 border border-ash-200 dark:border-white/10 shadow-2xl rounded-2xl p-6 w-full max-w-sm text-center relative">
+              <div className="mx-auto w-12 h-12 rounded-full bg-ash-100 dark:bg-white/5 border border-ash-200 dark:border-white/10 flex items-center justify-center mb-4 text-ash-700 dark:text-ash-200">
+                <KeyRound size={24} strokeWidth={1.75} />
+              </div>
+              <h2 className="text-xl font-semibold text-ash-900 dark:text-ash-100 mb-2">Issue a new link?</h2>
+              <p className="text-sm text-ash-600 dark:text-ash-400 mb-6">
+                The link you already sent to <strong className="text-ash-800 dark:text-ash-300">{rotatingProject.client_name}</strong> stops
+                working immediately, and you will need to send the new one. Photos already selected are kept.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setRotatingProject(null)} className="flex-1 px-4 py-3 rounded-xl border border-ash-200 dark:border-ash-700 font-medium text-sm hover:bg-ash-100 dark:hover:bg-ash-800 transition-colors">Cancel</button>
+                <button onClick={handleRotateLink} disabled={actionLoading} className="flex-1 px-4 py-3 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm shadow-sm transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
+                  {actionLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : "Yes, issue new link"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* DAFTAR NAMA BERKAS UNTUK LIGHTROOM */}
         {listingProject && (
           <SelectionListModal
@@ -980,7 +1044,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
  * "Delete" hilang di baliknya. Dengan satu penanda di induk, hanya satu kartu
  * yang pernah terangkat, jadi tumpang tindih itu tidak mungkin terjadi lagi.
  */
-function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, onCopy, onOpenGallery, onWhatsApp, onEdit, onDelete, onReopen, onResync, onCopyList }) {
+function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, onCopy, onOpenGallery, onWhatsApp, onEdit, onDelete, onReopen, onResync, onCopyList, onRotateLink, isNew }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopyClick = () => {
@@ -1067,8 +1131,19 @@ function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, on
           }
         `}>
           <span className={`w-1.5 h-1.5 rounded-full ${isPending ? 'bg-warning-500 animate-pulse' : 'bg-success-500'}`}></span>
-          {isPending ? 'Pending Selection' : 'Submitted'}
+          {isPending
+            ? 'Pending Selection'
+            : `Submitted${project.submitted_at ? ` ${waktuRelatif(project.submitted_at)}` : ''}`}
         </div>
+
+        {/* Tanpa pemberitahuan apa pun, satu-satunya cara fotografer tahu ada
+            kiriman baru adalah mengingat sendiri isi daftarnya. Lencana ini
+            hilang begitu kirimannya dibuka. */}
+        {isNew && (
+          <span className="px-2 py-1 rounded-full bg-ash-900 text-white dark:bg-ash-100 dark:text-ash-950 text-[10px] font-bold uppercase tracking-wide shadow-sm">
+            New
+          </span>
+        )}
 
         {/* Buka galeri klien di tab baru. Galeri hanya butuh magic link token,
             bukan sesi login, jadi ini tetap benar meski dibuka sambil masuk
@@ -1137,6 +1212,9 @@ function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, on
                     <RotateCcw size={14} strokeWidth={1.75} /> Reopen selection
                   </button>
                 )}
+                <button role="menuitem" onClick={() => { onCloseMenu(); onRotateLink(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-ash-700 dark:text-ash-300 hover:bg-ash-50 dark:hover:bg-white/5 flex items-center gap-2 whitespace-nowrap">
+                  <KeyRound size={14} strokeWidth={1.75} /> Issue a new link
+                </button>
                 <button role="menuitem" onClick={() => { onCloseMenu(); onDelete(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-danger-600 dark:text-danger-400 hover:bg-danger-50 dark:hover:bg-danger-900/10 flex items-center gap-2">
                   <Trash2 size={14} strokeWidth={1.75} /> Delete
                 </button>
