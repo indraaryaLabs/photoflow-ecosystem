@@ -259,7 +259,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
       await fetchProjects();
       const jumlah = body?.photos_found ?? 0;
       if (jumlah > 0) showToast(`${jumlah} photos pulled from Drive.`);
-      else showToast('The folder was read, but it contains no photos.', 'error');
+      else showToast('The folder was read, but no photos came back. Check that it is shared as "Anyone with the link".', 'error');
     } catch (err) {
       if (err.message === 'Failed to fetch') {
         showToast('The server did not respond. Please try again later.', 'error');
@@ -495,8 +495,12 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
       if (typeof jumlahFoto === 'number' && jumlahFoto > 0) {
         showToast(`Project created. ${jumlahFoto} photos pulled from Drive.`);
       } else {
+        // Sebabnya yang paling sering: foldernya belum dibagikan. Menyebutkan
+        // tindakan yang harus diambil lebih berguna daripada melaporkan bahwa
+        // sesuatu gagal.
         showToast(
-          body?.message || 'Project created, but no photos could be pulled from Drive.',
+          body?.message
+            || 'Project created, but no photos came back. Check that the folder is shared as "Anyone with the link".',
           'error'
         );
       }
@@ -717,9 +721,23 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
                           value={formData.driveLink}
                           onChange={(e) => setFormData({ ...formData, driveLink: e.target.value })}
                           placeholder="https://drive.google.com/..."
+                          aria-describedby="drive-link-hint"
                           className="w-full bg-ash-50 dark:bg-black/20 border border-ash-200 dark:border-white/10 focus:border-ash-500 dark:focus:border-ash-400 focus:ring-4 focus:ring-ash-900/10 dark:focus:ring-white/10 rounded-xl pl-10 pr-4 py-3 text-sm transition-all duration-300 outline-none placeholder:text-ash-500 dark:placeholder:text-ash-600"
                         />
                       </div>
+                      {/* Thumbnail foto dimuat langsung dari Drive oleh peramban
+                          klien, yang tidak membawa kredensial siapa pun. Jadi
+                          folder yang tidak dibagikan menghasilkan galeri berisi
+                          kotak kosong -- dan sampai sekarang tidak ada satu pun
+                          kalimat di layar ini yang menyebutkannya, sehingga
+                          kegagalannya baru ketahuan setelah tautannya terkirim
+                          ke klien. */}
+                      <p id="drive-link-hint" className="text-xs text-ash-600 dark:text-ash-400 leading-relaxed">
+                        Share the folder as{' '}
+                        <span className="font-medium text-ash-800 dark:text-ash-200">Anyone with the link</span>{' '}
+                        first. Your client&apos;s browser loads the photos straight from Drive, so a private
+                        folder shows up as an empty gallery.
+                      </p>
                     </div>
 
                     {/* Submit Button */}
