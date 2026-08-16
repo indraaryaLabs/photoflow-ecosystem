@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"time"
 
 	"golang.org/x/oauth2"
 	"gorm.io/gorm"
@@ -100,7 +101,13 @@ func submitSelection(db *gorm.DB, projectID string, photos []models.Photo) error
 	return db.Transaction(func(tx *gorm.DB) error {
 		lock := tx.Model(&models.Project{}).
 			Where("id = ? AND status <> ?", projectID, models.StatusSubmitted).
-			Update("status", models.StatusSubmitted)
+			Updates(map[string]any{
+				"status": models.StatusSubmitted,
+				// Ditulis di dalam UPDATE yang sama dengan penguncian, bukan
+				// setelahnya: yang kalah dalam perlombaan submit tidak boleh
+				// menimpa waktu kiriman milik yang menang.
+				"submitted_at": time.Now().UTC(),
+			})
 		if lock.Error != nil {
 			return lock.Error
 		}

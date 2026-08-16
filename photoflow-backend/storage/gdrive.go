@@ -187,6 +187,12 @@ func (g *GDriveStore) ListPhotos(ctx context.Context, sourceRef string) ([]Photo
 			// IMG_9 karena membandingkan huruf per huruf. Nama berkas kamera
 			// selalu bernomor, jadi perbedaan itu terasa di setiap galeri.
 			OrderBy("name_natural").
+			// Bawaan Drive 100 berkas per halaman. Galeri pernikahan berisi
+			// ribuan foto, dan seluruh penelusuran terjadi di dalam SATU
+			// permintaan serverless yang punya batas waktu. 1000 adalah
+			// maksimum yang diterima API, dan memangkas jumlah perjalanan
+			// jaringan sepuluh kali lipat.
+			PageSize(1000).
 			Fields("nextPageToken, files(id, name, mimeType, thumbnailLink, webContentLink)")
 		if pageToken != "" {
 			req = req.PageToken(pageToken)

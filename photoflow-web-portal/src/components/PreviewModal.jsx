@@ -15,18 +15,33 @@ const PreviewModal = ({
 }) => {
   const { index, direction } = previewState;
   const isVisible = index !== null;
-  const [isImgLoaded, setIsImgLoaded] = useState(false);
+  // Foto KEBERAPA yang sudah selesai dimuat, bukan sekadar "sudah/belum".
+  //
+  // Dengan begitu berpindah foto tidak menuntut penyetelan ulang sama sekali:
+  // nilainya tidak lagi cocok dengan index yang baru, jadi keadaan "belum
+  // dimuat" muncul dengan sendirinya.
+  const [loadedIndex, setLoadedIndex] = useState(null);
+  const isImgLoaded = loadedIndex === index;
+
   const [scale, setScale] = useState(1);
   const constraintsRef = useRef(null);
-  
+
   // Touch pinch logic states
   const [pinchDist, setPinchDist] = useState(0);
 
-  // Reset state tiap ganti foto
-  useEffect(() => {
-    setIsImgLoaded(false);
+  // Zoom disetel ulang saat foto berganti, dan itu dilakukan SAAT RENDER,
+  // bukan di dalam effect.
+  //
+  // Versi lama memakai useEffect: React merender foto baru dengan zoom lama
+  // lebih dulu, menampilkannya, lalu effect berjalan dan memicu render kedua.
+  // Foto berikutnya sempat berkedip dalam keadaan ter-zoom. Pola di bawah ini
+  // yang dianjurkan React untuk menyesuaikan state ketika prop berubah — tidak
+  // ada render yang terlanjur terlihat.
+  const [indexSebelumnya, setIndexSebelumnya] = useState(index);
+  if (indexSebelumnya !== index) {
+    setIndexSebelumnya(index);
     setScale(1);
-  }, [index]);
+  }
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -196,7 +211,7 @@ const PreviewModal = ({
                   src={highResUrl}
                   alt={currentPhoto.name || `Photo ${index + 1} of ${photos.length}`}
                   referrerPolicy="no-referrer"
-                  onLoad={() => setIsImgLoaded(true)}
+                  onLoad={() => setLoadedIndex(index)}
                   // Hanya bisa didrag/pan jika sedang di-zoom
                   drag={scale > 1}
                   dragConstraints={constraintsRef}
