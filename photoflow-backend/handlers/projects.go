@@ -131,6 +131,13 @@ func (h *Handler) ListProjects(c *gin.Context) {
 type projectWithCount struct {
 	models.Project
 	PhotoCount int64 `json:"photo_count"`
+	// Beberapa thumbnail pertama, untuk ditampilkan di kartu project.
+	//
+	// Dashboard sebelumnya tidak memuat satu foto pun — hanya ikon folder di
+	// aplikasi yang seluruh isinya fotografi. Selain membuatnya terlihat
+	// seperti dashboard mana pun, itu juga membuang cara tercepat mengenali
+	// sebuah project: melihat isinya.
+	Previews []string `json:"previews"`
 }
 
 // withPhotoCounts menghitung foto untuk sekumpulan project dalam satu query,
@@ -163,8 +170,14 @@ func (h *Handler) withPhotoCounts(projects []models.Project) []projectWithCount 
 		jumlah[b.ProjectID] = b.Jumlah
 	}
 
+	pratinjau := h.previewThumbnails(ids)
+
 	for _, p := range projects {
-		out = append(out, projectWithCount{Project: p, PhotoCount: jumlah[p.ID]})
+		out = append(out, projectWithCount{
+			Project:    p,
+			PhotoCount: jumlah[p.ID],
+			Previews:   pratinjau[p.ID],
+		})
 	}
 	return out
 }
@@ -181,6 +194,43 @@ func (h *Handler) withPhotoCounts(projects []models.Project) []projectWithCount 
 //
 // Pilihan klien yang sudah tersimpan dipertahankan: baris foto yang namanya
 // masih ada di folder tetap membawa is_selected-nya.
+// previewThumbnails mengambil beberapa thumbnail pertama tiap project.
+//
+// Satu query untuk seluruh daftar, bukan satu per project: dashboard memuat
+// semua project sekaligus, dan query per baris akan tumbuh bersama jumlah
+// project yang dimiliki fotografer.
+//
+// Batasnya dipasang di Go, bukan di SQL. Membatasi per-grup di SQL menuntut
+// window function, dan yang dihemat tidak sebanding: yang diambil hanya kolom
+// url, dan galeri terbesar sekalipun berisi ribuan baris pendek.
+func (h *Handler) previewThumbnails(ids []string) map[string][]string {
+	const perProject = 4
+
+	type baris struct {
+		ProjectID    string
+		ThumbnailURL string
+	}
+	var hasil []baris
+	if err := h.DB.Model(&models.Photo{}).
+		Select("project_id, thumbnail_url").
+		Where("project_id IN ? AND thumbnail_url <> ''", ids).
+		Order("project_id, file_name").
+		Scan(&hasil).Error; err != nil {
+		// Kartu tanpa pratinjau tetap berguna; ini bukan alasan menggagalkan
+		// seluruh daftar project.
+		log.Printf("⚠️ Gagal mengambil pratinjau: %v", err)
+		return map[string][]string{}
+	}
+
+	peta := make(map[string][]string, len(ids))
+	for _, b := range hasil {
+		if len(peta[b.ProjectID]) < perProject {
+			peta[b.ProjectID] = append(peta[b.ProjectID], b.ThumbnailURL)
+		}
+	}
+	return peta
+}
+
 func (h *Handler) ResyncProject(c *gin.Context) {
 	userID := c.GetString(middleware.ContextUserIDKey)
 	projectID := c.Param("id")

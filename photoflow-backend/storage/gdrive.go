@@ -193,7 +193,7 @@ func (g *GDriveStore) ListPhotos(ctx context.Context, sourceRef string) ([]Photo
 			// maksimum yang diterima API, dan memangkas jumlah perjalanan
 			// jaringan sepuluh kali lipat.
 			PageSize(1000).
-			Fields("nextPageToken, files(id, name, mimeType, thumbnailLink, webContentLink)")
+			Fields("nextPageToken, files(id, name, mimeType, thumbnailLink, webContentLink, imageMediaMetadata(width, height))")
 		if pageToken != "" {
 			req = req.PageToken(pageToken)
 		}
@@ -224,13 +224,21 @@ func (g *GDriveStore) ListPhotos(ctx context.Context, sourceRef string) ([]Photo
 				thumbnail = strings.Replace(thumbnail, "=s220", "=s1000", -1)
 			}
 
-			result = append(result, PhotoRef{
+			ref := PhotoRef{
 				ID:             file.Id,
 				Name:           file.Name,
 				MimeType:       file.MimeType,
 				ThumbnailLink:  thumbnail,
 				WebContentLink: file.WebContentLink,
-			})
+			}
+			// Tidak semua berkas membawanya: Drive mengisi imageMediaMetadata
+			// hanya untuk format yang dikenalinya, dan sebagian RAW tidak
+			// termasuk.
+			if m := file.ImageMediaMetadata; m != nil {
+				ref.Width = int(m.Width)
+				ref.Height = int(m.Height)
+			}
+			result = append(result, ref)
 		}
 
 		pageToken = page.NextPageToken

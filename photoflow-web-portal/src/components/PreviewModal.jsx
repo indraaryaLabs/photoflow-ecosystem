@@ -212,6 +212,9 @@ const PreviewModal = ({
                   alt={currentPhoto.name || `Photo ${index + 1} of ${photos.length}`}
                   referrerPolicy="no-referrer"
                   onLoad={() => setLoadedIndex(index)}
+                  // Nama yang sama dengan foto di grid. Itu yang membuat
+                  // peramban menganimasikan satu ke yang lain.
+                  style={{ viewTransitionName: `photo-${currentPhoto.id}` }}
                   // Hanya bisa didrag/pan jika sedang di-zoom
                   drag={scale > 1}
                   dragConstraints={constraintsRef}
@@ -221,7 +224,7 @@ const PreviewModal = ({
                   className={cn(
                     "relative max-h-[85vh] w-auto max-w-full object-contain rounded-xl select-none",
                     scale > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in",
-                    isImgLoaded ? "opacity-100" : "opacity-0 transition-opacity duration-300",
+                    isImgLoaded ? "opacity-100" : "opacity-0 transition-opacity duration-enter",
                     // Latar layar ini selalu hitam, jadi celah hitam di antara
                     // foto dan cincin sudah cukup memisahkan keduanya bahkan
                     // ketika fotonya terang.
