@@ -114,7 +114,11 @@ func driveFallbackReason(err error) string {
 // pernah terpakai, gambarnya kosong dan nama berkasnya hilang saat submit.
 func (h *Handler) respondWithStoredPhotos(c *gin.Context, project models.Project, reason string) {
 	var photos []models.Photo
-	if err := h.DB.Where("project_id = ?", project.ID).Find(&photos).Error; err != nil {
+	// Diurutkan menurut nama, sama seperti pembacaan dari Drive. Tanpa ORDER BY,
+	// Postgres tidak menjanjikan urutan apa pun — jadi galeri yang jatuh ke
+	// salinan ini akan tampil dengan susunan berbeda dari yang dilihat klien
+	// sebelumnya, pada saat yang justru sudah membingungkan.
+	if err := h.DB.Where("project_id = ?", project.ID).Order("file_name").Find(&photos).Error; err != nil {
 		log.Printf("🔴 Gagal memuat foto tersimpan project %s: %v", project.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat daftar foto"})
 		return

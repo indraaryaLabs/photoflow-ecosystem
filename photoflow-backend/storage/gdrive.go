@@ -178,6 +178,15 @@ func (g *GDriveStore) ListPhotos(ctx context.Context, sourceRef string) ([]Photo
 		req := g.service.Files.List().
 			Context(ctx).
 			Q(query).
+			// Tanpa orderBy, Drive mengembalikan berkas dalam urutan yang tidak
+			// dijanjikan apa pun. Akibatnya galeri klien tampil teracak, dan
+			// fotografer tidak bisa merujuk "foto ke-12" karena nomor itu
+			// berbeda di layarnya sendiri.
+			//
+			// name_natural, bukan name: pengurutan biasa menaruh IMG_10 sebelum
+			// IMG_9 karena membandingkan huruf per huruf. Nama berkas kamera
+			// selalu bernomor, jadi perbedaan itu terasa di setiap galeri.
+			OrderBy("name_natural").
 			Fields("nextPageToken, files(id, name, mimeType, thumbnailLink, webContentLink)")
 		if pageToken != "" {
 			req = req.PageToken(pageToken)
