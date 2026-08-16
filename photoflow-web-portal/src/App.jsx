@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2, AlertTriangle } from 'lucide-react';
 
@@ -13,6 +13,7 @@ import { supabase } from './lib/supabase';
 import { API_BASE } from './lib/api';
 import { openedFromRecoveryLink } from './lib/recovery';
 import { useTheme } from './lib/theme';
+import { bacaDraf, simpanDraf, hapusDraf, petakanKeId } from './lib/selectionDraft';
 
 export default function App() {
   // ─── Variables routing (No hook dependencies) ────────────────
@@ -61,6 +62,12 @@ export default function App() {
   const { choice: themeChoice, cycle: cycleTheme } = useTheme();
 
   const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Draf harus dipulihkan LEBIH DULU sebelum boleh ditulis. Tanpa penanda ini,
+  // effect penyimpan berjalan pada render pertama dengan pilihan yang masih
+  // kosong dan langsung menimpa draf yang hendak dipulihkan -- persis kerja
+  // yang ingin diselamatkan.
+  const drafSudahDipulihkan = useRef(false);
   const [toasts, setToasts] = useState([]);
   const [previewState, setPreviewState] = useState({ index: null, direction: 0 });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -190,6 +197,43 @@ export default function App() {
     }, 3000);
   }, []);
 
+  // Pulihkan pilihan yang belum sempat dikirim.
+  //
+  // Dijalankan setelah daftar foto ada, karena draf disimpan sebagai nama
+  // berkas dan baru bisa dipetakan kembali ke id ketika fotonya sudah dikenal.
+  useEffect(() => {
+    if (drafSudahDipulihkan.current) return;
+    if (isLoading || !token || !photos.length) return;
+
+    // Galeri yang sudah dikirim tidak lagi bisa diubah, jadi drafnya tidak ada
+    // gunanya -- dan meninggalkannya berarti pilihan lama muncul kembali kalau
+    // fotografer membuka ulang pemilihannya.
+    if (isSubmittedState) {
+      hapusDraf(token);
+      drafSudahDipulihkan.current = true;
+      return;
+    }
+
+    const nama = bacaDraf(token);
+    if (nama.length) {
+      const ids = petakanKeId(nama, photos, project?.max_selections);
+      if (ids.size) {
+        setSelectedIds(ids);
+        addToast(`Restored ${ids.size} photo${ids.size === 1 ? '' : 's'} you picked earlier.`);
+      }
+    }
+    drafSudahDipulihkan.current = true;
+  }, [isLoading, token, photos, isSubmittedState, project?.max_selections, addToast]);
+
+  // Simpan setiap perubahan pilihan.
+  useEffect(() => {
+    if (!drafSudahDipulihkan.current || !token || isSubmittedState) return;
+
+    const perId = new Map(photos.map((p) => [p.id, p.name]));
+    const nama = [...selectedIds].map((id) => perId.get(id)).filter(Boolean);
+    simpanDraf(token, nama);
+  }, [selectedIds, photos, token, isSubmittedState]);
+
   const handleToggleSelect = useCallback((id) => {
     // Gallery Lock: Cegah interaksi jika sudah disubmit
     if (isSubmittedState) {
@@ -233,6 +277,11 @@ export default function App() {
         throw new Error(body?.error || `Could not submit your selection. (status ${res.status})`);
       }
 
+      // Drafnya sudah jadi kiriman sungguhan, jadi tidak ada lagi yang perlu
+      // diselamatkan. Dibuang SEBELUM isSubmittedState disetel: effect penyimpan
+      // berhenti bekerja begitu galerinya terkunci, jadi kalau urutannya
+      // terbalik draf itu tertinggal di peramban klien untuk selamanya.
+      hapusDraf(token);
       addToast('Your selection has been sent to your photographer.');
       setIsSubmittedState(true);
     } catch (err) {
