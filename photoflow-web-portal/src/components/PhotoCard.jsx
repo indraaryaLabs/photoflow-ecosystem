@@ -1,48 +1,43 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Eye, ImageOff } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { Check, Maximize2, ImageOff } from 'lucide-react';
 import { cn } from '../lib/utils';
 
-const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
+const PhotoCard = ({
+  photo, index, width, height, isSelected, isLocked, onToggle, onOpenPreview, onMeasure,
+}) => {
   const [isLoaded, setIsLoaded] = useState(false);
-
-  // Sebagian baris foto memang tidak punya thumbnail — misalnya yang lahir dari
-  // proses submit, yang hanya membawa nama berkas. Sebelumnya kartunya tetap
-  // merender <img> dengan src kosong, dan hasilnya kotak abu tanpa keterangan
-  // yang tidak dapat dibedakan dari gambar yang gagal dimuat. Sekarang keadaan
-  // itu ditampilkan apa adanya, lengkap dengan nama berkasnya, supaya foto tetap
-  // bisa dikenali dan dipilih.
   const [gagalMuat, setGagalMuat] = useState(false);
   const adaGambar = Boolean(photo.thumbnailLink) && !gagalMuat;
+  const kurangiGerak = useReducedMotion();
 
   return (
     <motion.div
-      variants={{
-        hidden: { opacity: 0, y: 20 },
-        show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } }
-      }}
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
+      // Lebar dan tinggi datang dari perhitungan baris, bukan dari kelas rasio
+      // tetap. Itulah yang membuat foto tidak lagi dipotong.
+      style={{ width, height }}
+      layout={kurangiGerak ? false : 'position'}
+      transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+      // Menekan menurunkan skala sedikit, seperti benda yang benar-benar
+      // ditekan. Ini satu-satunya gerak pada kartu; membesarkannya saat kursor
+      // lewat membuat seluruh baris bergeser, dan pergeseran tata letak di
+      // bawah kursor adalah hal yang paling mengganggu ketika orang sedang
+      // mengetuk-ngetuk memilih foto.
+      whileTap={kurangiGerak || isLocked ? undefined : { scale: 0.97 }}
       onClick={() => onToggle(photo.id)}
       onDoubleClick={() => onOpenPreview(index)}
       className={cn(
-        "group relative cursor-pointer rounded-2xl overflow-hidden aspect-[2/3] bg-ash-200 dark:bg-ash-800 select-none shadow-sm hover:shadow-xl transition-all duration-300",
+        'group relative shrink-0 overflow-hidden rounded-lg bg-ash-200 dark:bg-ash-800 select-none',
+        'transition-shadow duration-feedback',
+        isLocked ? 'cursor-default' : 'cursor-pointer',
         // Penanda terpilih: dua cincin, terang di dalam dan gelap di luar.
-        //
-        // Dulu ini satu cincin indigo. Warna tunggal bukan penanda yang bisa
-        // diandalkan di sini, karena yang ada di belakangnya adalah foto —
-        // isinya bisa warna apa saja. Cincin indigo hilang di atas foto senja,
-        // dan hampir tak terlihat di atas foto yang memang kebiruan.
-        //
-        // Pasangan terang-gelap selalu terbaca, di mana pun ia jatuh. Di atas
-        // foto gelap, cincin putih yang menonjol. Di atas foto terang, cincin
-        // putih memang menyatu, tapi cincin gelap di sebelah luarnya yang
-        // memisahkan. Hal yang sama berlaku terhadap latar halaman: cincin
-        // gelap terlihat di mode terang, cincin putih terlihat di mode gelap.
-        // Karena itu keduanya sama di kedua mode — tidak ada yang perlu
-        // ditukar.
-        isSelected &&
-          "shadow-[0_0_0_3px_#fff,0_0_0_6px_var(--color-ash-950)] dark:shadow-[0_0_0_3px_#fff,0_0_0_6px_var(--color-ash-950)]"
+        // Yang ada di belakangnya foto, dan isinya bisa warna apa saja, jadi
+        // warna tunggal bukan penanda yang bisa diandalkan. Pasangan
+        // terang-gelap selalu terbaca di mana pun ia jatuh, dan karena itu sama
+        // di kedua mode tema.
+        isSelected
+          ? 'shadow-[0_0_0_3px_#fff,0_0_0_6px_var(--color-ash-950)]'
+          : 'shadow-sm hover:shadow-lg',
       )}
     >
       {adaGambar && !isLoaded && (
@@ -55,67 +50,57 @@ const PhotoCard = ({ photo, index, isSelected, onToggle, onOpenPreview }) => {
           alt={photo.name || 'Gallery photo'}
           loading="lazy"
           referrerPolicy="no-referrer"
-          onLoad={() => setIsLoaded(true)}
+          onLoad={(e) => {
+            setIsLoaded(true);
+            onMeasure?.(photo.id, e.currentTarget.naturalWidth, e.currentTarget.naturalHeight);
+          }}
           onError={() => setGagalMuat(true)}
+          // Nama transisi menghubungkan foto ini dengan gambar yang sama di
+          // layar pratinjau, sehingga peramban dapat menganimasikan satu ke
+          // yang lain alih-alih memudarkan keduanya. Lihat lib/viewTransition.
+          style={{ viewTransitionName: `photo-${photo.id}` }}
           className={cn(
-            "w-full h-full object-cover transition-opacity duration-500",
-            isLoaded ? "opacity-100" : "opacity-0"
+            'w-full h-full object-cover transition-opacity duration-enter',
+            isLoaded ? 'opacity-100' : 'opacity-0',
           )}
         />
       ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-3 text-center bg-ash-200 dark:bg-ash-800">
-          <ImageOff size={22} strokeWidth={1.75} className="text-ash-500 dark:text-ash-400" aria-hidden="true" />
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-3 text-center">
+          <ImageOff size={20} strokeWidth={1.75} className="text-ash-500 dark:text-ash-400" aria-hidden="true" />
           <span className="text-[11px] leading-snug font-medium text-ash-600 dark:text-ash-400 break-all line-clamp-3">
             {photo.name || 'Preview unavailable'}
           </span>
         </div>
       )}
 
-      {/* Hover Overlay Gelap */}
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 z-10" />
+      {/* Tombol perbesar. Duduk di pojok, bukan di tengah kartu: di tengah ia
+          menelan klik yang dimaksudkan untuk memilih, dan memilih adalah
+          pekerjaan utama di layar ini. */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenPreview(index);
+        }}
+        className="absolute bottom-2 right-2 z-20 hidden md:grid h-8 w-8 place-items-center rounded-lg bg-ash-950/55 text-white opacity-0 backdrop-blur-sm transition-opacity duration-feedback group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        title="View larger"
+        aria-label={`View ${photo.name || 'photo'} larger`}
+      >
+        <Maximize2 size={14} strokeWidth={2} />
+      </button>
 
-      {/* Tombol Preview (Mata) - Desktop Hover */}
-      <div className="absolute inset-0 hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20 pointer-events-none">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenPreview(index);
-          }}
-          className="p-4 rounded-full bg-white/20 hover:bg-white/40 backdrop-blur-md text-white shadow-xl border border-white/20 transition-transform hover:scale-110 pointer-events-auto active:scale-95"
-          title="View larger"
-          aria-label="View larger"
-        >
-          <Eye size={24} strokeWidth={1.75} />
-        </button>
-      </div>
-
+      {/* Lencana centang. Foto TIDAK diredupkan saat terpilih: meredupkan
+          justru menyulitkan pekerjaan yang sedang dilakukan orangnya, yaitu
+          membandingkan foto satu sama lain. Cincin dan lencana sudah cukup. */}
       <AnimatePresence>
         {isSelected && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            // Kerudung netral, bukan semburat warna. Fungsinya meredupkan foto
-            // sedikit supaya lencana centang di atasnya menonjol; memberi warna
-            // pada foto orang lain bukan tugas antarmuka ini.
-            className="absolute inset-0 bg-ash-950/30 z-10 pointer-events-none"
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Area Checkmark Visual */}
-      <AnimatePresence>
-        {isSelected && (
-          <motion.div
-            initial={{ scale: 0, opacity: 0 }}
+            initial={kurangiGerak ? false : { scale: 0.4, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 400, damping: 20 }}
-            // Dibalik: isi putih, ikon gelap. Di atas foto sembarang, putih
-            // pekat adalah satu-satunya isian yang selalu menang.
-            className="absolute top-3 right-3 bg-white text-ash-950 rounded-full p-1.5 shadow-lg shadow-black/25 z-30 pointer-events-none"
+            exit={kurangiGerak ? { opacity: 0 } : { scale: 0.4, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 26 }}
+            className="absolute top-2 left-2 z-30 grid h-6 w-6 place-items-center rounded-full bg-white text-ash-950 shadow-md shadow-black/30 pointer-events-none"
           >
-            <Check size={16} strokeWidth={2.25} aria-hidden="true" />
+            <Check size={14} strokeWidth={2.5} aria-hidden="true" />
           </motion.div>
         )}
       </AnimatePresence>

@@ -211,7 +211,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
 
   return (
     <div>
-      <div className="relative min-h-screen w-full flex items-center justify-center bg-ash-50 dark:bg-ash-950 text-ash-900 dark:text-ash-100 overflow-hidden font-sans transition-colors duration-500">
+      <div className="relative min-h-screen w-full flex items-center justify-center bg-ash-50 dark:bg-ash-950 text-ash-900 dark:text-ash-100 overflow-hidden font-sans transition-colors duration-tint">
 
         {/* --- THEME TOGGLE BUTTON --- */}
         <ThemeToggle
@@ -221,7 +221,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
         />
 
         {/* --- BACKGROUND EFFECTS --- */}
-        <div className="absolute inset-0 z-0 bg-[linear-gradient(to_right,#0000000a_1px,transparent_1px),linear-gradient(to_bottom,#0000000a_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] transition-colors duration-500"></div>
+        <div className="absolute inset-0 z-0 bg-[linear-gradient(to_right,#0000000a_1px,transparent_1px),linear-gradient(to_bottom,#0000000a_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] transition-colors duration-tint"></div>
 
         <motion.div
           animate={{ scale: [1, 1.2, 1], opacity: [0.15, 0.3, 0.15] }}
@@ -247,9 +247,9 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
           className="relative z-10 w-full max-w-[420px] px-6 py-12 md:p-0"
         >
           {/* Glass Panel */}
-          <div className="relative backdrop-blur-2xl bg-white/60 dark:bg-ash-900/40 border border-ash-200/80 dark:border-white/[0.08] p-8 rounded-3xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] dark:shadow-[0_0_40px_-10px_rgba(0,0,0,0.5)] overflow-hidden transition-colors duration-500">
+          <div className="relative backdrop-blur-2xl bg-white/60 dark:bg-ash-900/40 border border-ash-200/80 dark:border-white/[0.08] p-8 rounded-3xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] dark:shadow-[0_0_40px_-10px_rgba(0,0,0,0.5)] overflow-hidden transition-colors duration-tint">
 
-            <div className="absolute inset-0 rounded-3xl ring-1 ring-inset ring-white/50 dark:ring-white/[0.02] pointer-events-none transition-colors duration-500"></div>
+            <div className="absolute inset-0 rounded-3xl ring-1 ring-inset ring-white/50 dark:ring-white/[0.02] pointer-events-none transition-colors duration-tint"></div>
 
             {/* --- HEADER --- */}
             <div className="flex flex-col items-center mb-8 text-center">
@@ -272,12 +272,12 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                     transition={{ duration: 0.3 }}
                     className="absolute flex flex-col items-center w-full"
                   >
-                    <h1 className="text-2xl font-semibold tracking-tight text-ash-900 dark:text-white mb-1.5 transition-colors duration-500">
+                    <h1 className="text-2xl font-semibold tracking-tight text-ash-900 dark:text-white mb-1.5 transition-colors duration-tint">
                       {isRecovery
                         ? "Set a new password"
                         : (session ? "You're signed in" : (isLoginMode ? "Welcome back" : "Create an account"))}
                     </h1>
-                    <p className="text-sm text-ash-600 dark:text-ash-400 font-medium transition-colors duration-500">
+                    <p className="text-sm text-ash-600 dark:text-ash-400 font-medium transition-colors duration-tint">
                       {isRecovery
                         ? "Choose a new password for your account."
                         : (session
@@ -352,7 +352,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                   whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.98 }}
                   disabled={isLoading}
-                  className="relative w-full py-3.5 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm shadow-sm transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="relative w-full py-3.5 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm shadow-sm transition-all duration-feedback disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   <div className="flex items-center justify-center gap-2">
                     {isLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : <span>Save new password</span>}
@@ -366,7 +366,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                   whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => window.location.href = '/dashboard'}
-                  className="relative w-full py-3.5 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm overflow-hidden group shadow-sm transition-all duration-300"
+                  className="relative w-full py-3.5 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm overflow-hidden group shadow-sm transition-all duration-feedback"
                 >
                   <div className="flex items-center justify-center gap-2">
                     <LayoutDashboard className="w-4 h-4" />
@@ -379,7 +379,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                   whileTap={{ scale: 0.98 }}
                   onClick={handleLogout}
                   disabled={isLoading}
-                  className="relative w-full py-3.5 rounded-xl bg-ash-100 dark:bg-ash-800/50 text-ash-700 dark:text-ash-300 font-medium text-sm border border-ash-200 dark:border-white/10 hover:bg-ash-200 dark:hover:bg-ash-800 transition-all duration-300"
+                  className="relative w-full py-3.5 rounded-xl bg-ash-100 dark:bg-ash-800/50 text-ash-700 dark:text-ash-300 font-medium text-sm border border-ash-200 dark:border-white/10 hover:bg-ash-200 dark:hover:bg-ash-800 transition-all duration-feedback"
                 >
                   <div className="flex items-center justify-center gap-2">
                     {isLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : <LogOut size={16} strokeWidth={1.75} />}
@@ -477,9 +477,9 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.98 }}
                     disabled={isLoading}
-                    className="relative w-full py-3.5 mt-2 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm overflow-hidden group shadow-sm transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="relative w-full py-3.5 mt-2 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm overflow-hidden group shadow-sm transition-all duration-feedback disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    <div className="absolute inset-0 bg-white/20 translate-y-[-100%] group-hover:translate-y-[100%] transition-transform duration-700 ease-in-out pointer-events-none"></div>
+                    <div className="absolute inset-0 bg-white/20 translate-y-[-100%] group-hover:translate-y-[100%] transition-transform duration-move ease-in-out pointer-events-none"></div>
 
                     <div className="flex items-center justify-center gap-2">
                       {isLoading ? (
@@ -495,7 +495,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                 </form>
 
                 <div className="mt-8 text-center">
-                  <p className="text-sm text-ash-600 dark:text-ash-400 transition-colors duration-500">
+                  <p className="text-sm text-ash-600 dark:text-ash-400 transition-colors duration-tint">
                     {isLoginMode ? "Don't have an account? " : "Already have an account? "}
                     <button
                       onClick={toggleMode}
@@ -528,11 +528,11 @@ function InputField({ icon: Icon, ...props }) {
   return (
     <div className="relative group">
       <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-        <Icon className="h-4 w-4 text-ash-500 dark:text-ash-500 group-focus-within:text-ash-700 dark:group-focus-within:text-ash-200 transition-colors duration-300" />
+        <Icon className="h-4 w-4 text-ash-500 dark:text-ash-500 group-focus-within:text-ash-700 dark:group-focus-within:text-ash-200 transition-colors duration-tint" />
       </div>
       <input
         {...props}
-        className="w-full pl-10 pr-4 py-3.5 bg-ash-50/50 dark:bg-white/[0.03] border border-ash-200 dark:border-white/[0.08] rounded-xl text-sm text-ash-900 dark:text-white placeholder:text-ash-500 dark:placeholder:text-ash-500 focus:outline-none focus:ring-2 focus:ring-ash-900/15 dark:focus:ring-white/15 focus:border-ash-400 dark:focus:border-ash-500 focus:bg-white dark:focus:bg-white/[0.05] shadow-sm dark:shadow-none transition-all duration-300"
+        className="w-full pl-10 pr-4 py-3.5 bg-ash-50/50 dark:bg-white/[0.03] border border-ash-200 dark:border-white/[0.08] rounded-xl text-sm text-ash-900 dark:text-white placeholder:text-ash-500 dark:placeholder:text-ash-500 focus:outline-none focus:ring-2 focus:ring-ash-900/15 dark:focus:ring-white/15 focus:border-ash-400 dark:focus:border-ash-500 focus:bg-white dark:focus:bg-white/[0.05] shadow-sm dark:shadow-none transition-all duration-feedback"
       />
     </div>
   );
