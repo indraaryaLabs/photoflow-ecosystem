@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   Copy, Check, Plus, FolderOpen, Link as LinkIcon, Clock,
   CheckCircle2, Loader2, MoreVertical, Edit, Trash2, X, AlertOctagon,
-  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks
+  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks, KeyRound
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { API_BASE } from '../lib/api';
@@ -10,6 +11,7 @@ import { sudahDitawari, tandaiSudahDitawari } from '../lib/driveOnboarding';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
 import SelectionListModal from './SelectionListModal';
+import { sudahDilihat, tandaiDilihat, waktuRelatif } from '../lib/submissions';
 
 // --- STYLES & ANIMATIONS ---
 const globalStyles = `
@@ -68,6 +70,12 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
   const [deletingProject, setDeletingProject] = useState(null);
   const [reopeningProject, setReopeningProject] = useState(null);
   const [listingProject, setListingProject] = useState(null);
+  const [rotatingProject, setRotatingProject] = useState(null);
+  const [formOpen, setFormOpen] = useState(false);
+  // Project yang kirimannya sudah pernah dibuka fotografer. Disimpan di
+  // peramban, bukan di database: ini catatan "sudah saya lihat" milik satu
+  // orang di satu perangkat, bukan keadaan project.
+  const [dilihat, setDilihat] = useState(() => sudahDilihat());
   const [actionLoading, setActionLoading] = useState(false);
 
   // Menu titik tiga mana yang sedang terbuka — satu penanda untuk seluruh
@@ -231,6 +239,36 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleRotateLink = async () => {
+    if (!rotatingProject) return;
+    setActionLoading(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+
+      const sendRequest = (accessToken) => fetch(`${API_BASE}/api/projects/${rotatingProject.id}/rotate-link`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+
+      const checkedRes = await handleApiResponse(await sendRequest(token), sendRequest);
+      if (!checkedRes) return;
+      if (!checkedRes.ok) throw new Error('Could not issue a new link.');
+
+      showToast('New link issued. The old one no longer works.');
+      setRotatingProject(null);
+      fetchProjects();
+    } catch (err) {
+      if (err.message === 'Failed to fetch') {
+        showToast('The server did not respond. Please try again later.', 'error');
+      } else {
+        showToast(err.message, 'error');
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleResync = async (project) => {
     try {
       const token = await getAccessToken();
@@ -259,7 +297,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
       await fetchProjects();
       const jumlah = body?.photos_found ?? 0;
       if (jumlah > 0) showToast(`${jumlah} photos pulled from Drive.`);
-      else showToast('The folder was read, but it contains no photos.', 'error');
+      else showToast('The folder was read, but no photos came back. Check that it is shared as "Anyone with the link".', 'error');
     } catch (err) {
       if (err.message === 'Failed to fetch') {
         showToast('The server did not respond. Please try again later.', 'error');
@@ -492,11 +530,17 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
       await fetchDriveStatus();
       setFormData({ projectName: '', clientName: '', maxSelection: 50, driveLink: '', clientWa: '' });
 
+      setFormOpen(false);
+
       if (typeof jumlahFoto === 'number' && jumlahFoto > 0) {
         showToast(`Project created. ${jumlahFoto} photos pulled from Drive.`);
       } else {
+        // Sebabnya yang paling sering: foldernya belum dibagikan. Menyebutkan
+        // tindakan yang harus diambil lebih berguna daripada melaporkan bahwa
+        // sesuatu gagal.
         showToast(
-          body?.message || 'Project created, but no photos could be pulled from Drive.',
+          body?.message
+            || 'Project created, but no photos came back. Check that the folder is shared as "Anyone with the link".',
           'error'
         );
       }
@@ -563,14 +607,14 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
   }
 
   return (
-    <div className="min-h-screen transition-colors duration-500">
+    <div className="min-h-screen transition-colors duration-tint">
       <style>{globalStyles}</style>
 
       {/* MAIN LAYOUT */}
       <div className="min-h-screen bg-ash-50 dark:bg-ash-950 text-ash-900 dark:text-ash-100 font-sans">
 
         {/* HEADER (Sticky, Glassmorphism) */}
-        <header className="sticky top-0 z-40 bg-white/70 dark:bg-ash-950/70 backdrop-blur-xl border-b border-ash-200 dark:border-white/10 transition-colors duration-300">
+        <header className="sticky top-0 z-40 bg-white/70 dark:bg-ash-950/70 backdrop-blur-xl border-b border-ash-200 dark:border-white/10 transition-colors duration-tint">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="grid h-9 w-9 place-items-center rounded-lg border border-ash-200 bg-ash-100 text-ash-700 dark:border-white/10 dark:bg-white/5 dark:text-ash-200">
@@ -587,7 +631,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
 
               <button
                 onClick={handleLogout}
-                className="p-2.5 rounded-full bg-ash-100 dark:bg-white/5 border border-transparent dark:border-white/5 hover:bg-danger-50 dark:hover:bg-danger-500/10 text-ash-600 dark:text-ash-400 hover:text-danger-500 dark:hover:text-danger-400 transition-all duration-300 hover:scale-105 active:scale-95"
+                className="p-2.5 rounded-full bg-ash-100 dark:bg-white/5 border border-transparent dark:border-white/5 hover:bg-danger-50 dark:hover:bg-danger-500/10 text-ash-600 dark:text-ash-400 hover:text-danger-500 dark:hover:text-danger-400 transition-all duration-feedback hover:scale-105 active:scale-95"
                 title="Sign out"
               >
                 <LogOut size={16} strokeWidth={1.75} />
@@ -629,133 +673,29 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-            {/* LEFT PANEL: FORM */}
-            <div className="col-span-1">
-              <div className="sticky top-28">
-                <div className="mb-6">
-                  <h2 className="text-xl font-semibold tracking-tight">New Project</h2>
-                  <p className="text-sm text-ash-600 dark:text-ash-400 mt-1">Create a new gallery selection for your client.</p>
-                </div>
-
-                <div className="bg-white/80 dark:bg-white/[0.03] backdrop-blur-2xl border border-ash-200 dark:border-ash-800 shadow-sm rounded-2xl p-6 transition-all duration-300 relative overflow-hidden group">
-                  <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
-                    {/* Input: Project Name */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-ash-600 dark:text-ash-300 uppercase tracking-wider">Project Name</label>
-                      <input
-                        type="text"
-                        required
-                        value={formData.projectName}
-                        onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
-                        placeholder="e.g. Engagement Session, Maternity"
-                        className="w-full bg-ash-50 dark:bg-black/20 border border-ash-200 dark:border-white/10 focus:border-ash-500 dark:focus:border-ash-400 focus:ring-4 focus:ring-ash-900/10 dark:focus:ring-white/10 rounded-xl px-4 py-3 text-sm transition-all duration-300 outline-none placeholder:text-ash-500 dark:placeholder:text-ash-600"
-                      />
-                    </div>
-
-                    {/* Input: Client Name */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-ash-600 dark:text-ash-300 uppercase tracking-wider">Client Name</label>
-                      <input
-                        type="text"
-                        required
-                        value={formData.clientName}
-                        onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                        placeholder="e.g. The Hartleys"
-                        className="w-full bg-ash-50 dark:bg-black/20 border border-ash-200 dark:border-white/10 focus:border-ash-500 dark:focus:border-ash-400 focus:ring-4 focus:ring-ash-900/10 dark:focus:ring-white/10 rounded-xl px-4 py-3 text-sm transition-all duration-300 outline-none placeholder:text-ash-500 dark:placeholder:text-ash-600"
-                      />
-                    </div>
-
-                    {/* Input: Max Selections & Client WhatsApp (Grid 2 kolom) */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-ash-600 dark:text-ash-300 uppercase tracking-wider">Max Selections</label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            min="1"
-                            value={formData.maxSelection}
-                            onChange={(e) => setFormData({ ...formData, maxSelection: parseInt(e.target.value) })}
-                            className="w-full bg-ash-50 dark:bg-black/20 border border-ash-200 dark:border-white/10 focus:border-ash-500 dark:focus:border-ash-400 focus:ring-4 focus:ring-ash-900/10 dark:focus:ring-white/10 rounded-xl pl-4 pr-16 py-3 text-sm transition-all duration-300 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          />
-                          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-ash-500 font-medium">
-                            Photos
-                          </div>
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-ash-600 dark:text-ash-300 uppercase tracking-wider">Client WhatsApp</label>
-                        <input
-                          type="tel"
-                          required
-                          value={formData.clientWa}
-                          onChange={(e) => {
-                            let val = e.target.value;
-                            if (val.startsWith('0')) {
-                              val = '62' + val.substring(1);
-                            } else if (val.startsWith('+62')) {
-                              val = '62' + val.substring(3);
-                            }
-                            val = val.replace(/[^\d]/g, '');
-                            setFormData({ ...formData, clientWa: val });
-                          }}
-                          placeholder="62812..."
-                          className="w-full bg-ash-50 dark:bg-black/20 border border-ash-200 dark:border-white/10 focus:border-ash-500 dark:focus:border-ash-400 focus:ring-4 focus:ring-ash-900/10 dark:focus:ring-white/10 rounded-xl px-4 py-3 text-sm transition-all duration-300 outline-none placeholder:text-ash-500 dark:placeholder:text-ash-600"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Input: Drive Link */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-ash-600 dark:text-ash-300 uppercase tracking-wider">Google Drive Link</label>
-                      <div className="relative">
-                        <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ash-500" />
-                        <input
-                          type="url"
-                          required
-                          value={formData.driveLink}
-                          onChange={(e) => setFormData({ ...formData, driveLink: e.target.value })}
-                          placeholder="https://drive.google.com/..."
-                          className="w-full bg-ash-50 dark:bg-black/20 border border-ash-200 dark:border-white/10 focus:border-ash-500 dark:focus:border-ash-400 focus:ring-4 focus:ring-ash-900/10 dark:focus:ring-white/10 rounded-xl pl-10 pr-4 py-3 text-sm transition-all duration-300 outline-none placeholder:text-ash-500 dark:placeholder:text-ash-600"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Submit Button */}
-                    <button
-                      type="submit"
-                      disabled={!formData.clientName || isSubmitting}
-                      className="w-full mt-2 flex items-center justify-center gap-2 bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 rounded-xl px-4 py-3.5 text-sm font-semibold shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                    >
-                      {isSubmitting ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                          <span>Creating...</span>
-                        </div>
-                      ) : (
-                        <>
-                          <Plus size={16} strokeWidth={1.75} />
-                          <span>Create Project</span>
-                        </>
-                      )}
-                    </button>
-                  </form>
-                </div>
-              </div>
-            </div>
-
-            {/* RIGHT PANEL: LIST */}
-            <div className="col-span-1 lg:col-span-2">
-              <div className="mb-6 flex items-center justify-between">
+          <div>
+            <div>
+              {/* Formulir pembuatan project dulu terbuka permanen di kolom
+                  kiri, memakan sepertiga layar untuk tindakan yang dilakukan
+                  seminggu sekali. Sekarang jadi tombol, dan ruangnya kembali
+                  ke daftar project -- yang justru dibuka setiap hari. */}
+              <div className="mb-6 flex items-center justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-semibold tracking-tight">Client Projects</h2>
-                  <p className="text-sm text-ash-600 dark:text-ash-400 mt-1">Manage and track your gallery delivery status.</p>
+                  <p className="text-sm text-ash-600 dark:text-ash-400 mt-1">
+                    {projects.length === 0
+                      ? 'Nothing here yet.'
+                      : `${projects.length} project${projects.length === 1 ? '' : 's'}.`}
+                  </p>
                 </div>
 
-                <div className="text-sm font-medium px-3 py-1 bg-ash-100 dark:bg-white/5 border border-ash-200 dark:border-white/10 rounded-full text-ash-600 dark:text-ash-300">
-                  {projects.length} Active
-                </div>
+                <button
+                  onClick={() => setFormOpen(true)}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-ash-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors duration-tint hover:bg-ash-900 dark:bg-ash-100 dark:text-ash-950 dark:hover:bg-white"
+                >
+                  <Plus size={16} strokeWidth={2} aria-hidden="true" />
+                  New project
+                </button>
               </div>
 
               {isLoading ? (
@@ -803,7 +743,13 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
                       }}
                       onReopen={() => setReopeningProject(project)}
                       onResync={() => handleResync(project)}
-                      onCopyList={() => setListingProject(project)}
+                      onCopyList={() => {
+                        setListingProject(project);
+                        // Membuka kirimannya berarti sudah dilihat.
+                        setDilihat(tandaiDilihat(project.id, project.submitted_at));
+                      }}
+                      onRotateLink={() => setRotatingProject(project)}
+                      isNew={Boolean(project.submitted_at) && dilihat[project.id] !== project.submitted_at}
                       onWhatsApp={() => {
                         const url = `${window.location.origin}/?token=${project.magic_link_token}`;
                         const text = `Hi ${project.client_name},\nHere is the photo gallery link for the *${project.project_name}* project.\n\nOpen the link below to start choosing your photos (up to ${project.max_selections}):\n${url}\n\nThank you.`;
@@ -818,6 +764,167 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
             </div>
           </div>
         </main>
+
+        {/* PANEL GESER: PROJECT BARU */}
+        <AnimatePresence>
+          {formOpen && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                onClick={() => setFormOpen(false)}
+                className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
+              />
+              <motion.div
+                role="dialog"
+                aria-modal="true"
+                aria-label="New project"
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                // Pegas, bukan durasi tetap: ini perpindahan di ruang, satu-satunya
+                // jenis gerak yang pantas memakainya.
+                transition={{ type: 'spring', stiffness: 380, damping: 40 }}
+                className="fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto border-l border-ash-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-ash-900"
+              >
+                <div className="mb-6 flex items-start justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold tracking-tight">New project</h2>
+                    <p className="mt-1 text-sm text-ash-600 dark:text-ash-400">
+                      Create a gallery for your client to pick from.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFormOpen(false)}
+                    aria-label="Close"
+                    className="-mr-2 p-2 text-ash-500 transition-colors duration-tint hover:text-ash-900 dark:hover:text-ash-200"
+                  >
+                    <X size={20} strokeWidth={1.75} />
+                  </button>
+                </div>
+
+                  <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
+                    {/* Input: Project Name */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-ash-600 dark:text-ash-300 uppercase tracking-wider">Project Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.projectName}
+                        onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
+                        placeholder="e.g. Engagement Session, Maternity"
+                        className="w-full bg-ash-50 dark:bg-black/20 border border-ash-200 dark:border-white/10 focus:border-ash-500 dark:focus:border-ash-400 focus:ring-4 focus:ring-ash-900/10 dark:focus:ring-white/10 rounded-xl px-4 py-3 text-sm transition-all duration-feedback outline-none placeholder:text-ash-500 dark:placeholder:text-ash-600"
+                      />
+                    </div>
+
+                    {/* Input: Client Name */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-ash-600 dark:text-ash-300 uppercase tracking-wider">Client Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.clientName}
+                        onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
+                        placeholder="e.g. The Hartleys"
+                        className="w-full bg-ash-50 dark:bg-black/20 border border-ash-200 dark:border-white/10 focus:border-ash-500 dark:focus:border-ash-400 focus:ring-4 focus:ring-ash-900/10 dark:focus:ring-white/10 rounded-xl px-4 py-3 text-sm transition-all duration-feedback outline-none placeholder:text-ash-500 dark:placeholder:text-ash-600"
+                      />
+                    </div>
+
+                    {/* Input: Max Selections & Client WhatsApp (Grid 2 kolom) */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-ash-600 dark:text-ash-300 uppercase tracking-wider">Max Selections</label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="1"
+                            value={formData.maxSelection}
+                            onChange={(e) => setFormData({ ...formData, maxSelection: parseInt(e.target.value) })}
+                            className="w-full bg-ash-50 dark:bg-black/20 border border-ash-200 dark:border-white/10 focus:border-ash-500 dark:focus:border-ash-400 focus:ring-4 focus:ring-ash-900/10 dark:focus:ring-white/10 rounded-xl pl-4 pr-16 py-3 text-sm transition-all duration-feedback outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-ash-500 font-medium">
+                            Photos
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-ash-600 dark:text-ash-300 uppercase tracking-wider">Client WhatsApp</label>
+                        <input
+                          type="tel"
+                          required
+                          value={formData.clientWa}
+                          onChange={(e) => {
+                            let val = e.target.value;
+                            if (val.startsWith('0')) {
+                              val = '62' + val.substring(1);
+                            } else if (val.startsWith('+62')) {
+                              val = '62' + val.substring(3);
+                            }
+                            val = val.replace(/[^\d]/g, '');
+                            setFormData({ ...formData, clientWa: val });
+                          }}
+                          placeholder="62812..."
+                          className="w-full bg-ash-50 dark:bg-black/20 border border-ash-200 dark:border-white/10 focus:border-ash-500 dark:focus:border-ash-400 focus:ring-4 focus:ring-ash-900/10 dark:focus:ring-white/10 rounded-xl px-4 py-3 text-sm transition-all duration-feedback outline-none placeholder:text-ash-500 dark:placeholder:text-ash-600"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Input: Drive Link */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-ash-600 dark:text-ash-300 uppercase tracking-wider">Google Drive Link</label>
+                      <div className="relative">
+                        <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ash-500" />
+                        <input
+                          type="url"
+                          required
+                          value={formData.driveLink}
+                          onChange={(e) => setFormData({ ...formData, driveLink: e.target.value })}
+                          placeholder="https://drive.google.com/..."
+                          aria-describedby="drive-link-hint"
+                          className="w-full bg-ash-50 dark:bg-black/20 border border-ash-200 dark:border-white/10 focus:border-ash-500 dark:focus:border-ash-400 focus:ring-4 focus:ring-ash-900/10 dark:focus:ring-white/10 rounded-xl pl-10 pr-4 py-3 text-sm transition-all duration-feedback outline-none placeholder:text-ash-500 dark:placeholder:text-ash-600"
+                        />
+                      </div>
+                      {/* Thumbnail foto dimuat langsung dari Drive oleh peramban
+                          klien, yang tidak membawa kredensial siapa pun. Jadi
+                          folder yang tidak dibagikan menghasilkan galeri berisi
+                          kotak kosong -- dan sampai sekarang tidak ada satu pun
+                          kalimat di layar ini yang menyebutkannya, sehingga
+                          kegagalannya baru ketahuan setelah tautannya terkirim
+                          ke klien. */}
+                      <p id="drive-link-hint" className="text-xs text-ash-600 dark:text-ash-400 leading-relaxed">
+                        Share the folder as{' '}
+                        <span className="font-medium text-ash-800 dark:text-ash-200">Anyone with the link</span>{' '}
+                        first. Your client&apos;s browser loads the photos straight from Drive, so a private
+                        folder shows up as an empty gallery.
+                      </p>
+                    </div>
+
+                    {/* Submit Button */}
+                    <button
+                      type="submit"
+                      disabled={!formData.clientName || isSubmitting}
+                      className="w-full mt-2 flex items-center justify-center gap-2 bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 rounded-xl px-4 py-3.5 text-sm font-semibold shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-all duration-feedback disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                    >
+                      {isSubmitting ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          <span>Creating...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <Plus size={16} strokeWidth={1.75} />
+                          <span>Create Project</span>
+                        </>
+                      )}
+                    </button>
+                  </form>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
 
         {/* CUSTOM EDIT MODAL */}
         {editingProject && (
@@ -917,6 +1024,28 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
           </div>
         )}
 
+        {/* TERBITKAN ULANG MAGIC LINK */}
+        {rotatingProject && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-slide-up-fade">
+            <div className="bg-white dark:bg-ash-900 border border-ash-200 dark:border-white/10 shadow-2xl rounded-2xl p-6 w-full max-w-sm text-center relative">
+              <div className="mx-auto w-12 h-12 rounded-full bg-ash-100 dark:bg-white/5 border border-ash-200 dark:border-white/10 flex items-center justify-center mb-4 text-ash-700 dark:text-ash-200">
+                <KeyRound size={24} strokeWidth={1.75} />
+              </div>
+              <h2 className="text-xl font-semibold text-ash-900 dark:text-ash-100 mb-2">Issue a new link?</h2>
+              <p className="text-sm text-ash-600 dark:text-ash-400 mb-6">
+                The link you already sent to <strong className="text-ash-800 dark:text-ash-300">{rotatingProject.client_name}</strong> stops
+                working immediately, and you will need to send the new one. Photos already selected are kept.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setRotatingProject(null)} className="flex-1 px-4 py-3 rounded-xl border border-ash-200 dark:border-ash-700 font-medium text-sm hover:bg-ash-100 dark:hover:bg-ash-800 transition-colors">Cancel</button>
+                <button onClick={handleRotateLink} disabled={actionLoading} className="flex-1 px-4 py-3 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm shadow-sm transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
+                  {actionLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : "Yes, issue new link"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* DAFTAR NAMA BERKAS UNTUK LIGHTROOM */}
         {listingProject && (
           <SelectionListModal
@@ -962,7 +1091,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
  * "Delete" hilang di baliknya. Dengan satu penanda di induk, hanya satu kartu
  * yang pernah terangkat, jadi tumpang tindih itu tidak mungkin terjadi lagi.
  */
-function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, onCopy, onOpenGallery, onWhatsApp, onEdit, onDelete, onReopen, onResync, onCopyList }) {
+function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, onCopy, onOpenGallery, onWhatsApp, onEdit, onDelete, onReopen, onResync, onCopyList, onRotateLink, isNew }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopyClick = () => {
@@ -1003,87 +1132,115 @@ function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, on
 
   const isPending = project.status === 'pending';
   const jumlahFoto = project.photo_count ?? 0;
+  const pratinjau = project.previews || [];
 
   return (
     <div
-      className={`group relative bg-white dark:bg-white/[0.03] backdrop-blur-md border border-ash-200 dark:border-white/10 rounded-2xl p-5 hover:shadow-xl dark:hover:shadow-2xl hover:bg-ash-50 dark:hover:bg-white/[0.05] hover:border-ash-300 dark:hover:border-white/20 transition-all duration-300 animate-slide-up-fade flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isMenuOpen ? 'z-50' : 'z-0 hover:z-10'}`}
+      className={`group relative flex flex-col justify-between gap-4 rounded-2xl border border-ash-200 bg-white p-4 transition-[box-shadow,border-color] duration-feedback hover:border-ash-300 hover:shadow-lg sm:flex-row sm:items-center dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-white/20 ${isMenuOpen ? 'z-50' : 'z-0 hover:z-10'}`}
       style={{ animationDelay: `${index * 0.05}s` }}
     >
-      {/* Card Info */}
-      <div className="flex items-start sm:items-center gap-4">
-        {/* Status Icon Indicator */}
-        <div className="hidden sm:flex mt-1 sm:mt-0 items-center justify-center w-10 h-10 rounded-full bg-ash-100 dark:bg-white/5 border border-ash-200 dark:border-white/5 group-hover:scale-110 transition-transform duration-300">
-          <FolderOpen className={`w-5 h-5 ${isPending ? 'text-warning-500' : 'text-success-500'}`} />
-        </div>
+      {/* Strip pratinjau. Kartu ini dulu memuat ikon folder di aplikasi yang
+          seluruh isinya fotografi -- tanda "template SaaS" yang paling cepat
+          terbaca, sekaligus membuang cara tercepat mengenali sebuah project:
+          melihat isinya. */}
+      <div className="flex items-center gap-4 min-w-0">
+        {pratinjau.length > 0 ? (
+          <div className="hidden sm:flex shrink-0 -space-x-3">
+            {pratinjau.map((url, i) => (
+              <img
+                key={url + i}
+                src={url}
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                className="h-12 w-12 rounded-lg object-cover ring-2 ring-white dark:ring-ash-950 bg-ash-200 dark:bg-ash-800"
+                style={{ zIndex: pratinjau.length - i }}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="hidden sm:grid shrink-0 h-12 w-12 place-items-center rounded-lg border border-dashed border-ash-300 dark:border-white/10 text-ash-500">
+            <FolderOpen size={18} strokeWidth={1.75} aria-hidden="true" />
+          </div>
+        )}
 
-        <div>
-          <h3 className="text-base font-semibold text-ash-900 dark:text-ash-100 group-hover:text-ash-950 dark:group-hover:text-white transition-colors">
-            {project.project_name || "Untitled Project"}
-          </h3>
-          <p className="text-sm font-medium text-ash-600 dark:text-ash-400 mt-0.5">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-semibold text-ash-900 dark:text-ash-100 truncate">
+              {project.project_name || 'Untitled Project'}
+            </h3>
+            {isNew && (
+              <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-ash-900 text-white dark:bg-ash-100 dark:text-ash-950 text-[10px] font-bold uppercase tracking-wide">
+                New
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-ash-600 dark:text-ash-400 mt-0.5 truncate">
             {project.client_name}
           </p>
-          <div className="flex items-center gap-3 mt-1.5 text-xs text-ash-600 dark:text-ash-400">
-            <span className="flex items-center gap-1.5">
-              <Clock size={14} strokeWidth={1.75} />
-              {new Date(project.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          {/* Satu baris keterangan, bukan tiga kolom bertitik pemisah.
+              Statusnya ikut di sini alih-alih jadi lencana berwarna tersendiri:
+              di kartu yang sudah memuat foto, lencana berwarna adalah unsur
+              yang paling berisik dan paling sedikit isinya. */}
+          <p className="text-xs text-ash-500 dark:text-ash-500 mt-1.5 truncate">
+            {isPending
+              // Nama depan saja tidak bisa dipakai: "The Mercers" jadi
+              // "Waiting for The". Nama keluarga memang lazim dipakai klien
+              // fotografi, dan barisnya sudah dipotong dengan truncate.
+              ? `Waiting for ${project.client_name}`
+              : `Picks submitted ${waktuRelatif(project.submitted_at) || 'earlier'}`}
+            {' · '}
+            <span className={jumlahFoto === 0 ? 'text-warning-600 dark:text-warning-400 font-medium' : undefined}>
+              {jumlahFoto === 0 ? 'No photos yet' : `${jumlahFoto} photos`}
             </span>
-            <span className="w-1 h-1 rounded-full bg-ash-300 dark:bg-ash-700"></span>
-            <span className={jumlahFoto === 0 ? 'text-warning-600 dark:text-warning-400 font-semibold' : undefined}>
-              {jumlahFoto === 0
-                ? 'No photos yet'
-                : `${jumlahFoto} photos · up to ${project.max_selections} picks`}
-            </span>
-          </div>
+          </p>
         </div>
       </div>
 
-      {/* Card Actions & Badges */}
-      <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 border-ash-100 dark:border-white/5 pt-4 sm:pt-0">
+      <div className="flex items-center gap-2 border-t sm:border-t-0 border-ash-100 dark:border-white/5 pt-4 sm:pt-0">
 
-        {/* Status Badge */}
-        <div className={`px-3 py-1.5 rounded-full border text-xs font-medium flex items-center gap-1.5 shadow-sm
-          ${isPending
-            ? 'bg-warning-50 text-warning-600 border-warning-200 dark:bg-warning-500/10 dark:text-warning-400 dark:border-warning-500/20 shadow-warning-500/5 dark:shadow-warning-500/10'
-            : 'bg-success-50 text-success-600 border-success-200 dark:bg-success-500/10 dark:text-success-400 dark:border-success-500/20 shadow-success-500/5 dark:shadow-success-500/10'
-          }
-        `}>
-          <span className={`w-1.5 h-1.5 rounded-full ${isPending ? 'bg-warning-500 animate-pulse' : 'bg-success-500'}`}></span>
-          {isPending ? 'Pending Selection' : 'Submitted'}
-        </div>
+        {/* SATU tindakan utama, dan isinya berubah menurut keadaan project.
+            Sebelumnya ada empat tombol ikon sederajat berjajar; kalau semuanya
+            sama bobotnya, tidak ada yang memberi tahu mana yang penting.
+            Ketika klien belum memilih, yang dibutuhkan adalah mengirim
+            tautannya; ketika sudah, yang dibutuhkan adalah melihat pilihannya. */}
+        {isPending ? (
+          <button
+            onClick={onWhatsApp}
+            className="inline-flex items-center gap-2 rounded-xl bg-ash-800 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-tint hover:bg-ash-900 dark:bg-ash-100 dark:text-ash-950 dark:hover:bg-white"
+          >
+            <MessageCircle size={15} strokeWidth={1.75} aria-hidden="true" />
+            <span className="hidden sm:inline">Send link</span>
+          </button>
+        ) : (
+          <button
+            onClick={onCopyList}
+            className="inline-flex items-center gap-2 rounded-xl bg-ash-800 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-tint hover:bg-ash-900 dark:bg-ash-100 dark:text-ash-950 dark:hover:bg-white"
+          >
+            <ListChecks size={15} strokeWidth={1.75} aria-hidden="true" />
+            <span className="hidden sm:inline">Review picks</span>
+          </button>
+        )}
 
-        {/* Buka galeri klien di tab baru. Galeri hanya butuh magic link token,
-            bukan sesi login, jadi ini tetap benar meski dibuka sambil masuk
-            sebagai fotografer. */}
+        <button
+          onClick={handleCopyClick}
+          className="grid h-9 w-9 place-items-center rounded-xl border border-ash-200 bg-white text-ash-600 transition-colors duration-tint hover:bg-ash-100 hover:text-ash-950 dark:border-white/10 dark:bg-white/5 dark:text-ash-400 dark:hover:bg-white/10 dark:hover:text-white"
+          title="Copy gallery link"
+          aria-label="Copy gallery link"
+        >
+          {copied
+            ? <Check size={15} strokeWidth={2} className="text-success-500" />
+            : <Copy size={15} strokeWidth={1.75} />}
+        </button>
+
         <button
           onClick={onOpenGallery}
-          className="p-2 rounded-xl border border-ash-200 dark:border-white/5 bg-white dark:bg-white/5 text-ash-600 dark:text-ash-400 hover:text-ash-950 dark:hover:text-white hover:border-ash-300 dark:hover:border-white/20 hover:bg-ash-100 dark:hover:bg-white/10 transition-all duration-200 active:scale-90 group/open"
+          className="grid h-9 w-9 place-items-center rounded-xl border border-ash-200 bg-white text-ash-600 transition-colors duration-tint hover:bg-ash-100 hover:text-ash-950 dark:border-white/10 dark:bg-white/5 dark:text-ash-400 dark:hover:bg-white/10 dark:hover:text-white"
           title="Open client gallery in a new tab"
           aria-label="Open client gallery in a new tab"
         >
-          <ExternalLink size={16} strokeWidth={1.75} className="group-hover/open:scale-110 transition-transform" />
-        </button>
-
-        {/* Copy Action */}
-        <button
-          onClick={handleCopyClick}
-          className="p-2 rounded-xl border border-ash-200 dark:border-white/5 bg-white dark:bg-white/5 text-ash-600 dark:text-ash-400 hover:text-ash-950 dark:hover:text-white hover:border-ash-300 dark:hover:border-white/20 hover:bg-ash-100 dark:hover:bg-white/10 transition-all duration-200 active:scale-90 group/btn"
-          title="Copy Magic Link"
-        >
-          {copied ? (
-            <Check size={16} strokeWidth={1.75} className="text-success-500" />
-          ) : (
-            <Copy size={16} strokeWidth={1.75} className="group-hover/btn:scale-110 transition-transform" />
-          )}
-        </button>
-
-        {/* WhatsApp Action */}
-        <button
-          onClick={onWhatsApp}
-          className="p-2 rounded-xl border border-ash-200 dark:border-white/5 bg-white dark:bg-white/5 text-ash-600 dark:text-ash-400 hover:text-success-500 dark:hover:text-success-400 hover:border-success-200 dark:hover:border-success-500/20 hover:bg-success-50 dark:hover:bg-success-500/10 transition-all duration-200 active:scale-90 group/wa"
-          title="Send via WhatsApp"
-        >
-          <MessageCircle size={16} strokeWidth={1.75} className="group-hover/wa:scale-110 transition-transform" />
+          <ExternalLink size={15} strokeWidth={1.75} />
         </button>
 
         {/* Kebab Action */}
@@ -1119,6 +1276,9 @@ function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, on
                     <RotateCcw size={14} strokeWidth={1.75} /> Reopen selection
                   </button>
                 )}
+                <button role="menuitem" onClick={() => { onCloseMenu(); onRotateLink(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-ash-700 dark:text-ash-300 hover:bg-ash-50 dark:hover:bg-white/5 flex items-center gap-2 whitespace-nowrap">
+                  <KeyRound size={14} strokeWidth={1.75} /> Issue a new link
+                </button>
                 <button role="menuitem" onClick={() => { onCloseMenu(); onDelete(); }} className="w-full px-4 py-2.5 text-left text-sm font-medium text-danger-600 dark:text-danger-400 hover:bg-danger-50 dark:hover:bg-danger-900/10 flex items-center gap-2">
                   <Trash2 size={14} strokeWidth={1.75} /> Delete
                 </button>

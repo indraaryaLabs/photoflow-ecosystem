@@ -105,6 +105,10 @@ func SetupRouter() (*gin.Engine, error) {
 	// Lightroom. Lihat handlers.ListSelections.
 	r.GET("/api/projects/:id/selections", requireAuth, h.ListSelections)
 
+	// Menerbitkan magic link baru dan mematikan yang lama. Lihat
+	// handlers.RotateMagicLink.
+	r.POST("/api/projects/:id/rotate-link", requireAuth, h.RotateMagicLink)
+
 	// Jalan pulang dari status "submitted". Lihat handlers.ReopenSelection
 	// untuk alasan kenapa ini perlu ada.
 	r.POST("/api/projects/:id/reopen", requireAuth, h.ReopenSelection)

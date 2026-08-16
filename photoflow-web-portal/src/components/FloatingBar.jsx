@@ -87,7 +87,7 @@ Thank you.`;
               }}
               disabled={isSubmitting && !isSubmitted}
               className={cn(
-                "ml-auto transition-all duration-300 px-5 sm:px-6 py-2.5 rounded-full font-semibold text-sm flex items-center justify-center gap-2 min-h-[44px]",
+                "ml-auto transition-all duration-feedback px-5 sm:px-6 py-2.5 rounded-full font-semibold text-sm flex items-center justify-center gap-2 min-h-[44px]",
                 isSubmitted
                   // Hijau WhatsApp dibiarkan apa adanya: itu warna merek mereka,
                   // penanda ke mana tombol ini membawa, bukan pilihan gaya kita.

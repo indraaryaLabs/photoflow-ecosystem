@@ -69,6 +69,59 @@
   --color-warning-600: #936922;
 }
 
+/* Tempo gerak.
+ *
+ * Sebelumnya seluruh aplikasi memakai satu kecepatan: 26 tempat memakai
+ * duration-300, sembilan memakai duration-500, tanpa memandang apa yang
+ * digerakkan. Itu sumber rasa kaku — bukan kecepatannya yang salah,
+ * melainkan satu kecepatan untuk semua jenis perubahan.
+ *
+ * Empat tempo, dipisah menurut apa yang dikomunikasikan gerakannya:
+ *
+ *   feedback  jawaban atas tindakan yang baru saja dilakukan orangnya.
+ *             Harus terasa seketika; di atas 150ms mulai terbaca sebagai
+ *             lag, bukan animasi.
+ *   enter     elemen muncul atau pergi.
+ *   move      perpindahan di ruang (panel, modal, foto ke pratinjau).
+ *             Satu-satunya yang pantas memakai pegas.
+ *   tint      pergantian warna, termasuk pergantian tema.
+ */
+:root {
+  --duration-feedback: 120ms;
+  --duration-enter: 200ms;
+  --duration-move: 320ms;
+  --duration-tint: 150ms;
+  --ease-out-quart: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Didaftarkan sebagai utilitas sungguhan, bukan lewat @theme: Tailwind v4
+ * tidak punya namespace --duration-*, jadi menaruhnya di @theme menghasilkan
+ * variabel yang tidak pernah jadi kelas apa pun. */
+@utility duration-feedback {
+  transition-duration: var(--duration-feedback);
+  animation-duration: var(--duration-feedback);
+}
+
+@utility duration-enter {
+  transition-duration: var(--duration-enter);
+  animation-duration: var(--duration-enter);
+}
+
+@utility duration-move {
+  transition-duration: var(--duration-move);
+  animation-duration: var(--duration-move);
+}
+
+@utility duration-tint {
+  transition-duration: var(--duration-tint);
+  animation-duration: var(--duration-tint);
+}
+
+@utility ease-out-quart {
+  transition-timing-function: var(--ease-out-quart);
+}
+
+
 /* --- Base Layer Resets --- */
 @layer base {
   *,
@@ -93,6 +146,36 @@
   html.dark,
   html.dark body {
     background-color: var(--color-ash-950);
+  }
+
+  /* Menghormati orang yang mematikan animasi di sistemnya.
+   *
+   * Sebelum ini tidak ada satu tempat pun di aplikasi yang memeriksanya.
+   * Bagi sebagian orang animasi bukan hiasan yang mengganggu, melainkan
+   * pemicu mual dan pusing — dan galeri ini penuh gerakan: kartu membesar
+   * saat disentuh, foto meluncur di layar pratinjau, bilah melayang naik
+   * dari bawah.
+   *
+   * Yang disetel di sini bukan nol, melainkan 1ms. Nol membuat sebagian
+   * pustaka animasi tidak pernah menerima event "selesai", sehingga
+   * elemennya tersangkut di keadaan awal.
+   *
+   * scroll-behavior ikut dikembalikan ke auto: gulir yang dihaluskan adalah
+   * gerakan juga, dan justru yang paling sering memicu keluhan. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
+
+    html,
+    body {
+      scroll-behavior: auto;
+    }
   }
 
   /* Sorotan teks ikut netral. Dulu ini rgba indigo — satu-satunya tempat
