@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Copy, Loader2, X, AlertTriangle } from 'lucide-react';
+import { Check, Copy, Loader2, X, AlertTriangle, Grid2x2, List, ImageOff } from 'lucide-react';
 import {
   buildLightroomList,
   namesWithSpaces,
@@ -23,6 +23,11 @@ export default function SelectionListModal({ project, onClose, onFetch, onToast 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [names, setNames] = useState([]);
+  const [fotoTerpilih, setFotoTerpilih] = useState([]);
+  // Dua cara melihat pilihan yang sama. 'grid' untuk memeriksa dengan mata,
+  // 'list' untuk disalin ke Lightroom. Bawaannya grid: memeriksa lebih dulu,
+  // menyalin sesudahnya.
+  const [tampilan, setTampilan] = useState('grid');
   const [mode, setMode] = useState(MODE_BASENAME);
   const [extension, setExtension] = useState('CR3');
   const [copied, setCopied] = useState(false);
@@ -33,6 +38,7 @@ export default function SelectionListModal({ project, onClose, onFetch, onToast 
       .then((data) => {
         if (dibatalkan) return;
         setNames(data.file_names || []);
+        setFotoTerpilih(data.photos || []);
         setLoading(false);
       })
       .catch((err) => {
@@ -89,7 +95,9 @@ export default function SelectionListModal({ project, onClose, onFetch, onToast 
           <X size={20} strokeWidth={1.75} />
         </button>
 
-        <h2 className="text-xl font-semibold text-ash-900 dark:text-ash-100">Filenames for Lightroom</h2>
+        <h2 className="text-xl font-semibold text-ash-900 dark:text-ash-100">
+          {tampilan === 'grid' ? "Your client's picks" : 'Filenames for Lightroom'}
+        </h2>
         <p className="text-sm text-ash-600 dark:text-ash-400 mt-1">
           {project.client_name}
           {project.project_name ? ` · ${project.project_name}` : ''}
@@ -108,7 +116,68 @@ export default function SelectionListModal({ project, onClose, onFetch, onToast 
           </p>
         ) : (
           <>
-            <div className="mt-5 flex flex-wrap gap-2" role="group" aria-label="Filename format">
+            {/* Memeriksa dengan mata dan menyalin ke Lightroom adalah dua
+                pekerjaan berbeda atas data yang sama. Grid didahulukan: sebelum
+                ini satu-satunya cara fotografer tahu foto MANA yang dipilih
+                adalah membuka Drive dan mencocokkan nama satu per satu. */}
+            <div className="mt-5 flex gap-1 p-1 rounded-xl bg-ash-100 dark:bg-white/5 w-fit" role="tablist" aria-label="View">
+              {[
+                { id: 'grid', label: 'Photos', Icon: Grid2x2 },
+                { id: 'list', label: 'Filenames', Icon: List },
+              ].map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tampilan === id}
+                  onClick={() => setTampilan(id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    tampilan === id
+                      ? 'bg-white text-ash-900 shadow-sm dark:bg-ash-800 dark:text-ash-100'
+                      : 'text-ash-600 hover:text-ash-900 dark:text-ash-400 dark:hover:text-ash-200'
+                  }`}
+                >
+                  <Icon size={14} strokeWidth={1.75} aria-hidden="true" />
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {tampilan === 'grid' ? (
+              <>
+                <div className="mt-4 grid grid-cols-4 sm:grid-cols-5 gap-2 max-h-[46vh] overflow-y-auto pr-1">
+                  {fotoTerpilih.map((foto) => (
+                    <figure key={foto.id} className="relative aspect-square rounded-lg overflow-hidden bg-ash-200 dark:bg-ash-800 group/f">
+                      {foto.thumbnailLink ? (
+                        <img
+                          src={foto.thumbnailLink}
+                          alt={foto.name}
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full grid place-items-center">
+                          <ImageOff size={16} strokeWidth={1.75} className="text-ash-500" aria-hidden="true" />
+                        </div>
+                      )}
+                      {/* Nama berkasnya yang menghubungkan foto ini ke RAW di
+                          komputer, jadi harus bisa dibaca — bukan hanya jadi
+                          teks alternatif. */}
+                      <figcaption className="absolute inset-x-0 bottom-0 px-1 py-0.5 text-[9px] leading-tight font-mono text-white bg-black/60 opacity-0 group-hover/f:opacity-100 transition-opacity truncate">
+                        {foto.name}
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs text-ash-600 dark:text-ash-400">
+                  {names.length} photo{names.length === 1 ? '' : 's'} selected.
+                  {fotoTerpilih.some((f) => !f.thumbnailLink) && ' Some thumbnails are unavailable.'}
+                </p>
+              </>
+            ) : (
+            <>
+            <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Filename format">
               {pilihan.map((p) => (
                 <button
                   key={p.id}
@@ -169,9 +238,14 @@ export default function SelectionListModal({ project, onClose, onFetch, onToast 
               </div>
             )}
 
+            </>
+            )}
+
             <button
               type="button"
               onClick={handleCopy}
+              disabled={tampilan === 'grid'}
+              hidden={tampilan === 'grid'}
               className="mt-5 w-full px-4 py-3 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm shadow-sm transition-colors flex justify-center items-center gap-2"
             >
               {copied

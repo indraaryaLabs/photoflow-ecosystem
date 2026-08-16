@@ -75,11 +75,14 @@ jobs:
         run: npm ci
 
       - name: Lint
-        # Repo ini masih memuat pelanggaran lint yang sudah ada sebelum CI
-        # dipasang. Lint dijalankan agar hasilnya terlihat, tapi belum
-        # menggagalkan build sampai pelanggaran itu dibereskan.
+        # continue-on-error dipasang di sini karena repo memuat delapan
+        # pelanggaran lama. Tujuh di antaranya ternyata salah-deteksi: tanpa
+        # eslint-plugin-react, no-unused-vars tidak melihat komponen yang hanya
+        # dipakai di dalam JSX. Yang kedelapan sungguhan, dan sudah dibetulkan.
+        #
+        # Sekarang bersih, jadi lint boleh menggagalkan build — kalau tidak,
+        # pelanggaran berikutnya akan menumpuk tanpa ada yang menahannya.
         run: npm run lint
-        continue-on-error: true
 
       - name: Build
         run: npm run build
