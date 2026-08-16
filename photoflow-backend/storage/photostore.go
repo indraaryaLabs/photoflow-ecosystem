@@ -18,6 +18,17 @@ type PhotoRef struct {
 	MimeType       string `json:"mimeType"`
 	ThumbnailLink  string `json:"thumbnailLink"`
 	WebContentLink string `json:"webContentLink"`
+
+	// Ukuran asli berkasnya, kalau Drive mengetahuinya. Nol berarti tidak
+	// diketahui, dan galeri mengukurnya sendiri setelah gambarnya termuat.
+	//
+	// Dikirim supaya galeri dapat menyusun barisnya dengan rasio yang benar
+	// pada gambar pertama. Tanpa ini seluruh foto dianggap bujur sangkar dulu,
+	// lalu tata letaknya melompat begitu ukuran sebenarnya diketahui satu per
+	// satu -- persis jenis pergeseran tata letak yang paling mengganggu ketika
+	// orang sedang mengetuk-ngetuk memilih foto.
+	Width  int `json:"width,omitempty"`
+	Height int `json:"height,omitempty"`
 }
 
 // PhotoStore membaca daftar foto sebuah sumber, misalnya satu folder Drive.
