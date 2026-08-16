@@ -178,7 +178,22 @@ func (g *GDriveStore) ListPhotos(ctx context.Context, sourceRef string) ([]Photo
 		req := g.service.Files.List().
 			Context(ctx).
 			Q(query).
-			Fields("nextPageToken, files(id, name, mimeType, thumbnailLink, webContentLink)")
+			// Tanpa orderBy, Drive mengembalikan berkas dalam urutan yang tidak
+			// dijanjikan apa pun. Akibatnya galeri klien tampil teracak, dan
+			// fotografer tidak bisa merujuk "foto ke-12" karena nomor itu
+			// berbeda di layarnya sendiri.
+			//
+			// name_natural, bukan name: pengurutan biasa menaruh IMG_10 sebelum
+			// IMG_9 karena membandingkan huruf per huruf. Nama berkas kamera
+			// selalu bernomor, jadi perbedaan itu terasa di setiap galeri.
+			OrderBy("name_natural").
+			// Bawaan Drive 100 berkas per halaman. Galeri pernikahan berisi
+			// ribuan foto, dan seluruh penelusuran terjadi di dalam SATU
+			// permintaan serverless yang punya batas waktu. 1000 adalah
+			// maksimum yang diterima API, dan memangkas jumlah perjalanan
+			// jaringan sepuluh kali lipat.
+			PageSize(1000).
+			Fields("nextPageToken, files(id, name, mimeType, thumbnailLink, webContentLink, imageMediaMetadata(width, height))")
 		if pageToken != "" {
 			req = req.PageToken(pageToken)
 		}
@@ -209,13 +224,21 @@ func (g *GDriveStore) ListPhotos(ctx context.Context, sourceRef string) ([]Photo
 				thumbnail = strings.Replace(thumbnail, "=s220", "=s1000", -1)
 			}
 
-			result = append(result, PhotoRef{
+			ref := PhotoRef{
 				ID:             file.Id,
 				Name:           file.Name,
 				MimeType:       file.MimeType,
 				ThumbnailLink:  thumbnail,
 				WebContentLink: file.WebContentLink,
-			})
+			}
+			// Tidak semua berkas membawanya: Drive mengisi imageMediaMetadata
+			// hanya untuk format yang dikenalinya, dan sebagian RAW tidak
+			// termasuk.
+			if m := file.ImageMediaMetadata; m != nil {
+				ref.Width = int(m.Width)
+				ref.Height = int(m.Height)
+			}
+			result = append(result, ref)
 		}
 
 		pageToken = page.NextPageToken

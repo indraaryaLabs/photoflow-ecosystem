@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, AlertTriangle } from 'lucide-react';
 
 import Toast from './components/Toast';
 import Header from './components/Header';
-import PhotoCard from './components/PhotoCard';
+import PhotoGrid, { DensityPicker } from './components/PhotoGrid';
+import { useDensity } from './lib/useDensity';
 import PreviewModal from './components/PreviewModal';
 import FloatingBar from './components/FloatingBar';
 import AdminDashboard from './components/AdminDashboard';
@@ -13,6 +13,8 @@ import { supabase } from './lib/supabase';
 import { API_BASE } from './lib/api';
 import { openedFromRecoveryLink } from './lib/recovery';
 import { useTheme } from './lib/theme';
+import { bacaDraf, simpanDraf, hapusDraf, petakanKeId } from './lib/selectionDraft';
+import { withViewTransition } from './lib/viewTransition';
 
 export default function App() {
   // ─── Variables routing (No hook dependencies) ────────────────
@@ -61,8 +63,15 @@ export default function App() {
   const { choice: themeChoice, cycle: cycleTheme } = useTheme();
 
   const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Draf harus dipulihkan LEBIH DULU sebelum boleh ditulis. Tanpa penanda ini,
+  // effect penyimpan berjalan pada render pertama dengan pilihan yang masih
+  // kosong dan langsung menimpa draf yang hendak dipulihkan -- persis kerja
+  // yang ingin diselamatkan.
+  const drafSudahDipulihkan = useRef(false);
   const [toasts, setToasts] = useState([]);
   const [previewState, setPreviewState] = useState({ index: null, direction: 0 });
+  const [density, setDensity] = useDensity();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmittedState, setIsSubmittedState] = useState(false);
 
@@ -190,6 +199,43 @@ export default function App() {
     }, 3000);
   }, []);
 
+  // Pulihkan pilihan yang belum sempat dikirim.
+  //
+  // Dijalankan setelah daftar foto ada, karena draf disimpan sebagai nama
+  // berkas dan baru bisa dipetakan kembali ke id ketika fotonya sudah dikenal.
+  useEffect(() => {
+    if (drafSudahDipulihkan.current) return;
+    if (isLoading || !token || !photos.length) return;
+
+    // Galeri yang sudah dikirim tidak lagi bisa diubah, jadi drafnya tidak ada
+    // gunanya -- dan meninggalkannya berarti pilihan lama muncul kembali kalau
+    // fotografer membuka ulang pemilihannya.
+    if (isSubmittedState) {
+      hapusDraf(token);
+      drafSudahDipulihkan.current = true;
+      return;
+    }
+
+    const nama = bacaDraf(token);
+    if (nama.length) {
+      const ids = petakanKeId(nama, photos, project?.max_selections);
+      if (ids.size) {
+        setSelectedIds(ids);
+        addToast(`Restored ${ids.size} photo${ids.size === 1 ? '' : 's'} you picked earlier.`);
+      }
+    }
+    drafSudahDipulihkan.current = true;
+  }, [isLoading, token, photos, isSubmittedState, project?.max_selections, addToast]);
+
+  // Simpan setiap perubahan pilihan.
+  useEffect(() => {
+    if (!drafSudahDipulihkan.current || !token || isSubmittedState) return;
+
+    const perId = new Map(photos.map((p) => [p.id, p.name]));
+    const nama = [...selectedIds].map((id) => perId.get(id)).filter(Boolean);
+    simpanDraf(token, nama);
+  }, [selectedIds, photos, token, isSubmittedState]);
+
   const handleToggleSelect = useCallback((id) => {
     // Gallery Lock: Cegah interaksi jika sudah disubmit
     if (isSubmittedState) {
@@ -233,6 +279,11 @@ export default function App() {
         throw new Error(body?.error || `Could not submit your selection. (status ${res.status})`);
       }
 
+      // Drafnya sudah jadi kiriman sungguhan, jadi tidak ada lagi yang perlu
+      // diselamatkan. Dibuang SEBELUM isSubmittedState disetel: effect penyimpan
+      // berhenti bekerja begitu galerinya terkunci, jadi kalau urutannya
+      // terbalik draf itu tertinggal di peramban klien untuk selamanya.
+      hapusDraf(token);
       addToast('Your selection has been sent to your photographer.');
       setIsSubmittedState(true);
     } catch (err) {
@@ -242,12 +293,17 @@ export default function App() {
     }
   }, [selectedIds, addToast, isSubmitting, token]);
 
+  // Membuka dan menutup pratinjau dibungkus View Transition, sehingga fotonya
+  // benar-benar bergerak dan membesar dari petaknya di grid alih-alih hilang
+  // lalu digantikan gambar lain yang memudar masuk. Perpindahan yang terlihat
+  // itu yang memberi tahu foto mana yang sedang dibuka, dan setelah ditutup,
+  // di baris mana tadi ia berada.
   const handleOpenPreview = useCallback((index) => {
-    setPreviewState({ index, direction: 0 });
+    withViewTransition(() => setPreviewState({ index, direction: 0 }));
   }, []);
 
   const handleClosePreview = useCallback(() => {
-    setPreviewState({ index: null, direction: 0 });
+    withViewTransition(() => setPreviewState({ index: null, direction: 0 }));
   }, []);
 
   const handleNextPreview = useCallback(() => {
@@ -313,7 +369,7 @@ export default function App() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-ash-50 dark:bg-ash-950 transition-colors duration-300">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-ash-50 dark:bg-ash-950 transition-colors duration-tint">
         <Loader2 size={40} strokeWidth={1.75} className="text-ash-600 dark:text-ash-400 animate-spin mb-6" aria-hidden="true" />
         <p className="text-lg font-medium text-ash-600 dark:text-ash-300 tracking-wide">
           Loading gallery...
@@ -327,7 +383,7 @@ export default function App() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-ash-50 dark:bg-ash-950 transition-colors duration-300 px-6 text-center">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-ash-50 dark:bg-ash-950 transition-colors duration-tint px-6 text-center">
         <div className="w-16 h-16 rounded-full bg-danger-500/10 dark:bg-danger-500/20 flex items-center justify-center mb-6">
           <AlertTriangle size={32} strokeWidth={1.75} className="text-danger-500" />
         </div>
@@ -345,20 +401,26 @@ export default function App() {
   //  MAIN RENDER — Data loaded successfully
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   return (
-    <div className="min-h-screen bg-ash-50 dark:bg-ash-950 transition-colors duration-300 font-sans ">
+    <div className="min-h-screen bg-ash-50 dark:bg-ash-950 transition-colors duration-tint font-sans ">
       <Toast toasts={toasts} />
 
       <Header project={project} themeChoice={themeChoice} cycleTheme={cycleTheme} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28">
-        <div className="mb-8 flex flex-col gap-2">
-          <h2 className="text-2xl sm:text-3xl font-semibold text-ash-900 dark:text-white tracking-tight">
-            Choose your favourites
-          </h2>
-          <p className="text-ash-600 dark:text-ash-400 text-sm sm:text-base max-w-2xl">
-            Click a photo to select it, or use the eye icon to view it full size.
-            You can choose up to <strong className="text-ash-700 dark:text-ash-200">{project.max_selections}</strong> photos.
-          </p>
+        {/* Judul dan keterangan dirapatkan. Sebelumnya bagian ini memakan
+            200px tinggi layar untuk kalimat yang dibaca sekali, sementara yang
+            dibutuhkan orangnya adalah melihat foto sebanyak mungkin. */}
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-semibold text-ash-900 dark:text-white tracking-tight">
+              Choose your favourites
+            </h2>
+            <p className="text-ash-600 dark:text-ash-400 text-sm mt-1">
+              Tap a photo to select it. Up to{' '}
+              <strong className="text-ash-700 dark:text-ash-200">{project.max_selections}</strong>.
+            </p>
+          </div>
+          <DensityPicker value={density} onChange={setDensity} />
         </div>
 
         {/* Galeri yang jatuh ke salinan database dulu tampil sebagai deretan
@@ -379,29 +441,14 @@ export default function App() {
           </div>
         )}
 
-        <motion.div
-          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6"
-          variants={{
-            hidden: { opacity: 0 },
-            show: {
-              opacity: 1,
-              transition: { staggerChildren: 0.05 }
-            }
-          }}
-          initial="hidden"
-          animate="show"
-        >
-          {photos.map((photo, index) => (
-            <PhotoCard
-              key={photo.id}
-              photo={photo}
-              index={index}
-              isSelected={selectedIds.has(photo.id)}
-              onToggle={handleToggleSelect}
-              onOpenPreview={handleOpenPreview}
-            />
-          ))}
-        </motion.div>
+        <PhotoGrid
+          photos={photos}
+          selectedIds={selectedIds}
+          onToggle={handleToggleSelect}
+          onOpenPreview={handleOpenPreview}
+          density={density}
+          isLocked={isSubmittedState}
+        />
       </main>
 
       <PreviewModal

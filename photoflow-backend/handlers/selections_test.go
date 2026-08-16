@@ -139,3 +139,149 @@ func TestListSelectionsMenolakBukanPemilik(t *testing.T) {
 		t.Fatalf("nama berkas bocor ke bukan pemilik: %v", body.FileNames)
 	}
 }
+
+// ── Foto pilihan ikut dikirim, bukan hanya namanya ──────────────────
+
+func TestListSelectionsMenyertakanThumbnail(t *testing.T) {
+	db := newSubmitTestDB(t)
+	project := seedProject(t, db, 0)
+	h := &Handler{DB: db}
+
+	namaiFoto(t, h, project.ID, []string{"IMG_0001.jpg"}, map[string]bool{"IMG_0001.jpg": true})
+
+	rec := httptest.NewRecorder()
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest("GET", "/x", nil)
+	c.Params = gin.Params{{Key: "id", Value: project.ID}}
+	c.Set(middleware.ContextUserIDKey, project.UserID)
+	h.ListSelections(c)
+
+	var body struct {
+		Photos []struct {
+			Name          string `json:"name"`
+			ThumbnailLink string `json:"thumbnailLink"`
+		} `json:"photos"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("balasan bukan JSON: %v", err)
+	}
+
+	// Tanpa thumbnail, satu-satunya cara fotografer memeriksa pilihan kliennya
+	// adalah membandingkan daftar nama dengan isi folder Drive sendiri.
+	if len(body.Photos) != 1 || body.Photos[0].ThumbnailLink == "" {
+		t.Fatalf("photos = %+v, seharusnya memuat thumbnail", body.Photos)
+	}
+	if body.Photos[0].Name != "IMG_0001.jpg" {
+		t.Fatalf("nama = %q", body.Photos[0].Name)
+	}
+}
+
+// ── Penerbitan ulang magic link ─────────────────────────────────────
+
+func callRotate(t *testing.T, h *Handler, projectID, userID string) (int, string) {
+	t.Helper()
+
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest("POST", "/api/projects/"+projectID+"/rotate-link", nil)
+	c.Params = gin.Params{{Key: "id", Value: projectID}}
+	c.Set(middleware.ContextUserIDKey, userID)
+
+	h.RotateMagicLink(c)
+
+	var body struct {
+		Token string `json:"magic_link_token"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	return rec.Code, body.Token
+}
+
+func TestRotateMagicLinkMematikanTautanLama(t *testing.T) {
+	db := newSubmitTestDB(t)
+	project := seedProject(t, db, 2)
+	h := &Handler{DB: db}
+
+	lama := project.MagicLinkToken
+	code, baru := callRotate(t, h, project.ID, project.UserID)
+	if code != 200 {
+		t.Fatalf("kode %d, seharusnya 200", code)
+	}
+	if baru == "" || baru == lama {
+		t.Fatalf("token baru %q, lama %q", baru, lama)
+	}
+
+	// Tautan lama harus benar-benar tidak lagi menunjuk ke project mana pun.
+	var n int64
+	db.Model(&models.Project{}).Where("magic_link_token = ?", lama).Count(&n)
+	if n != 0 {
+		t.Fatalf("tautan lama masih hidup di %d project", n)
+	}
+}
+
+func TestRotateMagicLinkTidakMenghapusPilihan(t *testing.T) {
+	db := newSubmitTestDB(t)
+	project := seedProject(t, db, 0)
+	h := &Handler{DB: db}
+
+	namaiFoto(t, h, project.ID,
+		[]string{"a.jpg", "b.jpg"}, map[string]bool{"a.jpg": true, "b.jpg": true})
+
+	if code, _ := callRotate(t, h, project.ID, project.UserID); code != 200 {
+		t.Fatalf("kode %d", code)
+	}
+
+	// Menerbitkan ulang tautan itu tindakan keamanan, bukan pembatalan kerja
+	// klien. Membuang pilihannya sebagai efek samping akan mengejutkan.
+	if got := jumlahTerpilih(t, h, project.ID); got != 2 {
+		t.Fatalf("terpilih %d, seharusnya tetap 2", got)
+	}
+}
+
+func TestRotateMagicLinkMenolakBukanPemilik(t *testing.T) {
+	db := newSubmitTestDB(t)
+	project := seedProject(t, db, 1)
+	h := &Handler{DB: db}
+
+	code, _ := callRotate(t, h, project.ID, uuid.NewString())
+	if code != 404 {
+		t.Fatalf("kode %d, seharusnya 404", code)
+	}
+
+	var after models.Project
+	db.Where("id = ?", project.ID).First(&after)
+	if after.MagicLinkToken != project.MagicLinkToken {
+		t.Fatal("bukan pemilik berhasil mengganti tautan")
+	}
+}
+
+// ── Waktu kiriman ───────────────────────────────────────────────────
+
+func TestSubmitMengisiSubmittedAtDanReopenMengosongkannya(t *testing.T) {
+	db := newSubmitTestDB(t)
+	project := seedProject(t, db, 1)
+	h := &Handler{DB: db}
+
+	if err := submitSelection(db, project.ID, []models.Photo{{FileName: "asli.jpg"}}); err != nil {
+		t.Fatalf("submit gagal: %v", err)
+	}
+
+	var sesudah models.Project
+	db.Where("id = ?", project.ID).First(&sesudah)
+	if sesudah.SubmittedAt == nil {
+		t.Fatal("submitted_at masih kosong setelah submit")
+	}
+
+	if code := callReopen(t, h, project.ID, project.UserID); code != 200 {
+		t.Fatalf("reopen kode %d", code)
+	}
+
+	// Kalau ditinggal terisi, dashboard menampilkan project yang sudah dibuka
+	// kembali sebagai "dikirim dua jam lalu" — keterangan yang tidak benar.
+	var dibuka models.Project
+	db.Where("id = ?", project.ID).First(&dibuka)
+	if dibuka.SubmittedAt != nil {
+		t.Fatalf("submitted_at = %v, seharusnya kosong setelah reopen", dibuka.SubmittedAt)
+	}
+}

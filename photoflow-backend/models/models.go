@@ -7,19 +7,25 @@ package models
 import "time"
 
 type Project struct {
-	ID             string    `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
-	UserID         string    `gorm:"type:uuid" json:"user_id"`
-	ProjectName    string    `gorm:"type:text;not null" json:"project_name"`
-	ClientName     string    `gorm:"type:text;not null" json:"client_name"`
-	MaxSelections  int       `gorm:"default:50" json:"max_selections"`
-	DriveFolderURL string    `gorm:"type:text;not null" json:"drive_folder_url"`
-	DriveFolderID  string    `gorm:"type:text;not null" json:"drive_folder_id"`
-	MagicLinkToken string    `gorm:"type:text;unique;not null" json:"magic_link_token"`
-	AdminWhatsApp  string    `gorm:"type:text" json:"admin_whatsapp"`
-	ClientWhatsApp string    `gorm:"type:text" json:"client_whatsapp"`
-	Status         string    `gorm:"type:text;default:'pending'" json:"status"`
-	CreatedAt      time.Time `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt      time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	ID             string `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	UserID         string `gorm:"type:uuid" json:"user_id"`
+	ProjectName    string `gorm:"type:text;not null" json:"project_name"`
+	ClientName     string `gorm:"type:text;not null" json:"client_name"`
+	MaxSelections  int    `gorm:"default:50" json:"max_selections"`
+	DriveFolderURL string `gorm:"type:text;not null" json:"drive_folder_url"`
+	DriveFolderID  string `gorm:"type:text;not null" json:"drive_folder_id"`
+	MagicLinkToken string `gorm:"type:text;unique;not null" json:"magic_link_token"`
+	AdminWhatsApp  string `gorm:"type:text" json:"admin_whatsapp"`
+	ClientWhatsApp string `gorm:"type:text" json:"client_whatsapp"`
+	Status         string `gorm:"type:text;default:'pending'" json:"status"`
+	// Kapan klien mengirim pilihannya. nil selama masih terbuka.
+	//
+	// Tanpa ini dashboard tidak bisa membedakan kiriman satu jam lalu dari
+	// kiriman bulan lalu, dan fotografer tidak punya cara tahu mana yang baru
+	// selain mengingat sendiri isi daftarnya.
+	SubmittedAt *time.Time `gorm:"column:submitted_at" json:"submitted_at"`
+	CreatedAt   time.Time  `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt   time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 type Photo struct {

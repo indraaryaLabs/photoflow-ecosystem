@@ -131,6 +131,13 @@ func (h *Handler) ListProjects(c *gin.Context) {
 type projectWithCount struct {
 	models.Project
 	PhotoCount int64 `json:"photo_count"`
+	// Beberapa thumbnail pertama, untuk ditampilkan di kartu project.
+	//
+	// Dashboard sebelumnya tidak memuat satu foto pun — hanya ikon folder di
+	// aplikasi yang seluruh isinya fotografi. Selain membuatnya terlihat
+	// seperti dashboard mana pun, itu juga membuang cara tercepat mengenali
+	// sebuah project: melihat isinya.
+	Previews []string `json:"previews"`
 }
 
 // withPhotoCounts menghitung foto untuk sekumpulan project dalam satu query,
@@ -163,8 +170,14 @@ func (h *Handler) withPhotoCounts(projects []models.Project) []projectWithCount 
 		jumlah[b.ProjectID] = b.Jumlah
 	}
 
+	pratinjau := h.previewThumbnails(ids)
+
 	for _, p := range projects {
-		out = append(out, projectWithCount{Project: p, PhotoCount: jumlah[p.ID]})
+		out = append(out, projectWithCount{
+			Project:    p,
+			PhotoCount: jumlah[p.ID],
+			Previews:   pratinjau[p.ID],
+		})
 	}
 	return out
 }
@@ -181,6 +194,43 @@ func (h *Handler) withPhotoCounts(projects []models.Project) []projectWithCount 
 //
 // Pilihan klien yang sudah tersimpan dipertahankan: baris foto yang namanya
 // masih ada di folder tetap membawa is_selected-nya.
+// previewThumbnails mengambil beberapa thumbnail pertama tiap project.
+//
+// Satu query untuk seluruh daftar, bukan satu per project: dashboard memuat
+// semua project sekaligus, dan query per baris akan tumbuh bersama jumlah
+// project yang dimiliki fotografer.
+//
+// Batasnya dipasang di Go, bukan di SQL. Membatasi per-grup di SQL menuntut
+// window function, dan yang dihemat tidak sebanding: yang diambil hanya kolom
+// url, dan galeri terbesar sekalipun berisi ribuan baris pendek.
+func (h *Handler) previewThumbnails(ids []string) map[string][]string {
+	const perProject = 4
+
+	type baris struct {
+		ProjectID    string
+		ThumbnailURL string
+	}
+	var hasil []baris
+	if err := h.DB.Model(&models.Photo{}).
+		Select("project_id, thumbnail_url").
+		Where("project_id IN ? AND thumbnail_url <> ''", ids).
+		Order("project_id, file_name").
+		Scan(&hasil).Error; err != nil {
+		// Kartu tanpa pratinjau tetap berguna; ini bukan alasan menggagalkan
+		// seluruh daftar project.
+		log.Printf("⚠️ Gagal mengambil pratinjau: %v", err)
+		return map[string][]string{}
+	}
+
+	peta := make(map[string][]string, len(ids))
+	for _, b := range hasil {
+		if len(peta[b.ProjectID]) < perProject {
+			peta[b.ProjectID] = append(peta[b.ProjectID], b.ThumbnailURL)
+		}
+	}
+	return peta
+}
+
 func (h *Handler) ResyncProject(c *gin.Context) {
 	userID := c.GetString(middleware.ContextUserIDKey)
 	projectID := c.Param("id")
@@ -401,29 +451,85 @@ func (h *Handler) ListSelections(c *gin.Context) {
 		return
 	}
 
-	var fileNames []string
-	if err := h.DB.Model(&models.Photo{}).
+	var photos []models.Photo
+	if err := h.DB.
 		Where("project_id = ? AND is_selected = ?", project.ID, true).
 		Order("file_name").
-		Pluck("file_name", &fileNames).Error; err != nil {
+		Find(&photos).Error; err != nil {
 		log.Printf("list selections %s: %v", project.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not read the client's selection"})
 		return
 	}
 
-	// Pluck mengembalikan nil untuk hasil kosong, dan nil ter-serialisasi jadi
-	// `null` — bukan `[]`. Frontend yang memanggil .length atasnya akan pecah.
-	if fileNames == nil {
-		fileNames = []string{}
+	// Dua bentuk dari satu query. `file_names` untuk ditempel ke Lightroom;
+	// `photos` supaya fotografer bisa MELIHAT pilihannya tanpa membuka Drive.
+	// Sebelumnya satu-satunya cara memeriksa adalah membandingkan daftar nama
+	// dengan isi folder sendiri.
+	//
+	// Keduanya bukan nil sekalipun kosong: nil ter-serialisasi jadi `null`, dan
+	// frontend memanggil .length atasnya.
+	fileNames := make([]string, 0, len(photos))
+	ringkas := make([]gin.H, 0, len(photos))
+	for _, p := range photos {
+		fileNames = append(fileNames, p.FileName)
+		ringkas = append(ringkas, gin.H{
+			"id":            p.ID,
+			"name":          p.FileName,
+			"thumbnailLink": p.ThumbnailURL,
+		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"project_name": project.ProjectName,
 		"client_name":  project.ClientName,
 		"status":       project.Status,
+		"submitted_at": project.SubmittedAt,
 		"count":        len(fileNames),
 		"file_names":   fileNames,
+		"photos":       ringkas,
 	})
+}
+
+// RotateMagicLink menerbitkan magic link baru dan mematikan yang lama.
+//
+// Magic link tidak pernah kedaluwarsa dan tidak bisa dicabut. Sekali terkirim
+// ia sah selamanya, dan galeri klien dapat dibuka siapa pun yang memegangnya —
+// tautan yang diteruskan ke grup keluarga, tertinggal di riwayat percakapan,
+// atau ikut terbawa saat ponsel berpindah tangan.
+//
+// Yang dipilih penerbitan ulang, bukan tanggal kedaluwarsa. Kedaluwarsa
+// otomatis mematikan tautan pada saat yang tidak diminta siapa pun — termasuk
+// di tengah klien memilih. Penerbitan ulang menaruh keputusannya pada
+// fotografer, dan sekaligus jadi jalan keluar ketika tautan memang bocor.
+func (h *Handler) RotateMagicLink(c *gin.Context) {
+	userID := c.GetString(middleware.ContextUserIDKey)
+	projectID := c.Param("id")
+
+	var project models.Project
+	if err := h.DB.Where("id = ? AND user_id = ?", projectID, userID).First(&project).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Project not found, or you do not have access to it"})
+		return
+	}
+
+	token, err := generateMagicLink()
+	if err != nil {
+		log.Printf("rotate magic link %s: %v", project.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not issue a new link"})
+		return
+	}
+
+	if err := h.DB.Model(&models.Project{}).
+		Where("id = ?", project.ID).
+		Update("magic_link_token", token).Error; err != nil {
+		log.Printf("rotate magic link %s: %v", project.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not issue a new link"})
+		return
+	}
+
+	// Pilihan yang sudah dikirim sengaja TIDAK ikut dihapus. Menerbitkan ulang
+	// tautan adalah tindakan keamanan, bukan pembatalan pekerjaan; membuang
+	// pilihan klien sebagai efek sampingnya akan mengejutkan.
+	c.JSON(http.StatusOK, gin.H{"magic_link_token": token})
 }
 
 func (h *Handler) ReopenSelection(c *gin.Context) {
@@ -455,7 +561,13 @@ func (h *Handler) ReopenSelection(c *gin.Context) {
 		}
 		return tx.Model(&models.Project{}).
 			Where("id = ?", project.ID).
-			Update("status", models.StatusPending).Error
+			Updates(map[string]any{
+				"status": models.StatusPending,
+				// Waktu kiriman ikut dikosongkan. Kalau ditinggal, dashboard
+				// menampilkan project yang kembali terbuka sebagai "dikirim
+				// dua jam lalu" — keterangan yang sudah tidak benar.
+				"submitted_at": nil,
+			}).Error
 	})
 	if err != nil {
 		log.Printf("reopen selection %s: %v", project.ID, err)
