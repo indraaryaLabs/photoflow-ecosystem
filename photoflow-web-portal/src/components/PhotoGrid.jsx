@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import PhotoCard from './PhotoCard';
-import { buildRows, DENSITIES, DEFAULT_DENSITY } from '../lib/justifiedRows';
+import { buildRows, DENSITIES, targetHeight } from '../lib/justifiedRows';
 
 /**
  * Galeri klien, disusun sebagai baris setinggi seragam.
@@ -45,7 +45,10 @@ export default function PhotoGrid({ photos, selectedIds, onToggle, onOpenPreview
       ?? 1.5,
   })), [photos, rasioTerukur]);
 
-  const tinggiTarget = DENSITIES[density]?.height ?? DENSITIES[DEFAULT_DENSITY].height;
+  // Dihitung dari lebar wadah, bukan angka tetap. Lihat DENSITIES untuk
+  // alasannya: tinggi tetap membuat ketiga pilihan kerapatan menghasilkan tata
+  // letak yang sama di layar ponsel.
+  const tinggiTarget = targetHeight(density, lebar);
   const rows = useMemo(
     () => buildRows(denganRasio, lebar, tinggiTarget, 8),
     [denganRasio, lebar, tinggiTarget],

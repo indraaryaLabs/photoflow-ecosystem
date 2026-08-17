@@ -94,17 +94,31 @@ const PhotoCard = ({
 
       {/* Tombol perbesar. Duduk di pojok, bukan di tengah kartu: di tengah ia
           menelan klik yang dimaksudkan untuk memilih, dan memilih adalah
-          pekerjaan utama di layar ini. */}
+          pekerjaan utama di layar ini.
+
+          Dulu tombol ini `hidden md:grid`, sehingga di ponsel dan tablet ia
+          tidak ada sama sekali. Satu-satunya jalan tersisa untuk membuka foto
+          adalah ketukan ganda — dan ketukan ganda di sini justru memilih lalu
+          membatalkan pilihan, karena setiap ketukan tunggal sudah menyalakan
+          pemilihan. Akibatnya di layar sentuh foto memang TIDAK BISA dilihat
+          besar sama sekali.
+
+          Sekarang selalu ada. Di layar sentuh ia terlihat tetap; di layar
+          berpenunjuk ia tetap muncul hanya saat kursor lewat, karena di sana
+          kursornya sendiri yang menyatakan kartu mana yang sedang dituju.
+          Pembedanya `(hover: hover)`, bukan lebar layar: tablet lebar tanpa
+          tetikus akan lolos dari pemeriksaan lebar dan kembali kehilangan
+          tombolnya. */}
       <button
         onClick={(e) => {
           e.stopPropagation();
           onOpenPreview(index);
         }}
-        className="absolute bottom-2 right-2 z-20 hidden md:grid h-8 w-8 place-items-center rounded-lg bg-ash-950/55 text-white opacity-0 backdrop-blur-sm transition-opacity duration-feedback group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        className="absolute bottom-2 right-2 z-20 grid h-9 w-9 place-items-center rounded-lg bg-ash-950/60 text-white backdrop-blur-sm transition-opacity duration-feedback [@media(hover:hover)]:h-8 [@media(hover:hover)]:w-8 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
         title="View larger"
         aria-label={`View ${photo.name || 'photo'} larger`}
       >
-        <Maximize2 size={14} strokeWidth={2} />
+        <Maximize2 size={15} strokeWidth={2} />
       </button>
 
       {/* Lencana centang. Foto TIDAK diredupkan saat terpilih: meredupkan
