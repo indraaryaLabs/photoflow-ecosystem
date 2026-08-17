@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { openedFromRecoveryLink, clearUrlFragment } from '../lib/recovery';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
+import { PRIVACY_PATH, TERMS_PATH } from '../lib/legal';
 
 /**
  * Terjemahkan error Supabase Auth jadi kalimat yang benar untuk user.
@@ -512,10 +513,29 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
 
           {/* Di sini dulu tertulis "Protected by reCAPTCHA and subject to the
               Privacy Policy and Terms of Service", dengan ketiganya menunjuk
-              href="#". Tidak ada reCAPTCHA di aplikasi ini, dan kedua dokumen
-              itu tidak pernah ada. Klaim keamanan yang tidak benar lebih buruk
-              daripada tidak ada klaim sama sekali, jadi seluruh baris itu
-              dihapus alih-alih dibiarkan sebagai hiasan. */}
+              href="#". Tidak ada reCAPTCHA di aplikasi ini dan kedua dokumen
+              itu tidak pernah ada, jadi seluruh barisnya dihapus.
+
+              Sekarang dokumennya sungguh ada, jadi tautannya kembali — tanpa
+              bagian reCAPTCHA-nya. Letaknya di layar masuk bukan sekadar rapi:
+              verifikasi OAuth Google menuntut tautan kebijakan privasi terlihat
+              dari halaman depan aplikasi, dan bagi orang yang belum masuk,
+              inilah halaman depannya. */}
+          <p className="mt-6 text-center text-xs text-ash-500 dark:text-ash-500">
+            <a
+              href={PRIVACY_PATH}
+              className="hover:text-ash-700 dark:hover:text-ash-300 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"
+            >
+              Privacy Policy
+            </a>
+            <span className="mx-2 opacity-50">·</span>
+            <a
+              href={TERMS_PATH}
+              className="hover:text-ash-700 dark:hover:text-ash-300 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"
+            >
+              Terms of Service
+            </a>
+          </p>
 
         </motion.div>
       </div>
