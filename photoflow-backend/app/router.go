@@ -95,6 +95,12 @@ func SetupRouter() (*gin.Engine, error) {
 	r.GET("/api/p/:magic_link/photos", h.GalleryPhotos)
 	r.POST("/api/p/:magic_link/submit", h.SubmitSelection)
 
+	// --- PROFIL FOTOGRAFER ---
+	// Nama studio yang dilihat klien di kepala galerinya, menggantikan
+	// "PhotoFlow". Lihat handlers.UpdateProfile.
+	r.GET("/api/profile", requireAuth, h.GetProfile)
+	r.PUT("/api/profile", requireAuth, h.UpdateProfile)
+
 	// --- DASHBOARD ADMIN: butuh JWT Supabase yang sah ---
 	r.POST("/api/projects", requireAuth, h.CreateProject)
 	r.GET("/api/projects", requireAuth, h.ListProjects)
