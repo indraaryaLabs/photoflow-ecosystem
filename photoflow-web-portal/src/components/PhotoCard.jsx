@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Check, Maximize2, ImageOff } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -16,7 +16,21 @@ const PhotoCard = ({
       // Lebar dan tinggi datang dari perhitungan baris, bukan dari kelas rasio
       // tetap. Itulah yang membuat foto tidak lagi dipotong.
       style={{ width, height }}
-      layout={kurangiGerak ? false : 'position'}
+      // `layout` DIHAPUS, dan itu perbaikan performa, bukan penyederhanaan.
+      //
+      // Framer Motion mengukur posisi setiap elemen ber-`layout` pada setiap
+      // commit -- satu reflow paksa atas seluruh galeri. Ongkos itu dibayar
+      // juga pada klik memilih foto, padahal memilih foto tidak menggeser apa
+      // pun; pada 55 foto itulah yang membuat setiap ketukan terasa tertinggal
+      // sepersekian detik dari jarinya.
+      //
+      // Yang benar-benar hilang cuma sedikit: baris hanya menata ulang ketika
+      // kerapatan diubah, dan di situ perpindahan seketika justru yang
+      // diharapkan -- alat culling profesional pun menggantinya seketika.
+      // Menyalakannya hanya pada saat itu tidak mungkin: kalau `layout` mati
+      // pada render sebelumnya, Framer tidak punya posisi lama untuk
+      // dianimasikan, jadi yang didapat tetap perpindahan seketika, hanya
+      // ditambah kerumitan.
       transition={{ type: 'spring', stiffness: 400, damping: 32 }}
       // Menekan menurunkan skala sedikit, seperti benda yang benar-benar
       // ditekan. Ini satu-satunya gerak pada kartu; membesarkannya saat kursor
@@ -49,6 +63,11 @@ const PhotoCard = ({
           src={photo.thumbnailLink}
           alt={photo.name || 'Gallery photo'}
           loading="lazy"
+          // Pengurai gambar dijalankan di luar utas utama. Tanpa ini peramban
+          // boleh mendekode gambar secara sinkron tepat sebelum menggambar, dan
+          // pada galeri berisi puluhan foto itu tampak sebagai tersendat saat
+          // menggulir -- bukan saat memuat.
+          decoding="async"
           referrerPolicy="no-referrer"
           onLoad={(e) => {
             setIsLoaded(true);
@@ -108,4 +127,17 @@ const PhotoCard = ({
   );
 };
 
-export default PhotoCard;
+/**
+ * Di-memo karena grid ini dirender ulang setiap kali satu foto dipilih.
+ *
+ * Tanpa memo, mengetuk satu foto merender ulang SELURUH kartu di galeri —
+ * pada 55 foto itu 55 komponen Framer Motion beserta AnimatePresence-nya, untuk
+ * perubahan yang hanya menyentuh satu kartu. Dengan memo, yang dirender ulang
+ * hanya kartu yang keadaannya benar-benar berubah.
+ *
+ * Semua prop-nya bernilai primitif atau berkelakuan stabil: `photo` berasal
+ * dari daftar yang sama, dan `onToggle`, `onOpenPreview`, serta `onMeasure`
+ * dibungkus useCallback di pemanggilnya. Perbandingan dangkal bawaan karena itu
+ * sudah benar, dan pembanding khusus hanya akan jadi tempat baru untuk keliru.
+ */
+export default memo(PhotoCard);
