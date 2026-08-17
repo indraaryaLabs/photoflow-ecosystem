@@ -233,6 +233,85 @@ jendela itu berarti sebagian request gagal sebentar, bukan data rusak.
 Menghilangkannya sama sekali menuntut deploy dipindahkan ke Actions dan
 integrasi Git Vercel dimatikan.
 
+#### Menjaga database tetap bangun
+
+Supabase paket gratis menghentikan project yang tidak menerima query selama
+sekitar tujuh hari, dan yang tertidur **tidak bangun sendiri** — tombol resume
+harus ditekan manual di dashboard. Untuk aplikasi portofolio itu kegagalan yang
+paling mahal: yang membukanya adalah orang yang sedang menilai.
+
+`.github/workflows/keepalive.yml` menjalankan `go run ./cmd/migrate -check`
+setiap Senin dan Kamis. Perintahnya hanya membaca `information_schema`, dan
+efek sampingnya diinginkan: selisih skema kini berbunyi setiap beberapa hari,
+bukan menunggu ada tombol yang rusak. Memakai secret `DATABASE_URL` yang sama.
+
+Secret opsional **`KEEPALIVE_DATABASE_URLS`** menampung connection string
+project Supabase lain, satu per baris. Dengan itu satu jadwal di repo ini
+menahan seluruh akun tanpa perlu menyalin workflow ke tiap repo; project
+tambahan hanya menerima `SELECT 1`, dan yang gagal jadi peringatan, bukan
+kegagalan.
+
+Satu batas yang perlu diingat: GitHub menonaktifkan workflow terjadwal di repo
+yang tidak menerima commit selama 60 hari.
+
+### Pemberitahuan email
+
+Ketika klien mengirim pilihannya, fotografer diberi tahu lewat email. Fitur ini
+**mati secara bawaan** dan aplikasi berjalan penuh tanpanya; yang hilang hanya
+pemberitahuannya.
+
+Untuk menyalakannya, isi tiga environment variable di backend:
+
+| Variabel | Isi |
+|---|---|
+| `RESEND_API_KEY` | API key dari resend.com |
+| `NOTIFY_FROM_EMAIL` | alamat pengirim, mis. `PhotoFlow <hello@domainmu.com>` |
+| `APP_BASE_URL` | alamat aplikasi web, dipakai untuk tautan di dalam email |
+
+Paket gratis Resend memberi 3.000 email/bulan dan 100/hari, cukup untuk skala
+saat ini. **Satu syarat yang mudah terlewat:** pengiriman ke alamat sembarang
+menuntut domain pengirim yang sudah diverifikasi. Tanpa domain sendiri,
+pengiriman terbatas ke alamat pemilik akun Resend saja.
+
+Emailnya dikirim **sebelum** balasan submit, bukan di goroutine latar. Backend
+ini fungsi serverless: begitu balasan terkirim, prosesnya dapat dibekukan, dan
+goroutine yang masih berjalan ikut mati. Ongkosnya klien menunggu satu
+perjalanan jaringan lagi, dibatasi 5 detik. Kegagalannya tidak pernah
+menggagalkan submit.
+
+### Alamat yang diizinkan (CORS)
+
+`ALLOWED_ORIGINS` berisi daftar origin yang boleh memanggil backend, dipisah
+koma. Kosong berarti memakai bawaan (`photoflow-ecosystem.vercel.app` dan
+`localhost:5173`).
+
+Variabel ini yang harus diisi lebih dulu **sebelum** mengganti alamat frontend.
+Origin yang tidak terdaftar berarti setiap panggilan API ditolak peramban, dan
+yang terlihat bukan pesan error melainkan galeri kosong dan dashboard yang
+gagal memuat.
+
+### Dokumen hukum
+
+`/privacy` dan `/terms` dilayani frontend tanpa login, dan rutenya mendahului
+pemeriksaan sesi supaya pembukanya tidak mendapat pemuat berputar maupun
+lemparan ke layar masuk.
+
+Keduanya **wajib** sebelum aplikasi ini diajukan ke verifikasi OAuth Google:
+`drive.readonly` adalah scope terbatas, dan verifikasinya mensyaratkan
+kebijakan privasi publik yang memuat pernyataan Limited Use serta menyebut data
+Google apa yang diambil. Tanpa itu pengajuannya ditolak sebelum ditinjau, dan
+layar persetujuan terus menampilkan "Google hasn't verified this app".
+
+Satu variabel frontend yang perlu diisi sebelum pengajuan:
+
+| Variabel | Isi |
+|---|---|
+| `VITE_CONTACT_EMAIL` | alamat kontak untuk pertanyaan privasi dan permintaan penghapusan data |
+
+Selama kosong, kedua dokumen menunjuk ke issue tracker repositori — kanal yang
+sungguh terbaca, bukan alamat karangan yang memantulkan setiap email. Pengulas
+Google mencari cara menghubungi pemiliknya, jadi isi variabel ini lebih dulu.
+
 ### Tes
 
 ```bash
@@ -324,3 +403,14 @@ Repo ini menyimpan dua berkas yang menjelaskan sisi keamanannya:
   perbaikannya.
 - [`FINDINGS.md`](FINDINGS.md) — seluruh temuan beserta statusnya, termasuk yang
   sengaja dibiarkan terbuka dan alasannya.
+
+### Nama studio pada galeri klien
+
+Galeri klien menampilkan nama studio fotografernya di kepala halaman,
+menggantikan "PhotoFlow", beserta pita sampul yang memakai foto pertama galeri
+itu sendiri. Disetel lewat ikon roda gigi di dashboard; kosong berarti kembali
+ke "PhotoFlow", jadi fitur ini pilihan.
+
+Tersimpan di `profiles.studio_name`. Lambangnya tetap lambang PhotoFlow —
+menggantinya menuntut unggahan berkas, dan itu menuntut penyimpanan berkas yang
+belum ada di aplikasi ini.

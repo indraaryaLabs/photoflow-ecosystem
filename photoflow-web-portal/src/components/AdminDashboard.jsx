@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Copy, Check, Plus, FolderOpen, Link as LinkIcon, Clock,
   CheckCircle2, Loader2, MoreVertical, Edit, Trash2, X, AlertOctagon,
-  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks, KeyRound
+  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks, KeyRound, Settings
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { API_BASE } from '../lib/api';
@@ -12,6 +12,8 @@ import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
 import SelectionListModal from './SelectionListModal';
 import { sudahDilihat, tandaiDilihat, waktuRelatif } from '../lib/submissions';
+import { ringkasProject } from '../lib/dashboardSummary';
+import { PRIVACY_PATH, TERMS_PATH } from '../lib/legal';
 
 // --- STYLES & ANIMATIONS ---
 const globalStyles = `
@@ -72,6 +74,11 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
   const [listingProject, setListingProject] = useState(null);
   const [rotatingProject, setRotatingProject] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
+
+  // Nama studio yang dilihat klien di kepala galerinya, menggantikan
+  // "PhotoFlow". Kosong berarti kembali ke bawaan.
+  const [studioOpen, setStudioOpen] = useState(false);
+  const [studioName, setStudioName] = useState('');
   // Project yang kirimannya sudah pernah dibuka fotografer. Disimpan di
   // peramban, bukan di database: ini catatan "sudah saya lihat" milik satu
   // orang di satu perangkat, bukan keadaan project.
@@ -174,6 +181,50 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Nama studio dibaca saat dashboard dimuat, bukan saat modalnya dibuka:
+  // tombolnya perlu menunjukkan nama yang sedang berlaku tanpa menunggu
+  // seseorang mengkliknya lebih dulu.
+  const fetchStudioName = async () => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const res = await fetch(`${API_BASE}/api/profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setStudioName(data.studio_name || '');
+    } catch {
+      // Diamkan. Nama studio adalah hiasan pada galeri klien; tidak
+      // terbacanya bukan alasan menampilkan galat di dashboard.
+    }
+  };
+
+  const saveStudioName = async (nama) => {
+    const token = await getAccessToken();
+    if (!token) return false;
+
+    const res = await fetch(`${API_BASE}/api/profile`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ studio_name: nama }),
+    });
+
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      showToast(body?.error || 'Could not save your studio name.', 'error');
+      return false;
+    }
+
+    setStudioName(body?.studio_name ?? nama);
+    showToast(
+      body?.studio_name
+        ? 'Your clients will see this name on their gallery.'
+        : 'Studio name cleared. Galleries show "PhotoFlow" again.',
+    );
+    return true;
   };
 
   const fetchDriveStatus = async () => {
@@ -310,6 +361,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
   useEffect(() => {
     fetchProjects();
     fetchDriveStatus();
+    fetchStudioName();
     // getSession, bukan getUser: yang pertama membaca sesi yang sudah tersimpan
     // di peramban, yang kedua menembak jaringan ke Supabase. Yang dibutuhkan di
     // sini hanya id-nya, dan id itu sudah ada di tangan — menunggu satu
@@ -627,6 +679,15 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setStudioOpen(true)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ash-600 transition-colors hover:bg-ash-100 hover:text-ash-900 dark:text-ash-400 dark:hover:bg-white/5 dark:hover:text-ash-100"
+                title="Studio name"
+                aria-label="Studio name"
+              >
+                <Settings size={18} strokeWidth={1.75} />
+              </button>
+
               <ThemeToggle choice={themeChoice} onCycle={cycleTheme} />
 
               <button
@@ -698,37 +759,64 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
                 </button>
               </div>
 
+              {/* Baris ringkasan. Ada karena dashboard ini menjawab satu
+                  pertanyaan lebih dulu daripada semua pertanyaan lain: "apa
+                  yang perlu saya kerjakan sekarang?" Sebelum ini jawabannya
+                  hanya bisa didapat dengan membaca seluruh kartu satu per satu
+                  dan mengingat sendiri mana yang sudah dibuka.
+
+                  Angkanya dihitung dari daftar yang sudah ada di tangan, jadi
+                  baris ini tidak menambah satu pun permintaan jaringan. */}
+              {!isLoading && projects.length > 0 && (
+                <RingkasanBaris projects={projects} dilihat={dilihat} />
+              )}
+
               {isLoading ? (
-                <div className="space-y-4 animate-slide-up-fade">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="bg-white dark:bg-white/[0.03] border border-ash-200 dark:border-white/10 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div className="flex items-center gap-4">
-                        <div className="hidden sm:block w-10 h-10 rounded-full bg-ash-100 dark:bg-white/5 skeleton-shimmer" />
-                        <div className="space-y-2">
-                          <div className="h-4 w-40 rounded-lg bg-ash-200 dark:bg-white/10 skeleton-shimmer" />
-                          <div className="h-3 w-28 rounded-lg bg-ash-100 dark:bg-white/5 skeleton-shimmer" />
-                          <div className="h-3 w-48 rounded-lg bg-ash-100 dark:bg-white/5 skeleton-shimmer" />
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="h-7 w-28 rounded-full bg-ash-100 dark:bg-white/5 skeleton-shimmer" />
-                        <div className="h-8 w-8 rounded-xl bg-ash-100 dark:bg-white/5 skeleton-shimmer" />
+                <div className="grid gap-4 lg:grid-cols-2 animate-slide-up-fade">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="overflow-hidden rounded-2xl border border-ash-200 bg-white dark:border-white/10 dark:bg-white/[0.03]">
+                      <div className="h-24 bg-ash-100 dark:bg-white/5 skeleton-shimmer" />
+                      <div className="space-y-2 p-4">
+                        <div className="h-4 w-40 rounded-lg bg-ash-200 dark:bg-white/10 skeleton-shimmer" />
+                        <div className="h-3 w-28 rounded-lg bg-ash-100 dark:bg-white/5 skeleton-shimmer" />
+                        <div className="h-9 w-full rounded-xl bg-ash-100 dark:bg-white/5 skeleton-shimmer !mt-4" />
                       </div>
                     </div>
                   ))}
                 </div>
               ) : projects.length === 0 ? (
                 // Empty State
+                //
+                // Kalimatnya dulu menyuruh orang membuat project "on the left
+                // panel". Panel kirinya sudah tidak ada sejak formulirnya jadi
+                // panel geser -- petunjuk yang menunjuk ke tempat kosong lebih
+                // menyesatkan daripada tidak ada petunjuk sama sekali.
                 <div className="bg-white/50 dark:bg-white/[0.02] border border-dashed border-ash-300 dark:border-white/10 rounded-2xl p-12 flex flex-col items-center justify-center text-center animate-slide-up-fade">
                   <div className="w-16 h-16 bg-ash-100 dark:bg-white/5 rounded-full flex items-center justify-center mb-4">
                     <FolderOpen size={32} strokeWidth={1.75} className="text-ash-500" />
                   </div>
                   <h3 className="text-lg font-medium text-ash-900 dark:text-white">No projects yet</h3>
-                  <p className="text-sm text-ash-600 dark:text-ash-400 mt-2 max-w-sm">Create your first project on the left panel to start sharing galleries with your clients.</p>
+                  <p className="text-sm text-ash-600 dark:text-ash-400 mt-2 max-w-sm">
+                    Point a project at a Google Drive folder and PhotoFlow turns it into a
+                    link your client can pick from.
+                  </p>
+                  <button
+                    onClick={() => setFormOpen(true)}
+                    className="mt-6 inline-flex items-center gap-2 rounded-xl bg-ash-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors duration-tint hover:bg-ash-900 dark:bg-ash-100 dark:text-ash-950 dark:hover:bg-white"
+                  >
+                    <Plus size={16} strokeWidth={2} aria-hidden="true" />
+                    Create your first project
+                  </button>
                 </div>
               ) : (
-                // List State
-                <div className="space-y-4">
+                // Dua kolom pada layar lebar.
+                //
+                // Satu kartu per baris membentang 1200px untuk memuat sebuah
+                // judul, satu nama, dan empat tombol. Sisanya kosong, dan
+                // kekosongan itu yang paling terlihat saat halaman dibuka di
+                // laptop. Dua kolom memakai lebar yang sama untuk memuat dua
+                // kali lebih banyak project tanpa mengecilkan apa pun.
+                <div className="grid gap-4 lg:grid-cols-2">
                   {projects.map((project, index) => (
                     <ProjectCard
                       key={project.id}
@@ -739,7 +827,9 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
                       onCloseMenu={closeMenu}
                       onCopy={() => handleCopyLink(project.magic_link_token)}
                       onOpenGallery={() => {
-                        window.open(`${window.location.origin}/?token=${project.magic_link_token}`, '_blank', 'noopener');
+                        // preview=1 supaya kunjungan fotografer sendiri tidak
+                        // tercatat sebagai "klien sudah membuka galeri".
+                        window.open(`${window.location.origin}/?token=${project.magic_link_token}&preview=1`, '_blank', 'noopener');
                       }}
                       onReopen={() => setReopeningProject(project)}
                       onResync={() => handleResync(project)}
@@ -763,6 +853,19 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
               )}
             </div>
           </div>
+
+          {/* Tautan dokumen hukum juga hidup di sini, bukan hanya di layar
+              masuk: sekali seseorang masuk, ia tidak pernah melihat layar itu
+              lagi, dan halaman inilah satu-satunya tempat ia berada. */}
+          <footer className="mt-16 border-t border-ash-200 pt-6 text-xs text-ash-500 dark:border-white/10 dark:text-ash-500">
+            <a href={PRIVACY_PATH} className="hover:text-ash-700 dark:hover:text-ash-300 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors">
+              Privacy Policy
+            </a>
+            <span className="mx-2 opacity-50">·</span>
+            <a href={TERMS_PATH} className="hover:text-ash-700 dark:hover:text-ash-300 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors">
+              Terms of Service
+            </a>
+          </footer>
         </main>
 
         {/* PANEL GESER: PROJECT BARU */}
@@ -925,6 +1028,15 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
             </>
           )}
         </AnimatePresence>
+
+        {/* NAMA STUDIO */}
+        {studioOpen && (
+          <StudioNameModal
+            initial={studioName}
+            onClose={() => setStudioOpen(false)}
+            onSave={saveStudioName}
+          />
+        )}
 
         {/* CUSTOM EDIT MODAL */}
         {editingProject && (
@@ -1091,6 +1203,153 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
  * "Delete" hilang di baliknya. Dengan satu penanda di induk, hanya satu kartu
  * yang pernah terangkat, jadi tumpang tindih itu tidak mungkin terjadi lagi.
  */
+/**
+ * Menyetel nama studio yang dilihat klien di kepala galerinya.
+ *
+ * Nilainya disalin ke state lokal saat modal dibuka, bukan diikat langsung ke
+ * state dashboard: mengetik lalu menutup tanpa menyimpan harus membuang
+ * ketikannya, bukan diam-diam mengubah tampilan tombol di kepala halaman.
+ */
+function StudioNameModal({ initial, onClose, onSave }) {
+  const [nilai, setNilai] = useState(initial);
+  const [menyimpan, setMenyimpan] = useState(false);
+
+  const kirim = async (e) => {
+    e.preventDefault();
+    setMenyimpan(true);
+    const berhasil = await onSave(nilai.trim());
+    setMenyimpan(false);
+    if (berhasil) onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-slide-up-fade">
+      <div className="relative w-full max-w-md rounded-2xl border border-ash-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-ash-900">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 p-2 text-ash-500 transition-colors hover:text-ash-600 dark:hover:text-ash-200"
+          aria-label="Close"
+        >
+          <X size={20} strokeWidth={1.75} />
+        </button>
+
+        <h2 className="mb-1 text-xl font-semibold tracking-tight">Studio name</h2>
+        <p className="mb-5 text-sm text-ash-600 dark:text-ash-400">
+          Shown at the top of every gallery your clients open, in place of
+          &ldquo;PhotoFlow&rdquo;. Leave it empty to keep the default.
+        </p>
+
+        <form onSubmit={kirim} className="space-y-4">
+          <input
+            type="text"
+            autoFocus
+            maxLength={60}
+            value={nilai}
+            onChange={(e) => setNilai(e.target.value)}
+            placeholder="e.g. Cahaya Studio"
+            className="w-full rounded-xl border border-ash-200 bg-ash-50 px-4 py-3 text-sm outline-none focus:border-ash-500 dark:border-white/10 dark:bg-black/20 dark:focus:border-ash-400"
+          />
+
+          {/* Pratinjau, bukan sekadar keterangan. Yang diubah di sini tampil di
+              halaman lain yang dibuka orang lain; tanpa melihat bentuknya,
+              satu-satunya cara memastikan adalah mengirim tautan ke diri
+              sendiri. */}
+          <div className="rounded-xl border border-ash-200 bg-ash-50 p-3 dark:border-white/10 dark:bg-white/[0.03]">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-ash-500">
+              Your client sees
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-ash-200 bg-ash-100 text-ash-700 dark:border-white/10 dark:bg-white/5 dark:text-ash-200">
+                <BrandMark size={18} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold tracking-tight text-ash-900 dark:text-white">
+                  {nilai.trim() || 'PhotoFlow'}
+                </p>
+                <p className="truncate text-xs font-medium text-ash-600 dark:text-ash-400">
+                  Their name
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={menyimpan}
+            className="w-full rounded-xl bg-ash-800 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors duration-tint hover:bg-ash-900 disabled:opacity-50 dark:bg-ash-100 dark:text-ash-950 dark:hover:bg-white"
+          >
+            {menyimpan ? 'Saving...' : 'Save'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Empat angka di atas daftar project.
+ *
+ * Yang ditampilkan dipilih menurut apakah angkanya menuntut tindakan, bukan
+ * menurut apakah angkanya mudah dihitung. "Total project" mudah dihitung dan
+ * tidak pernah menyuruh siapa pun mengerjakan apa pun; ia sudah tertulis di
+ * bawah judul dan tidak perlu petak sendiri.
+ */
+function RingkasanBaris({ projects, dilihat }) {
+  const { perluDitinjau, menunggu, belumDibuka, fotoTerpilih, tungguTerlama } =
+    ringkasProject(projects, dilihat);
+
+  return (
+    <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <Petak
+        icon={ListChecks}
+        label="Needs review"
+        value={perluDitinjau}
+        // Satu-satunya petak yang boleh menarik perhatian, dan hanya saat
+        // isinya bukan nol. Empat petak yang semuanya menonjol sama saja
+        // dengan tidak ada yang menonjol.
+        highlight={perluDitinjau > 0}
+      />
+      <Petak
+        icon={Clock}
+        label="Waiting on clients"
+        value={menunggu}
+        hint={belumDibuka > 0 ? `${belumDibuka} never opened the link` : undefined}
+      />
+      <Petak icon={CheckCircle2} label="Photos picked" value={fotoTerpilih} />
+      <Petak
+        icon={AlertTriangle}
+        label="Longest open"
+        value={tungguTerlama || '—'}
+        hint={tungguTerlama ? 'oldest project still waiting' : 'nothing is waiting'}
+      />
+    </div>
+  );
+}
+
+function Petak({ icon: Icon, label, value, hint, highlight }) {
+  return (
+    <div
+      className={`rounded-2xl border p-4 transition-colors duration-tint ${
+        highlight
+          ? 'border-ash-300 bg-ash-100/70 dark:border-white/20 dark:bg-white/[0.07]'
+          : 'border-ash-200 bg-white dark:border-white/10 dark:bg-white/[0.03]'
+      }`}
+    >
+      <div className="flex items-center gap-1.5 text-ash-500 dark:text-ash-500">
+        <Icon size={13} strokeWidth={1.75} aria-hidden="true" />
+        <span className="text-xs font-medium truncate">{label}</span>
+      </div>
+      <p className="mt-1.5 text-2xl font-semibold tracking-tight text-ash-900 tabular-nums dark:text-white">
+        {value}
+      </p>
+      {hint && (
+        <p className="mt-0.5 text-[11px] text-ash-500 dark:text-ash-500 truncate">{hint}</p>
+      )}
+    </div>
+  );
+}
+
 function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, onCopy, onOpenGallery, onWhatsApp, onEdit, onDelete, onReopen, onResync, onCopyList, onRotateLink, isNew }) {
   const [copied, setCopied] = useState(false);
 
@@ -1131,21 +1390,27 @@ function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, on
   }, [isMenuOpen, onCloseMenu]);
 
   const isPending = project.status === 'pending';
+  const sudahDibuka = Boolean(project.first_viewed_at);
   const jumlahFoto = project.photo_count ?? 0;
   const pratinjau = project.previews || [];
 
   return (
     <div
-      className={`group relative flex flex-col justify-between gap-4 rounded-2xl border border-ash-200 bg-white p-4 transition-[box-shadow,border-color] duration-feedback hover:border-ash-300 hover:shadow-lg sm:flex-row sm:items-center dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-white/20 ${isMenuOpen ? 'z-50' : 'z-0 hover:z-10'}`}
+      className={`group relative flex flex-col overflow-visible rounded-2xl border border-ash-200 bg-white transition-[box-shadow,border-color] duration-feedback hover:border-ash-300 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-white/20 ${isMenuOpen ? 'z-50' : 'z-0 hover:z-10'}`}
       style={{ animationDelay: `${index * 0.05}s` }}
     >
-      {/* Strip pratinjau. Kartu ini dulu memuat ikon folder di aplikasi yang
+      {/* Pita pratinjau. Kartu ini dulu memuat ikon folder di aplikasi yang
           seluruh isinya fotografi -- tanda "template SaaS" yang paling cepat
           terbaca, sekaligus membuang cara tercepat mengenali sebuah project:
-          melihat isinya. */}
-      <div className="flex items-center gap-4 min-w-0">
+          melihat isinya.
+
+          Dulu empat petak 48px yang saling bertumpuk di sisi kiri baris.
+          Sekarang satu pita selebar kartu: di tata letak dua kolom, ruang itu
+          memang ada, dan foto yang cukup besar untuk dikenali jauh lebih
+          berguna daripada empat keping yang sama-sama tidak terbaca. */}
+      <div className="h-24 overflow-hidden rounded-t-2xl border-b border-ash-100 dark:border-white/5">
         {pratinjau.length > 0 ? (
-          <div className="hidden sm:flex shrink-0 -space-x-3">
+          <div className="flex h-full gap-px bg-ash-100 dark:bg-white/5">
             {pratinjau.map((url, i) => (
               <img
                 key={url + i}
@@ -1154,51 +1419,69 @@ function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, on
                 aria-hidden="true"
                 loading="lazy"
                 referrerPolicy="no-referrer"
-                className="h-12 w-12 rounded-lg object-cover ring-2 ring-white dark:ring-ash-950 bg-ash-200 dark:bg-ash-800"
-                style={{ zIndex: pratinjau.length - i }}
+                className="h-full min-w-0 flex-1 bg-ash-200 object-cover dark:bg-ash-800"
               />
             ))}
           </div>
         ) : (
-          <div className="hidden sm:grid shrink-0 h-12 w-12 place-items-center rounded-lg border border-dashed border-ash-300 dark:border-white/10 text-ash-500">
-            <FolderOpen size={18} strokeWidth={1.75} aria-hidden="true" />
+          // Pita kosong setinggi 96px dengan satu ikon kecil di tengahnya
+          // terbaca sebagai gambar yang gagal dimuat. Kalimatnya menyebut
+          // sebabnya, sehingga yang terlihat adalah keadaan, bukan kerusakan.
+          <div className="flex h-full flex-col items-center justify-center gap-1.5 bg-ash-50 text-ash-500 dark:bg-white/[0.02] dark:text-ash-600">
+            <FolderOpen size={18} strokeWidth={1.5} aria-hidden="true" />
+            <span className="text-xs">Nothing synced from Drive yet</span>
           </div>
         )}
-
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="text-base font-semibold text-ash-900 dark:text-ash-100 truncate">
-              {project.project_name || 'Untitled Project'}
-            </h3>
-            {isNew && (
-              <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-ash-900 text-white dark:bg-ash-100 dark:text-ash-950 text-[10px] font-bold uppercase tracking-wide">
-                New
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-ash-600 dark:text-ash-400 mt-0.5 truncate">
-            {project.client_name}
-          </p>
-          {/* Satu baris keterangan, bukan tiga kolom bertitik pemisah.
-              Statusnya ikut di sini alih-alih jadi lencana berwarna tersendiri:
-              di kartu yang sudah memuat foto, lencana berwarna adalah unsur
-              yang paling berisik dan paling sedikit isinya. */}
-          <p className="text-xs text-ash-500 dark:text-ash-500 mt-1.5 truncate">
-            {isPending
-              // Nama depan saja tidak bisa dipakai: "The Mercers" jadi
-              // "Waiting for The". Nama keluarga memang lazim dipakai klien
-              // fotografi, dan barisnya sudah dipotong dengan truncate.
-              ? `Waiting for ${project.client_name}`
-              : `Picks submitted ${waktuRelatif(project.submitted_at) || 'earlier'}`}
-            {' · '}
-            <span className={jumlahFoto === 0 ? 'text-warning-600 dark:text-warning-400 font-medium' : undefined}>
-              {jumlahFoto === 0 ? 'No photos yet' : `${jumlahFoto} photos`}
-            </span>
-          </p>
-        </div>
       </div>
 
-      <div className="flex items-center gap-2 border-t sm:border-t-0 border-ash-100 dark:border-white/5 pt-4 sm:pt-0">
+      <div className="min-w-0 p-4">
+        <div className="flex items-center gap-2">
+          <h3 className="truncate text-base font-semibold text-ash-900 dark:text-ash-100">
+            {project.project_name || 'Untitled Project'}
+          </h3>
+          {isNew && (
+            <span className="shrink-0 rounded-md bg-ash-900 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white dark:bg-ash-100 dark:text-ash-950">
+              New
+            </span>
+          )}
+        </div>
+        <p className="mt-0.5 truncate text-sm text-ash-600 dark:text-ash-400">
+          {project.client_name}
+        </p>
+        {/* Satu baris keterangan, bukan tiga kolom bertitik pemisah.
+            Statusnya ikut di sini alih-alih jadi lencana berwarna tersendiri:
+            di kartu yang sudah memuat foto, lencana berwarna adalah unsur
+            yang paling berisik dan paling sedikit isinya. */}
+        <p className="mt-1.5 truncate text-xs text-ash-500 dark:text-ash-500">
+          {isPending ? (
+            // Baris ini dulu berbunyi "Waiting for <nama klien>" -- mengulang
+            // nama yang sudah tertulis persis di atasnya, dan mendiamkan
+            // satu-satunya hal yang belum diketahui: apakah tautannya sampai.
+            //
+            // Dua keadaan yang tampak sama dari luar menuntut tindakan yang
+            // berlawanan. Belum pernah dibuka berarti masalahnya pengiriman:
+            // kirim ulang. Sudah dibuka dan tetap sepi berarti masalahnya
+            // orangnya: tagih.
+            sudahDibuka ? (
+              `Opened ${waktuRelatif(project.first_viewed_at) || 'earlier'}`
+            ) : (
+              <span className="font-medium text-warning-600 dark:text-warning-400">
+                Link not opened yet
+              </span>
+            )
+          ) : (
+            `Picks submitted ${waktuRelatif(project.submitted_at) || 'earlier'}`
+          )}
+          {' · '}
+          <span className={jumlahFoto === 0 ? 'text-warning-600 dark:text-warning-400 font-medium' : undefined}>
+            {jumlahFoto === 0 ? 'No photos yet' : `${jumlahFoto} photos`}
+          </span>
+        </p>
+      </div>
+
+      {/* Tindakan didorong ke dasar kartu dengan mt-auto supaya dua kartu
+          bersebelahan yang judulnya berbeda panjang tetap sejajar tombolnya. */}
+      <div className="mt-auto flex items-center gap-2 border-t border-ash-100 px-4 py-3 dark:border-white/5">
 
         {/* SATU tindakan utama, dan isinya berubah menurut keadaan project.
             Sebelumnya ada empat tombol ikon sederajat berjajar; kalau semuanya
@@ -1208,24 +1491,24 @@ function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, on
         {isPending ? (
           <button
             onClick={onWhatsApp}
-            className="inline-flex items-center gap-2 rounded-xl bg-ash-800 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-tint hover:bg-ash-900 dark:bg-ash-100 dark:text-ash-950 dark:hover:bg-white"
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-ash-800 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-tint hover:bg-ash-900 dark:bg-ash-100 dark:text-ash-950 dark:hover:bg-white"
           >
             <MessageCircle size={15} strokeWidth={1.75} aria-hidden="true" />
-            <span className="hidden sm:inline">Send link</span>
+            Send link
           </button>
         ) : (
           <button
             onClick={onCopyList}
-            className="inline-flex items-center gap-2 rounded-xl bg-ash-800 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-tint hover:bg-ash-900 dark:bg-ash-100 dark:text-ash-950 dark:hover:bg-white"
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-ash-800 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors duration-tint hover:bg-ash-900 dark:bg-ash-100 dark:text-ash-950 dark:hover:bg-white"
           >
             <ListChecks size={15} strokeWidth={1.75} aria-hidden="true" />
-            <span className="hidden sm:inline">Review picks</span>
+            Review picks
           </button>
         )}
 
         <button
           onClick={handleCopyClick}
-          className="grid h-9 w-9 place-items-center rounded-xl border border-ash-200 bg-white text-ash-600 transition-colors duration-tint hover:bg-ash-100 hover:text-ash-950 dark:border-white/10 dark:bg-white/5 dark:text-ash-400 dark:hover:bg-white/10 dark:hover:text-white"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-ash-200 bg-white text-ash-600 transition-colors duration-tint hover:bg-ash-100 hover:text-ash-950 dark:border-white/10 dark:bg-white/5 dark:text-ash-400 dark:hover:bg-white/10 dark:hover:text-white"
           title="Copy gallery link"
           aria-label="Copy gallery link"
         >
@@ -1236,7 +1519,7 @@ function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, on
 
         <button
           onClick={onOpenGallery}
-          className="grid h-9 w-9 place-items-center rounded-xl border border-ash-200 bg-white text-ash-600 transition-colors duration-tint hover:bg-ash-100 hover:text-ash-950 dark:border-white/10 dark:bg-white/5 dark:text-ash-400 dark:hover:bg-white/10 dark:hover:text-white"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-ash-200 bg-white text-ash-600 transition-colors duration-tint hover:bg-ash-100 hover:text-ash-950 dark:border-white/10 dark:bg-white/5 dark:text-ash-400 dark:hover:bg-white/10 dark:hover:text-white"
           title="Open client gallery in a new tab"
           aria-label="Open client gallery in a new tab"
         >

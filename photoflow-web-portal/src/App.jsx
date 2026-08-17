@@ -3,12 +3,15 @@ import { Loader2, AlertTriangle } from 'lucide-react';
 
 import Toast from './components/Toast';
 import Header from './components/Header';
+import GalleryCover from './components/GalleryCover';
 import PhotoGrid, { DensityPicker } from './components/PhotoGrid';
 import { useDensity } from './lib/useDensity';
 import PreviewModal from './components/PreviewModal';
 import FloatingBar from './components/FloatingBar';
 import AdminDashboard from './components/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
+import LegalPage from './components/LegalPage';
+import { PRIVACY_PATH, TERMS_PATH } from './lib/legal';
 import { supabase } from './lib/supabase';
 import { API_BASE } from './lib/api';
 import { openedFromRecoveryLink } from './lib/recovery';
@@ -35,6 +38,14 @@ export default function App() {
   const isDashboardRoute = pathname === DASHBOARD_PATH || pathname.startsWith(DASHBOARD_PATH + '/');
 
   const token = new URLSearchParams(search).get('token');
+
+  // Dashboard membuka galeri lewat tautan yang sama persis dengan yang dipegang
+  // klien, jadi tanpa penanda ini "klien sudah membuka galeri" akan berbunyi
+  // pada detik fotografer mengintip pekerjaannya sendiri. Diteruskan ke backend,
+  // yang memakainya untuk tidak mencatat kunjungan ini.
+  const isPreview = new URLSearchParams(search).get('preview') === '1';
+  const galleryQuery = isPreview ? '?preview=1' : '';
+
   const isHome = pathname === '/';
 
   // ─── 1. Auth State ───────────────────────────────────────────
@@ -134,7 +145,7 @@ export default function App() {
 
     const fetchGallery = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/p/${token}`);
+        const res = await fetch(`${API_BASE}/api/p/${token}${galleryQuery}`);
 
         if (!res.ok) {
           const body = await res.json().catch(() => null);
@@ -188,7 +199,7 @@ export default function App() {
     };
 
     fetchGallery();
-  }, [token]);
+  }, [token, galleryQuery]);
 
   // ─── Callbacks ───────────────────────────────────────────────
   const addToast = useCallback((message) => {
@@ -324,6 +335,23 @@ export default function App() {
   //  CONDITIONAL RENDERING — Early Returns
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+  // Dokumen hukum mendahului SEGALANYA, termasuk pemeriksaan sesi.
+  //
+  // Keduanya harus terbuka untuk siapa saja tanpa login — itu syarat verifikasi
+  // OAuth Google, dan pengulasnya membuka tautannya langsung. Kalau routing ini
+  // diletakkan setelah pemeriksaan sesi, yang pertama ia lihat adalah pemuat
+  // yang berputar; kalau diletakkan setelah penjaga autentikasi, ia justru
+  // dilempar ke layar masuk.
+  if (pathname === PRIVACY_PATH || pathname === TERMS_PATH) {
+    return (
+      <LegalPage
+        doc={pathname === PRIVACY_PATH ? 'privacy' : 'terms'}
+        themeChoice={themeChoice}
+        cycleTheme={cycleTheme}
+      />
+    );
+  }
+
   if (isAuthChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-ash-50 dark:bg-ash-950">
@@ -375,7 +403,7 @@ export default function App() {
           Loading gallery...
         </p>
         <p className="text-sm text-ash-500 dark:text-ash-500 mt-1">
-          Mohon tunggu sebentar
+          This will only take a moment
         </p>
       </div>
     );
@@ -407,6 +435,12 @@ export default function App() {
       <Header project={project} themeChoice={themeChoice} cycleTheme={cycleTheme} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28">
+        <GalleryCover
+          photo={photos[0]}
+          projectName={project.project_name || project.client_name}
+          studioName={project.studio_name}
+        />
+
         {/* Judul dan keterangan dirapatkan. Sebelumnya bagian ini memakan
             200px tinggi layar untuk kalimat yang dibaca sekali, sementara yang
             dibutuhkan orangnya adalah melihat foto sebanyak mungkin. */}
@@ -449,6 +483,25 @@ export default function App() {
           density={density}
           isLocked={isSubmittedState}
         />
+
+        {/* Klien tidak pernah mendaftar dan tidak pernah menyetujui apa pun,
+            tapi namanya, nomornya, dan pilihannya tetap tersimpan. Tautan ini
+            satu-satunya tempat ia dapat mengetahuinya. */}
+        <footer className="mt-16 text-center text-xs text-ash-500 dark:text-ash-500">
+          <a
+            href={PRIVACY_PATH}
+            className="hover:text-ash-700 dark:hover:text-ash-300 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"
+          >
+            Privacy Policy
+          </a>
+          <span className="mx-2 opacity-50">·</span>
+          <a
+            href={TERMS_PATH}
+            className="hover:text-ash-700 dark:hover:text-ash-300 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"
+          >
+            Terms
+          </a>
+        </footer>
       </main>
 
       <PreviewModal

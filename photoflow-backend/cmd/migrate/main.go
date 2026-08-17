@@ -138,9 +138,19 @@ func run() error {
 		return fmt.Errorf("automigrate: %w", err)
 	}
 
-	// Kolom ini ditambahkan ke tabel yang dibuat Supabase, bukan oleh AutoMigrate.
-	if err := conn.Exec("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS gdrive_refresh_token TEXT").Error; err != nil {
-		return fmt.Errorf("menambah kolom gdrive_refresh_token: %w", err)
+	// Kolom-kolom ini ditambahkan ke tabel yang dibuat Supabase, bukan oleh
+	// AutoMigrate. profiles tidak masuk dikelola() karena barisnya dibuat
+	// trigger handle_new_user() milik Supabase; membiarkan GORM mengurus
+	// tabelnya berarti dua pihak mengaku memilikinya.
+	kolomProfil := map[string]string{
+		"gdrive_refresh_token": "TEXT",
+		"studio_name":          "TEXT",
+	}
+	for kolom, tipe := range kolomProfil {
+		q := fmt.Sprintf("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS %s %s", kolom, tipe)
+		if err := conn.Exec(q).Error; err != nil {
+			return fmt.Errorf("menambah kolom %s: %w", kolom, err)
+		}
 	}
 
 	if err := enableRLS(conn); err != nil {
