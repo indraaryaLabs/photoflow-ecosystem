@@ -52,6 +52,27 @@ const globalStyles = `
   ::-webkit-scrollbar-thumb:hover { background: var(--color-ash-500); }
 `;
 
+/**
+ * Nomor WhatsApp fotografer sendiri, dari metadata akunnya.
+ *
+ * getSession, BUKAN getUser. Keduanya mengembalikan user yang sama, tapi
+ * getUser menembak jaringan ke Supabase sementara getSession membaca sesi yang
+ * sudah tersimpan di peramban. Yang dicari cuma satu nomor di metadata — sudah
+ * ada di tangan sejak orangnya masuk.
+ *
+ * Ongkosnya nyata dan terasa: satu perjalanan jaringan penuh disisipkan di
+ * DEPAN pembuatan dan penyuntingan project, sebelum permintaan yang sebenarnya
+ * dikirim. Itulah jeda yang muncul setiap kali "Create Project" ditekan, dan
+ * seluruhnya untuk data yang tidak perlu diambil ulang.
+ *
+ * Berkas ini sudah memakai alasan yang sama saat membaca id pemakai; dua
+ * pemanggilan ini terlewat.
+ */
+async function nomorWhatsAppSendiri() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user?.user_metadata?.whatsapp || '';
+}
+
 export default function AdminDashboard({ themeChoice, cycleTheme }) {
   // --- STATE MANAGEMENT ---
   const [toast, setToast] = useState(null);
@@ -487,8 +508,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
       const token = await getAccessToken();
       if (!token) return;
 
-      const { data: { user } } = await supabase.auth.getUser();
-      const adminWa = user?.user_metadata?.whatsapp || '';
+      const adminWa = await nomorWhatsAppSendiri();
 
       const sendRequest = (accessToken) => fetch(`${API_BASE}/api/projects/${editingProject.id}`, {
         method: 'PUT',
@@ -544,8 +564,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
       const token = await getAccessToken();
       if (!token) return;
 
-      const { data: { user } } = await supabase.auth.getUser();
-      const adminWa = user?.user_metadata?.whatsapp || '';
+      const adminWa = await nomorWhatsAppSendiri();
 
       const sendRequest = (accessToken) => fetch(`${API_BASE}/api/projects`, {
         method: 'POST',

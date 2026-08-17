@@ -83,11 +83,57 @@ export function buildRows(photos, containerWidth, targetHeight, gap = 8) {
   return rows;
 }
 
-/** Tinggi baris menurut pilihan kerapatan. */
+/**
+ * Kerapatan galeri.
+ *
+ * Nilainya PEMBAGI lebar wadah, bukan tinggi dalam piksel.
+ *
+ * Sebelumnya ketiganya tinggi tetap: 380, 260, 170. Di layar lebar itu bekerja,
+ * tapi di ponsel ketiganya menghasilkan tata letak yang praktis sama. Sebabnya
+ * ada di rumus barisnya: dengan lebar wadah 343px, satu foto potret saja sudah
+ * setinggi 514px, jadi baris ditutup pada foto KEDUA berapa pun tinggi
+ * targetnya — 380, 260, maupun 170 sama-sama sudah terlampaui. Akibatnya tiga
+ * tombol yang tidak mengubah apa pun, pada perangkat yang paling sering dipakai
+ * klien.
+ *
+ * Dinyatakan sebagai pecahan lebar, ketiganya kembali punya arti di semua
+ * ukuran layar. Pada wadah 343px hasilnya kira-kira 1,5 / 2 / 3 foto per baris;
+ * pada 1216px, 3 / 5 / 6.
+ *
+ * Pembaginya berbeda antara layar sempit dan lebar, dan itu bukan tambalan:
+ * enam foto sebaris di layar 343px berarti masing-masing selebar 55px — terlalu
+ * kecil untuk menilai apa pun, padahal menilai foto justru satu-satunya
+ * pekerjaan di halaman ini. Jumlah kolom yang pantas memang bukan besaran yang
+ * boleh diskalakan lurus terhadap lebar.
+ *
+ * Pembagi untuk layar lebar dipilih agar hasilnya praktis sama dengan tinggi
+ * tetap yang lama pada wadah 1280px — 376 / 261 / 171 berbanding 380 / 260 /
+ * 170 — sehingga tampilan di desktop tidak berubah.
+ */
 export const DENSITIES = {
-  large: { label: 'Large', height: 380 },
-  medium: { label: 'Medium', height: 260 },
-  small: { label: 'Small', height: 170 },
+  large: { label: 'Large', sempit: 1.0, lebar: 3.4 },
+  medium: { label: 'Medium', sempit: 1.9, lebar: 4.9 },
+  small: { label: 'Small', sempit: 3.2, lebar: 7.5 },
 };
 
 export const DEFAULT_DENSITY = 'medium';
+
+/** Di bawah lebar ini, wadahnya dianggap layar sempit. Sama dengan `sm:` Tailwind. */
+const AMBANG_SEMPIT = 640;
+
+/**
+ * Tinggi baris yang dituju untuk sebuah kerapatan pada lebar wadah tertentu.
+ *
+ * @param {string} density  kunci di DENSITIES
+ * @param {number} containerWidth  lebar wadah dalam piksel
+ */
+export function targetHeight(density, containerWidth) {
+  const d = DENSITIES[density] ?? DENSITIES[DEFAULT_DENSITY];
+  // Lebar 0 terjadi pada render pertama, sebelum wadahnya sempat diukur.
+  // Mengembalikan 0 akan membuat setiap baris ditutup pada foto pertama, dan
+  // tata letak salah itu sempat terlihat sekejap sebelum diperbaiki.
+  if (!containerWidth) return 260;
+
+  const pembagi = containerWidth < AMBANG_SEMPIT ? d.sempit : d.lebar;
+  return containerWidth / pembagi;
+}
