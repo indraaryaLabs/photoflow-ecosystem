@@ -233,6 +233,42 @@ jendela itu berarti sebagian request gagal sebentar, bukan data rusak.
 Menghilangkannya sama sekali menuntut deploy dipindahkan ke Actions dan
 integrasi Git Vercel dimatikan.
 
+### Pemberitahuan email
+
+Ketika klien mengirim pilihannya, fotografer diberi tahu lewat email. Fitur ini
+**mati secara bawaan** dan aplikasi berjalan penuh tanpanya; yang hilang hanya
+pemberitahuannya.
+
+Untuk menyalakannya, isi tiga environment variable di backend:
+
+| Variabel | Isi |
+|---|---|
+| `RESEND_API_KEY` | API key dari resend.com |
+| `NOTIFY_FROM_EMAIL` | alamat pengirim, mis. `PhotoFlow <hello@domainmu.com>` |
+| `APP_BASE_URL` | alamat aplikasi web, dipakai untuk tautan di dalam email |
+
+Paket gratis Resend memberi 3.000 email/bulan dan 100/hari, cukup untuk skala
+saat ini. **Satu syarat yang mudah terlewat:** pengiriman ke alamat sembarang
+menuntut domain pengirim yang sudah diverifikasi. Tanpa domain sendiri,
+pengiriman terbatas ke alamat pemilik akun Resend saja.
+
+Emailnya dikirim **sebelum** balasan submit, bukan di goroutine latar. Backend
+ini fungsi serverless: begitu balasan terkirim, prosesnya dapat dibekukan, dan
+goroutine yang masih berjalan ikut mati. Ongkosnya klien menunggu satu
+perjalanan jaringan lagi, dibatasi 5 detik. Kegagalannya tidak pernah
+menggagalkan submit.
+
+### Alamat yang diizinkan (CORS)
+
+`ALLOWED_ORIGINS` berisi daftar origin yang boleh memanggil backend, dipisah
+koma. Kosong berarti memakai bawaan (`photoflow-ecosystem.vercel.app` dan
+`localhost:5173`).
+
+Variabel ini yang harus diisi lebih dulu **sebelum** mengganti alamat frontend.
+Origin yang tidak terdaftar berarti setiap panggilan API ditolak peramban, dan
+yang terlihat bukan pesan error melainkan galeri kosong dan dashboard yang
+gagal memuat.
+
 ### Tes
 
 ```bash
