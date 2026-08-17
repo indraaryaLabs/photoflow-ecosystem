@@ -33,6 +33,7 @@ export function durasiSingkat(iso) {
 export function ringkasProject(projects, dilihat = {}) {
   let perluDitinjau = 0;
   let menunggu = 0;
+  let belumDibuka = 0;
   let fotoTerpilih = 0;
   let tertua = null;
 
@@ -49,6 +50,11 @@ export function ringkasProject(projects, dilihat = {}) {
     }
 
     menunggu++;
+    // Dihitung terpisah karena dua project yang sama-sama "menunggu" menuntut
+    // tindakan yang berlawanan: yang tautannya belum pernah dibuka perlu
+    // dikirim ulang, yang sudah dibuka perlu ditagih.
+    if (!p.first_viewed_at) belumDibuka++;
+
     // Yang dicari project terbuka yang PALING LAMA menganggur -- itu yang
     // kliennya perlu ditagih. Karena itu tanggal terkecil, bukan terbesar.
     const dibuat = p.created_at ? new Date(p.created_at).getTime() : NaN;
@@ -60,6 +66,7 @@ export function ringkasProject(projects, dilihat = {}) {
   return {
     perluDitinjau,
     menunggu,
+    belumDibuka,
     fotoTerpilih,
     tungguTerlama: tertua === null ? '' : durasiSingkat(new Date(tertua).toISOString()),
   };

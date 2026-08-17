@@ -37,6 +37,14 @@ export default function App() {
   const isDashboardRoute = pathname === DASHBOARD_PATH || pathname.startsWith(DASHBOARD_PATH + '/');
 
   const token = new URLSearchParams(search).get('token');
+
+  // Dashboard membuka galeri lewat tautan yang sama persis dengan yang dipegang
+  // klien, jadi tanpa penanda ini "klien sudah membuka galeri" akan berbunyi
+  // pada detik fotografer mengintip pekerjaannya sendiri. Diteruskan ke backend,
+  // yang memakainya untuk tidak mencatat kunjungan ini.
+  const isPreview = new URLSearchParams(search).get('preview') === '1';
+  const galleryQuery = isPreview ? '?preview=1' : '';
+
   const isHome = pathname === '/';
 
   // ─── 1. Auth State ───────────────────────────────────────────
@@ -136,7 +144,7 @@ export default function App() {
 
     const fetchGallery = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/p/${token}`);
+        const res = await fetch(`${API_BASE}/api/p/${token}${galleryQuery}`);
 
         if (!res.ok) {
           const body = await res.json().catch(() => null);
@@ -190,7 +198,7 @@ export default function App() {
     };
 
     fetchGallery();
-  }, [token]);
+  }, [token, galleryQuery]);
 
   // ─── Callbacks ───────────────────────────────────────────────
   const addToast = useCallback((message) => {

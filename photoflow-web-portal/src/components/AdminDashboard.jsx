@@ -768,7 +768,9 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
                       onCloseMenu={closeMenu}
                       onCopy={() => handleCopyLink(project.magic_link_token)}
                       onOpenGallery={() => {
-                        window.open(`${window.location.origin}/?token=${project.magic_link_token}`, '_blank', 'noopener');
+                        // preview=1 supaya kunjungan fotografer sendiri tidak
+                        // tercatat sebagai "klien sudah membuka galeri".
+                        window.open(`${window.location.origin}/?token=${project.magic_link_token}&preview=1`, '_blank', 'noopener');
                       }}
                       onReopen={() => setReopeningProject(project)}
                       onResync={() => handleResync(project)}
@@ -1142,7 +1144,8 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
  * bawah judul dan tidak perlu petak sendiri.
  */
 function RingkasanBaris({ projects, dilihat }) {
-  const { perluDitinjau, menunggu, fotoTerpilih, tungguTerlama } = ringkasProject(projects, dilihat);
+  const { perluDitinjau, menunggu, belumDibuka, fotoTerpilih, tungguTerlama } =
+    ringkasProject(projects, dilihat);
 
   return (
     <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -1155,7 +1158,12 @@ function RingkasanBaris({ projects, dilihat }) {
         // dengan tidak ada yang menonjol.
         highlight={perluDitinjau > 0}
       />
-      <Petak icon={Clock} label="Waiting on clients" value={menunggu} />
+      <Petak
+        icon={Clock}
+        label="Waiting on clients"
+        value={menunggu}
+        hint={belumDibuka > 0 ? `${belumDibuka} never opened the link` : undefined}
+      />
       <Petak icon={CheckCircle2} label="Photos picked" value={fotoTerpilih} />
       <Petak
         icon={AlertTriangle}
@@ -1230,6 +1238,7 @@ function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, on
   }, [isMenuOpen, onCloseMenu]);
 
   const isPending = project.status === 'pending';
+  const sudahDibuka = Boolean(project.first_viewed_at);
   const jumlahFoto = project.photo_count ?? 0;
   const pratinjau = project.previews || [];
 
@@ -1292,12 +1301,25 @@ function ProjectCard({ project, index, isMenuOpen, onToggleMenu, onCloseMenu, on
             di kartu yang sudah memuat foto, lencana berwarna adalah unsur
             yang paling berisik dan paling sedikit isinya. */}
         <p className="mt-1.5 truncate text-xs text-ash-500 dark:text-ash-500">
-          {isPending
-            // Nama depan saja tidak bisa dipakai: "The Mercers" jadi
-            // "Waiting for The". Nama keluarga memang lazim dipakai klien
-            // fotografi, dan barisnya sudah dipotong dengan truncate.
-            ? `Waiting for ${project.client_name}`
-            : `Picks submitted ${waktuRelatif(project.submitted_at) || 'earlier'}`}
+          {isPending ? (
+            // Baris ini dulu berbunyi "Waiting for <nama klien>" -- mengulang
+            // nama yang sudah tertulis persis di atasnya, dan mendiamkan
+            // satu-satunya hal yang belum diketahui: apakah tautannya sampai.
+            //
+            // Dua keadaan yang tampak sama dari luar menuntut tindakan yang
+            // berlawanan. Belum pernah dibuka berarti masalahnya pengiriman:
+            // kirim ulang. Sudah dibuka dan tetap sepi berarti masalahnya
+            // orangnya: tagih.
+            sudahDibuka ? (
+              `Opened ${waktuRelatif(project.first_viewed_at) || 'earlier'}`
+            ) : (
+              <span className="font-medium text-warning-600 dark:text-warning-400">
+                Link not opened yet
+              </span>
+            )
+          ) : (
+            `Picks submitted ${waktuRelatif(project.submitted_at) || 'earlier'}`
+          )}
           {' · '}
           <span className={jumlahFoto === 0 ? 'text-warning-600 dark:text-warning-400 font-medium' : undefined}>
             {jumlahFoto === 0 ? 'No photos yet' : `${jumlahFoto} photos`}
