@@ -3,7 +3,6 @@ import { Loader2, AlertTriangle } from 'lucide-react';
 
 import Toast from './components/Toast';
 import Header from './components/Header';
-import GalleryCover from './components/GalleryCover';
 import PhotoGrid, { DensityPicker } from './components/PhotoGrid';
 import { useDensity } from './lib/useDensity';
 import PreviewModal from './components/PreviewModal';
@@ -239,12 +238,27 @@ export default function App() {
   }, [isLoading, token, photos, isSubmittedState, project?.max_selections, addToast]);
 
   // Simpan setiap perubahan pilihan.
+  //
+  // Ditunda 300ms, tidak ditulis pada tiap klik. localStorage adalah tulisan
+  // SINKRON di utas utama: menyimpan pada setiap ketukan berarti membangun peta
+  // seluruh foto, menyusun daftar nama, dan men-serialisasi JSON di tengah
+  // gerakan yang harus terasa seketika. Orang memilih foto secara beruntun,
+  // jadi penundaan ini menggabungkan sederet ketukan jadi satu penulisan.
+  //
+  // Yang tidak dikorbankan: penyelamatan drafnya sendiri. 300ms jauh lebih
+  // pendek daripada jeda mana pun antara memilih foto terakhir dan menutup tab,
+  // dan pembersihnya menjalankan ulang penundaan pada setiap perubahan
+  // berikutnya, bukan membatalkannya diam-diam.
   useEffect(() => {
     if (!drafSudahDipulihkan.current || !token || isSubmittedState) return;
 
-    const perId = new Map(photos.map((p) => [p.id, p.name]));
-    const nama = [...selectedIds].map((id) => perId.get(id)).filter(Boolean);
-    simpanDraf(token, nama);
+    const tunda = setTimeout(() => {
+      const perId = new Map(photos.map((p) => [p.id, p.name]));
+      const nama = [...selectedIds].map((id) => perId.get(id)).filter(Boolean);
+      simpanDraf(token, nama);
+    }, 300);
+
+    return () => clearTimeout(tunda);
   }, [selectedIds, photos, token, isSubmittedState]);
 
   const handleToggleSelect = useCallback((id) => {
@@ -435,12 +449,6 @@ export default function App() {
       <Header project={project} themeChoice={themeChoice} cycleTheme={cycleTheme} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28">
-        <GalleryCover
-          photo={photos[0]}
-          projectName={project.project_name || project.client_name}
-          studioName={project.studio_name}
-        />
-
         {/* Judul dan keterangan dirapatkan. Sebelumnya bagian ini memakan
             200px tinggi layar untuk kalimat yang dibaca sekali, sementara yang
             dibutuhkan orangnya adalah melihat foto sebanyak mungkin. */}
