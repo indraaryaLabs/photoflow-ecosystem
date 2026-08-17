@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -34,6 +35,8 @@ func (h *Handler) GetGallery(c *gin.Context) {
 		return
 	}
 
+	h.tandaiPernahDibuka(c, project)
+
 	// Hanya kolom yang dipakai halaman galeri yang dikirim. Rute ini publik,
 	// jadi mengirim baris Project apa adanya berarti membocorkan user_id,
 	// drive_folder_id, magic_link_token, dan nomor WhatsApp klien kepada siapa
@@ -42,6 +45,36 @@ func (h *Handler) GetGallery(c *gin.Context) {
 		"project": models.NewGalleryProject(project),
 		"photos":  models.NewGalleryPhotos(photos),
 	})
+}
+
+// tandaiPernahDibuka mencatat kapan galeri ini pertama kali dibuka.
+//
+// Satu UPDATE bersyarat, bukan baca-lalu-tulis. Klien yang menyegarkan halaman
+// dua kali menjalankan dua permintaan yang boleh berjalan bersamaan di dua
+// instance serverless yang berbeda; keduanya akan membaca nil dan keduanya akan
+// menulis. `WHERE first_viewed_at IS NULL` membuat yang kedua tidak mengenai
+// baris apa pun, sehingga waktu pertama tidak dapat tergeser oleh kunjungan
+// berikutnya.
+//
+// Fotografer yang mengintip galerinya sendiri TIDAK dihitung. Tombol "Open
+// client gallery" di dashboard membuka tautan yang sama persis dengan yang
+// dipegang klien, jadi tanpa penanda ini angka "sudah dibuka" akan berbunyi
+// pada detik project dibuat -- dan sinyal yang selalu menyala sama tidak
+// bergunanya dengan sinyal yang tidak pernah menyala.
+//
+// Kegagalannya diabaikan selain dicatat: galeri klien tidak boleh mati karena
+// sebuah statistik gagal ditulis.
+func (h *Handler) tandaiPernahDibuka(c *gin.Context, project models.Project) {
+	if project.FirstViewedAt != nil || c.Query("preview") == "1" {
+		return
+	}
+
+	err := h.DB.Model(&models.Project{}).
+		Where("id = ? AND first_viewed_at IS NULL", project.ID).
+		Update("first_viewed_at", time.Now()).Error
+	if err != nil {
+		log.Printf("gallery: gagal menandai project %s pernah dibuka: %v", project.ID, err)
+	}
 }
 
 // SubmitSelection menerima pilihan foto dari klien lalu mengunci galerinya.

@@ -24,8 +24,21 @@ type Project struct {
 	// kiriman bulan lalu, dan fotografer tidak punya cara tahu mana yang baru
 	// selain mengingat sendiri isi daftarnya.
 	SubmittedAt *time.Time `gorm:"column:submitted_at" json:"submitted_at"`
-	CreatedAt   time.Time  `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt   time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
+	// Kapan galerinya PERTAMA KALI dibuka. nil berarti belum pernah.
+	//
+	// Sebelum ini sebuah project yang menganggur hanya punya satu penjelasan
+	// di layar: "menunggu klien". Padahal ada dua, dan tindakannya berlawanan.
+	// Kalau tautannya belum pernah dibuka, yang salah pengirimannya — nomornya
+	// keliru, pesannya tenggelam, tautannya tidak pernah sampai. Kalau sudah
+	// dibuka dan tetap sepi, yang perlu ditagih orangnya. Tanpa kolom ini
+	// fotografer menebak, dan tebakan yang salah berarti mengirim ulang
+	// tautan kepada orang yang sudah memegangnya.
+	//
+	// Hanya waktu pertama yang disimpan, bukan yang terakhir: yang hendak
+	// dijawab "sudah sampai atau belum", bukan seberapa sering dilihat.
+	FirstViewedAt *time.Time `gorm:"column:first_viewed_at" json:"first_viewed_at"`
+	CreatedAt     time.Time  `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt     time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 type Photo struct {
