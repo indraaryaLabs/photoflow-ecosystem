@@ -52,7 +52,29 @@ jobs:
         # tersebut menjalankan DROP TABLE.
         env:
           TEST_DATABASE_URL: host=localhost port=5432 user=postgres password=postgres dbname=photoflow_test sslmode=disable
-        run: go test ./... -count=1
+        # -p 1: satu paket tes dijalankan pada satu waktu.
+        #
+        # Bawaan `go test` menjalankan paket-paket secara PARALEL, dan di sini
+        # ada tiga paket yang membangun ulang skema pada database yang SAMA:
+        # handlers menjatuhkan lalu membuat ulang `projects` dan `photos`,
+        # cmd/migrate menjalankan AutoMigrate beserta `ALTER TABLE projects DROP
+        # COLUMN`, dan middleware membuat `rate_limits`. Dijalankan bersamaan,
+        # yang satu menghapus tabel yang sedang dipakai yang lain.
+        #
+        # Gejalanya tidak menunjuk ke sebabnya sama sekali: `relation "projects"
+        # does not exist` pada tes yang jelas-jelas baru membuatnya, berselang
+        # dengan `duplicate key value violates unique constraint
+        # "pg_type_typname_nsp_index"` — dua pesan yang saling bertentangan,
+        # keduanya benar, karena keduanya datang dari proses yang berbeda.
+        #
+        # Dan karena bergantung pada waktu, ia hanya muncul sesekali. CI yang
+        # merah secara acak lebih buruk daripada CI yang lambat: yang pertama
+        # mengajari orang mengabaikan hasilnya.
+        #
+        # Ongkosnya beberapa detik — seluruh suite ini selesai di bawah lima.
+        # Alternatifnya satu database per paket, yang menuntut tiap tes tahu
+        # namanya sendiri; tidak sepadan untuk repo sebesar ini.
+        run: go test ./... -count=1 -p 1
 
   frontend:
     name: Frontend
