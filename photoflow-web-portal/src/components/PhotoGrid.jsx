@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import PhotoCard from './PhotoCard';
 import { buildRows, DENSITIES, DEFAULT_DENSITY } from '../lib/justifiedRows';
 
@@ -51,10 +51,26 @@ export default function PhotoGrid({ photos, selectedIds, onToggle, onOpenPreview
     [denganRasio, lebar, tinggiTarget],
   );
 
-  const catatRasio = (id, w, h) => {
+  // Nomor urut tiap foto, dihitung sekali.
+  //
+  // Sebelumnya `denganRasio.findIndex(...)` dipanggil di dalam render SETIAP
+  // kartu, jadi ongkosnya kuadratik: 55 foto berarti 3.025 perbandingan, 500
+  // foto berarti 250.000 -- dan seluruhnya diulang setiap kali satu foto
+  // dipilih, karena berubahnya `selectedIds` membuat grid ini dirender ulang.
+  // Itu penyebab utama rasa berat saat mengetuk-ngetuk memilih foto.
+  const nomorUrut = useMemo(() => {
+    const peta = new Map();
+    denganRasio.forEach((p, i) => peta.set(p.id, i));
+    return peta;
+  }, [denganRasio]);
+
+  // Identitasnya harus tetap antar-render, kalau tidak React.memo pada
+  // PhotoCard tidak menahan apa pun: prop yang berubah tiap render membuat
+  // seluruh kartu dirender ulang persis seperti sebelum di-memo.
+  const catatRasio = useCallback((id, w, h) => {
     if (!w || !h) return;
     setRasioTerukur((prev) => (prev[id] ? prev : { ...prev, [id]: w / h }));
-  };
+  }, []);
 
   return (
     <div ref={wadahRef} className="flex flex-col gap-2">
@@ -64,7 +80,7 @@ export default function PhotoGrid({ photos, selectedIds, onToggle, onOpenPreview
             <PhotoCard
               key={photo.id}
               photo={photo}
-              index={denganRasio.findIndex((p) => p.id === photo.id)}
+              index={nomorUrut.get(photo.id) ?? 0}
               width={width}
               height={height}
               isSelected={selectedIds.has(photo.id)}
