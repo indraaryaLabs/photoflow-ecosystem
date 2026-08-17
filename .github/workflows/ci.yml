@@ -112,3 +112,91 @@ jobs:
 
       - name: Test
         run: python -m unittest discover -s tests -v
+
+  # ── Skema database ────────────────────────────────────────────────────
+  #
+  # Deploy berjalan otomatis, migrasi tidak. Sekali skema tertinggal dari kode
+  # yang sudah live, gejalanya bukan pesan yang jelas melainkan satu tombol yang
+  # berhenti bekerja: backend membaca dengan SELECT * sehingga tetap jalan, tapi
+  # menulis dengan menyebut kolomnya satu per satu sehingga INSERT ditolak.
+  # Persis itu yang terjadi pada projects.submitted_at, dan yang menemukannya
+  # adalah pemakainya, bukan CI.
+  #
+  # Dua job, karena mencegah dan membetulkan bukan pekerjaan yang sama.
+
+  schema-check:
+    name: Schema check
+    # Hanya pada pull request. Ini pemeriksaan sebelum digabung: kalau perubahan
+    # ini menuntut kolom baru, yang membacanya harus tahu SEKARANG.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: photoflow-backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: photoflow-backend/go.mod
+          cache-dependency-path: photoflow-backend/go.sum
+
+      - name: Check schema against production
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        # Hanya membaca information_schema; tidak menulis apa pun.
+        #
+        # Sengaja gagal, bukan dilewati diam-diam, ketika secret-nya belum ada.
+        # Pemeriksaan yang melewati dirinya sendiri saat tidak dikonfigurasi
+        # adalah pemeriksaan yang tidak pernah menemukan apa-apa.
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Secret DATABASE_URL belum disetel."
+            echo "Tambahkan di Settings > Secrets and variables > Actions."
+            echo "Isinya connection string Postgres Supabase (Session pooler)."
+            exit 1
+          fi
+          go run ./cmd/migrate -check
+
+  migrate:
+    name: Migrate
+    # Hanya saat sudah masuk main. Menerapkan skema dari sebuah pull request
+    # akan mengubah database produksi untuk kode yang belum tentu digabung.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    # Tidak berjalan kalau tesnya merah. Menerapkan skema dari kode yang belum
+    # terbukti benar adalah cara memperbesar kerusakan, bukan memperbaikinya.
+    needs: [backend]
+
+    # Satu migrasi pada satu waktu, dan yang sedang berjalan tidak dibatalkan.
+    # Dua push berdekatan akan menjalankan dua migrasi bersamaan di database
+    # yang sama.
+    concurrency:
+      group: migrate-production
+      cancel-in-progress: false
+
+    defaults:
+      run:
+        working-directory: photoflow-backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: photoflow-backend/go.mod
+          cache-dependency-path: photoflow-backend/go.sum
+
+      - name: Apply schema
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Secret DATABASE_URL belum disetel."
+            echo "Tambahkan di Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          go run ./cmd/migrate
