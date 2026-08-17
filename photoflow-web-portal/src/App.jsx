@@ -3,6 +3,7 @@ import { Loader2, AlertTriangle } from 'lucide-react';
 
 import Toast from './components/Toast';
 import Header from './components/Header';
+import GalleryCover from './components/GalleryCover';
 import PhotoGrid, { DensityPicker } from './components/PhotoGrid';
 import { useDensity } from './lib/useDensity';
 import PreviewModal from './components/PreviewModal';
@@ -434,6 +435,12 @@ export default function App() {
       <Header project={project} themeChoice={themeChoice} cycleTheme={cycleTheme} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28">
+        <GalleryCover
+          photo={photos[0]}
+          projectName={project.project_name || project.client_name}
+          studioName={project.studio_name}
+        />
+
         {/* Judul dan keterangan dirapatkan. Sebelumnya bagian ini memakan
             200px tinggi layar untuk kalimat yang dibaca sekali, sementara yang
             dibutuhkan orangnya adalah melihat foto sebanyak mungkin. */}
