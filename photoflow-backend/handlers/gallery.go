@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"photoflow-backend/models"
+	"photoflow-backend/notify"
 )
 
 // GetGallery melayani galeri klien lewat magic link. Rute ini publik: klien
@@ -92,8 +93,48 @@ func (h *Handler) SubmitSelection(c *gin.Context) {
 		return
 	}
 
+	h.notifySubmission(c, project, len(input.SelectedPhotos))
+
 	c.JSON(http.StatusOK, gin.H{
 		"message":      "Pilihan berhasil disimpan!",
 		"photos_saved": len(input.SelectedPhotos),
 	})
+}
+
+// notifySubmission memberi tahu fotografer bahwa kliennya sudah memilih.
+//
+// Dijalankan SEBELUM balasan dikirim, bukan di goroutine latar. Backend ini
+// fungsi serverless: begitu balasan terkirim, prosesnya dapat dibekukan atau
+// dimatikan kapan saja, dan goroutine yang masih berjalan ikut mati tanpa jejak.
+// Pemberitahuan yang kadang terkirim kadang tidak lebih buruk daripada tidak
+// ada sama sekali, karena tidak ada yang tahu kapan boleh mempercayainya.
+//
+// Ongkosnya jelas dan diterima: klien menunggu satu perjalanan jaringan lagi,
+// dibatasi 5 detik oleh timeout milik Mailer.
+//
+// Kegagalannya TIDAK PERNAH menggagalkan submit. Pilihan klien sudah tersimpan
+// di database pada titik ini; membalas error karena email gagal akan membuatnya
+// mengira pekerjaannya hilang, lalu mencoba lagi ke galeri yang sudah terkunci.
+func (h *Handler) notifySubmission(c *gin.Context, project models.Project, count int) {
+	if h.Mailer == nil {
+		return
+	}
+
+	var pemilik struct{ Email string }
+	// Email fotografer ada di auth.users milik Supabase, bukan di tabel
+	// aplikasi ini. Dibaca lewat query mentah karena tabel itu tidak dipetakan
+	// sebagai model di sini.
+	if err := h.DB.Raw(
+		"SELECT email FROM auth.users WHERE id = ?", project.UserID,
+	).Scan(&pemilik).Error; err != nil || pemilik.Email == "" {
+		log.Printf("notify: tidak dapat menemukan email pemilik project %s: %v", project.ID, err)
+		return
+	}
+
+	subjek, badan := notify.SelectionSubmitted(
+		project.ClientName, project.ProjectName, count, h.AppBaseURL+"/dashboard")
+
+	if err := h.Mailer.Send(c.Request.Context(), pemilik.Email, subjek, badan); err != nil {
+		log.Printf("notify: gagal mengirim pemberitahuan project %s: %v", project.ID, err)
+	}
 }

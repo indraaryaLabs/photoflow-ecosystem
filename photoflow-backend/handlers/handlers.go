@@ -12,7 +12,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -20,6 +22,7 @@ import (
 
 	"photoflow-backend/middleware"
 	"photoflow-backend/models"
+	"photoflow-backend/notify"
 	"photoflow-backend/storage"
 )
 
@@ -33,6 +36,15 @@ type Handler struct {
 	// tertentu. Ini titik sisip yang membuat handler bisa diuji tanpa memanggil
 	// jaringan: tes memasang fungsi yang mengembalikan storage.FakeStore.
 	StoreForUser func(ctx context.Context, userID string) (storage.PhotoStore, error)
+
+	// Mailer mengirim pemberitahuan ke fotografer. Tidak pernah nil: ketika
+	// penyedia email belum dikonfigurasi, isinya notify.Disabled. Handler
+	// memanggilnya tanpa memeriksa.
+	Mailer notify.Mailer
+
+	// AppBaseURL adalah alamat aplikasi web, dipakai menyusun tautan di dalam
+	// email. Kosong berarti tautannya dilewati.
+	AppBaseURL string
 }
 
 // New membuat Handler dengan PhotoStore yang membaca Google Drive sungguhan.
@@ -44,6 +56,8 @@ func New(db *gorm.DB, oauthConfig *oauth2.Config, limiter *middleware.Limiter) *
 		StoreForUser: func(ctx context.Context, userID string) (storage.PhotoStore, error) {
 			return storage.NewGDriveStoreForUser(ctx, db, userID)
 		},
+		Mailer:     notify.FromEnv(),
+		AppBaseURL: strings.TrimRight(os.Getenv("APP_BASE_URL"), "/"),
 	}
 }
 
