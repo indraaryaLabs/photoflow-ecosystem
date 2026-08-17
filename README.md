@@ -204,6 +204,35 @@ satu tabel pun tanpa RLS. Penjagaan itu ada karena GORM membuat tabel tanpa RLS,
 dan di project Supabase tabel semacam itu dapat dibaca-tulis lewat REST API
 memakai anon key yang ada di bundle frontend.
 
+#### Di CI
+
+Menjalankannya dengan tangan sudah pernah terlewat sekali, dan akibatnya bukan
+pesan yang jelas: backend membaca dengan `SELECT *` sehingga tetap jalan, tapi
+menulis dengan menyebut kolomnya satu per satu sehingga `INSERT` ditolak. Yang
+terlihat pemakainya hanya tombol "Create Project" yang gagal.
+
+Sekarang ada dua job di `.github/workflows/ci.yml`:
+
+| Job | Kapan | Yang dikerjakan |
+|---|---|---|
+| `Schema check` | tiap pull request | `go run ./cmd/migrate -check` — hanya membaca, gagal kalau ada kolom di model yang belum ada di database |
+| `Migrate` | push ke `main`, setelah job `Backend` hijau | `go run ./cmd/migrate` |
+
+Keduanya menuntut secret **`DATABASE_URL`** di *Settings → Secrets and variables
+→ Actions*. Isinya connection string Postgres milik project Supabase; pakai
+**Session pooler**, bukan koneksi langsung, karena runner GitHub tidak punya
+IPv6. Tanpa secret itu kedua job **gagal**, bukan dilewati diam-diam:
+pemeriksaan yang melewati dirinya sendiri saat tidak dikonfigurasi adalah
+pemeriksaan yang tidak pernah menemukan apa-apa.
+
+Yang perlu diketahui: job `Migrate` **tidak** menahan deploy. Vercel men-deploy
+dari integrasi Git-nya sendiri, berbarengan dengan GitHub Actions, dan Actions
+tidak bisa menghentikannya. Jadi masih ada jendela beberapa puluh detik antara
+kode baru live dan skema menyusul. Untuk migrasi yang hanya menambah kolom,
+jendela itu berarti sebagian request gagal sebentar, bukan data rusak.
+Menghilangkannya sama sekali menuntut deploy dipindahkan ke Actions dan
+integrasi Git Vercel dimatikan.
+
 ### Tes
 
 ```bash
