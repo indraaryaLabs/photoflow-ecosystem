@@ -1,22 +1,48 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { Loader2, AlertTriangle } from 'lucide-react';
 
 import Toast from './components/Toast';
 import Header from './components/Header';
 import PhotoGrid, { DensityPicker } from './components/PhotoGrid';
 import { useDensity } from './lib/useDensity';
-import PreviewModal from './components/PreviewModal';
 import FloatingBar from './components/FloatingBar';
-import AdminDashboard from './components/AdminDashboard';
-import AdminLogin from './components/AdminLogin';
-import LegalPage from './components/LegalPage';
 import { PRIVACY_PATH, TERMS_PATH } from './lib/legal';
-import { supabase } from './lib/supabase';
+
 import { API_BASE } from './lib/api';
 import { openedFromRecoveryLink } from './lib/recovery';
 import { useTheme } from './lib/theme';
 import { bacaDraf, simpanDraf, hapusDraf, petakanKeId } from './lib/selectionDraft';
 import { withViewTransition } from './lib/viewTransition';
+
+// Tiga bagian yang dimuat hanya kalau benar-benar dibuka.
+//
+// Sebelum ini seluruh aplikasi dikirim sebagai satu berkas 626 KB, jadi klien
+// yang membuka galeri lewat magic link ikut mengunduh seluruh dashboard —
+// formulir project, modal-modalnya, halaman hukum — padahal ia tidak punya akun
+// dan tidak akan pernah melihat satu pun di antaranya. Sebaliknya juga: seorang
+// fotografer mengunduh layar pratinjau galeri sebelum membukanya.
+//
+// Klien galeri adalah orang yang paling sering membuka aplikasi ini, paling
+// sering di ponsel, dan paling sering di jaringan seluler. Ia yang paling
+// dirugikan, dan ia yang paling diuntungkan pemisahan ini.
+//
+// PreviewModal dipisah dengan alasan berbeda: ia satu-satunya bagian galeri
+// yang tidak dibutuhkan pada layar pertama, dan menundanya memindahkan
+// framer-motion versi beratnya keluar dari jalur muat awal.
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const AdminLogin = lazy(() => import('./components/AdminLogin'));
+const LegalPage = lazy(() => import('./components/LegalPage'));
+const PreviewModal = lazy(() => import('./components/PreviewModal'));
+
+
+/** Layar tunggu untuk bagian yang dimuat terpisah. */
+function Memuat() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-ash-50 dark:bg-ash-950">
+      <Loader2 size={32} strokeWidth={1.75} className="text-ash-600 dark:text-ash-400 animate-spin" />
+    </div>
+  );
+}
 
 export default function App() {
   // ─── Variables routing (No hook dependencies) ────────────────
@@ -47,9 +73,22 @@ export default function App() {
 
   const isHome = pathname === '/';
 
+  // Galeri klien tidak butuh autentikasi apa pun: tautannya sendiri yang jadi
+  // kuncinya. Membedakannya di sini memungkinkan seluruh pustaka auth tidak
+  // pernah diunduh pada jalur itu.
+  //
+  // Halaman hukum juga tidak, tapi keduanya sudah dilayani oleh cabang routing
+  // yang berhenti lebih awal, jadi tidak perlu disebut lagi di sini.
+  const galeriKlien = isHome && Boolean(token);
+  const perluAuth = !galeriKlien;
+
   // ─── 1. Auth State ───────────────────────────────────────────
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
-  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  // Dimulai dari false pada galeri klien, bukan disetel belakangan di effect:
+  // memulainya true berarti galeri menampilkan pemutar berputar dulu, lalu
+  // sekali render lagi untuk mematikannya — dua render dan satu kedipan untuk
+  // pemeriksaan yang memang tidak pernah dijalankan.
+  const [isAuthChecking, setIsAuthChecking] = useState(perluAuth);
 
   // Tautan pemulihan password membawa sesi yang sah. Tanpa penanda terpisah,
   // routing di bawah menyimpulkan orangnya sudah login dan melemparnya ke
@@ -87,20 +126,43 @@ export default function App() {
 
   // ─── 4. Hooks / Effects ──────────────────────────────────────
 
-  // Auth Session Checker
+  // Auth Session Checker.
+  //
+  // Klien galeri dilewati seluruhnya, dan itu bukan penghematan kecil:
+  // supabase-js berukuran 49 KB terkompresi, dan sebelum ini ia diunduh oleh
+  // SETIAP orang yang membuka magic link — orang yang tidak punya akun, tidak
+  // pernah masuk, dan tidak akan pernah menyentuh satu pun fungsinya. Di
+  // jaringan seluler itulah bagian terbesar dari jeda sebelum foto pertama
+  // muncul.
+  //
+  // Diimpor secara dinamis, sehingga bundler menaruhnya di berkas terpisah yang
+  // hanya diminta pada jalur yang benar-benar membutuhkannya.
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAdminAuthenticated(!!session);
-      setIsAuthChecking(false);
+    if (!perluAuth) return;
+
+    let subscription;
+    let dibatalkan = false;
+
+    import('./lib/supabase').then(({ supabase }) => {
+      // Komponennya bisa saja sudah dilepas sebelum modulnya tiba.
+      if (dibatalkan) return;
+
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setIsAdminAuthenticated(!!session);
+        setIsAuthChecking(false);
+      });
+
+      subscription = supabase.auth.onAuthStateChange((event, session) => {
+        setIsAdminAuthenticated(!!session);
+        if (event === 'PASSWORD_RECOVERY') setIsPasswordRecovery(true);
+      }).data.subscription;
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setIsAdminAuthenticated(!!session);
-      if (event === 'PASSWORD_RECOVERY') setIsPasswordRecovery(true);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      dibatalkan = true;
+      subscription?.unsubscribe();
+    };
+  }, [perluAuth]);
 
   // Idle Auto-Logout Timer (30 Menit)
   useEffect(() => {
@@ -110,9 +172,10 @@ export default function App() {
     const resetTimer = () => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(async () => {
-        // Logout user dari Supabase. Modulnya sudah diimpor di atas berkas ini;
-        // import dinamis di sini tidak memecah bundle apa pun, hanya membuat
-        // bundler memperingatkan bahwa modul yang sama diminta dua cara.
+        // Modulnya sudah pasti termuat di sini: effect ini hanya berjalan
+        // ketika seseorang sudah login, dan yang menyatakan ia login adalah
+        // modul yang sama.
+        const { supabase } = await import('./lib/supabase');
         await supabase.auth.signOut();
         // Paksa kembali ke halaman root (login)
         window.location.href = '/';
@@ -237,6 +300,28 @@ export default function App() {
     drafSudahDipulihkan.current = true;
   }, [isLoading, token, photos, isSubmittedState, project?.max_selections, addToast]);
 
+  // Ambil berkas layar pratinjau lebih awal, setelah galerinya siap.
+  //
+  // Tanpa ini, ketukan pertama pada tombol perbesar harus menunggu berkasnya
+  // diunduh dulu — jeda yang justru muncul tepat pada tindakan yang seharusnya
+  // terasa seketika. Diminta di sini, berkasnya sudah ada di cache jauh sebelum
+  // ada yang menekannya.
+  //
+  // requestIdleCallback supaya permintaannya tidak berebut dengan gambar galeri
+  // yang sedang dimuat; setTimeout untuk Safari, yang belum punya fungsi itu.
+  useEffect(() => {
+    if (isLoading || !photos.length) return;
+
+    const ambil = () => { import('./components/PreviewModal'); };
+    const idle = window.requestIdleCallback;
+    if (idle) {
+      const id = idle(ambil, { timeout: 2000 });
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const t = setTimeout(ambil, 1200);
+    return () => clearTimeout(t);
+  }, [isLoading, photos.length]);
+
   // Simpan setiap perubahan pilihan.
   //
   // Ditunda 300ms, tidak ditulis pada tiap klik. localStorage adalah tulisan
@@ -358,11 +443,13 @@ export default function App() {
   // dilempar ke layar masuk.
   if (pathname === PRIVACY_PATH || pathname === TERMS_PATH) {
     return (
-      <LegalPage
-        doc={pathname === PRIVACY_PATH ? 'privacy' : 'terms'}
-        themeChoice={themeChoice}
-        cycleTheme={cycleTheme}
-      />
+      <Suspense fallback={<Memuat />}>
+        <LegalPage
+          doc={pathname === PRIVACY_PATH ? 'privacy' : 'terms'}
+          themeChoice={themeChoice}
+          cycleTheme={cycleTheme}
+        />
+      </Suspense>
     );
   }
 
@@ -377,7 +464,7 @@ export default function App() {
   // Pemulihan password mendahului seluruh routing lain: sesi yang dibawa
   // tautan itu memang sah, tapi tujuannya bukan masuk ke dashboard.
   if (isPasswordRecovery) {
-    return <AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} />;
+    return <Suspense fallback={<Memuat />}><AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} /></Suspense>;
   }
 
   // Jalur lama /admin dialihkan, tidak dilayani. Kalau dilayani begitu saja,
@@ -392,9 +479,13 @@ export default function App() {
   // Strict Auth Guard Routing
   if (isDashboardRoute) {
     if (isAdminAuthenticated) {
-      return <AdminDashboard themeChoice={themeChoice} cycleTheme={cycleTheme} />;
+      return (
+        <Suspense fallback={<Memuat />}>
+          <AdminDashboard themeChoice={themeChoice} cycleTheme={cycleTheme} />
+        </Suspense>
+      );
     } else {
-      return <AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} />;
+      return <Suspense fallback={<Memuat />}><AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} /></Suspense>;
     }
   }
 
@@ -405,7 +496,7 @@ export default function App() {
       window.location.replace(DASHBOARD_PATH);
       return null;
     } else {
-      return <AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} />;
+      return <Suspense fallback={<Memuat />}><AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} /></Suspense>;
     }
   }
 
@@ -512,16 +603,22 @@ export default function App() {
         </footer>
       </main>
 
-      <PreviewModal
-        photos={photos}
-        previewState={previewState}
-        onClose={handleClosePreview}
-        onNext={handleNextPreview}
-        onPrev={handlePrevPreview}
-        selectedIds={selectedIds}
-        onToggleSelect={handleToggleSelect}
-        project={project}
-      />
+      {/* Tanpa fallback: modal ini menutupi seluruh layar, dan menyisipkan
+          pemutar berputar seukuran layar sebelum ia siap justru mengedipkan
+          galeri yang masih terlihat baik-baik saja di belakangnya. Berkasnya
+          kecil, dan sudah diminta lebih awal saat galeri menganggur. */}
+      <Suspense fallback={null}>
+        <PreviewModal
+          photos={photos}
+          previewState={previewState}
+          onClose={handleClosePreview}
+          onNext={handleNextPreview}
+          onPrev={handlePrevPreview}
+          selectedIds={selectedIds}
+          onToggleSelect={handleToggleSelect}
+          project={project}
+        />
+      </Suspense>
 
       <FloatingBar
         project={project}
