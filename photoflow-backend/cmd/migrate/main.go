@@ -7,13 +7,24 @@
 //
 // Jalankan dengan DATABASE_URL terisi:
 //
-//	go run ./cmd/migrate
+//	go run ./cmd/migrate           menerapkan skema
+//	go run ./cmd/migrate -check    hanya memeriksa, tidak mengubah apa pun
+//
+// Mode -check ada karena deploy berjalan otomatis sementara migrasi tidak.
+// Sekali skema tertinggal dari kode yang sudah terlanjur live, gejalanya bukan
+// pesan yang jelas melainkan satu tombol yang berhenti bekerja: backend membaca
+// dengan SELECT * sehingga tetap jalan, tapi menulis dengan menyebut kolomnya
+// satu per satu sehingga INSERT ditolak. Persis itu yang terjadi pada
+// projects.submitted_at. Dijalankan pada setiap pull request, -check
+// memunculkannya sebelum digabung, bukan sesudah pemakainya menemukannya.
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -28,11 +39,91 @@ import (
 // verifyRLS di bawah yang akan menangkapnya.
 var managedTables = []string{"projects", "photos", "profiles", "rate_limits", "oauth_states"}
 
+// dikelola adalah model yang skemanya diurus perintah ini. Satu daftar dipakai
+// AutoMigrate maupun pemeriksaan, supaya keduanya tidak bisa berbeda isi.
+func dikelola() []any {
+	return []any{&models.Project{}, &models.Photo{}, &models.RateLimit{}, &models.OAuthState{}}
+}
+
 func main() {
+	hanyaPeriksa := flag.Bool("check", false,
+		"periksa apakah skema database tertinggal dari model, tanpa mengubah apa pun")
+	flag.Parse()
+
+	if *hanyaPeriksa {
+		if err := periksa(); err != nil {
+			log.Fatalf("🔴 %v", err)
+		}
+		fmt.Println("✅ Skema database sudah sesuai dengan model.")
+		return
+	}
+
 	if err := run(); err != nil {
 		log.Fatalf("🔴 Migrasi gagal: %v", err)
 	}
 	fmt.Println("✅ Migrasi selesai.")
+}
+
+// periksa melaporkan kolom atau tabel yang ada di model tapi belum ada di
+// database. Tidak menulis apa pun.
+func periksa() error {
+	godotenv.Load()
+
+	conn, err := db.Open(os.Getenv("DATABASE_URL"))
+	if err != nil {
+		return err
+	}
+
+	kurang, err := kolomYangHilang(conn)
+	if err != nil {
+		return err
+	}
+	if len(kurang) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"skema database tertinggal dari model:\n  %s\n\n"+
+			"Jalankan `go run ./cmd/migrate` dengan DATABASE_URL yang benar sebelum\n"+
+			"perubahan ini digabung. Kalau tidak, backend yang sudah live akan menulis\n"+
+			"kolom yang belum ada, dan yang terlihat pemakainya hanya tombol yang gagal",
+		strings.Join(kurang, "\n  "))
+}
+
+// kolomYangHilang membandingkan tiap model dengan tabelnya di database.
+//
+// Yang dicari hanya yang KURANG. Kolom yang ada di database tapi tidak di model
+// dibiarkan: tabel-tabel ini dibuat Supabase dan sebagian kolomnya memang tidak
+// pernah dipetakan ke Go, jadi melaporkannya hanya menghasilkan derau.
+func kolomYangHilang(conn *gorm.DB) ([]string, error) {
+	m := conn.Migrator()
+	var kurang []string
+
+	for _, model := range dikelola() {
+		stmt := &gorm.Statement{DB: conn}
+		if err := stmt.Parse(model); err != nil {
+			return nil, fmt.Errorf("membaca model %T: %w", model, err)
+		}
+		tabel := stmt.Schema.Table
+
+		if !m.HasTable(model) {
+			kurang = append(kurang, fmt.Sprintf("tabel %s belum ada", tabel))
+			continue
+		}
+
+		for _, field := range stmt.Schema.Fields {
+			// Field tanpa kolom sendiri: relasi, dan field bertanda "-".
+			if field.DBName == "" || field.IgnoreMigration {
+				continue
+			}
+			if !m.HasColumn(model, field.DBName) {
+				kurang = append(kurang, fmt.Sprintf("%s.%s belum ada", tabel, field.DBName))
+			}
+		}
+	}
+
+	sort.Strings(kurang)
+	return kurang, nil
 }
 
 func run() error {
