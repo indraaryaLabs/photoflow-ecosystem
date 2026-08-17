@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Copy, Check, Plus, FolderOpen, Link as LinkIcon, Clock,
   CheckCircle2, Loader2, MoreVertical, Edit, Trash2, X, AlertOctagon,
-  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks, KeyRound
+  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks, KeyRound, Settings
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { API_BASE } from '../lib/api';
@@ -74,6 +74,11 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
   const [listingProject, setListingProject] = useState(null);
   const [rotatingProject, setRotatingProject] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
+
+  // Nama studio yang dilihat klien di kepala galerinya, menggantikan
+  // "PhotoFlow". Kosong berarti kembali ke bawaan.
+  const [studioOpen, setStudioOpen] = useState(false);
+  const [studioName, setStudioName] = useState('');
   // Project yang kirimannya sudah pernah dibuka fotografer. Disimpan di
   // peramban, bukan di database: ini catatan "sudah saya lihat" milik satu
   // orang di satu perangkat, bukan keadaan project.
@@ -176,6 +181,50 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Nama studio dibaca saat dashboard dimuat, bukan saat modalnya dibuka:
+  // tombolnya perlu menunjukkan nama yang sedang berlaku tanpa menunggu
+  // seseorang mengkliknya lebih dulu.
+  const fetchStudioName = async () => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const res = await fetch(`${API_BASE}/api/profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setStudioName(data.studio_name || '');
+    } catch {
+      // Diamkan. Nama studio adalah hiasan pada galeri klien; tidak
+      // terbacanya bukan alasan menampilkan galat di dashboard.
+    }
+  };
+
+  const saveStudioName = async (nama) => {
+    const token = await getAccessToken();
+    if (!token) return false;
+
+    const res = await fetch(`${API_BASE}/api/profile`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ studio_name: nama }),
+    });
+
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      showToast(body?.error || 'Could not save your studio name.', 'error');
+      return false;
+    }
+
+    setStudioName(body?.studio_name ?? nama);
+    showToast(
+      body?.studio_name
+        ? 'Your clients will see this name on their gallery.'
+        : 'Studio name cleared. Galleries show "PhotoFlow" again.',
+    );
+    return true;
   };
 
   const fetchDriveStatus = async () => {
@@ -312,6 +361,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
   useEffect(() => {
     fetchProjects();
     fetchDriveStatus();
+    fetchStudioName();
     // getSession, bukan getUser: yang pertama membaca sesi yang sudah tersimpan
     // di peramban, yang kedua menembak jaringan ke Supabase. Yang dibutuhkan di
     // sini hanya id-nya, dan id itu sudah ada di tangan — menunggu satu
@@ -629,6 +679,15 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setStudioOpen(true)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ash-600 transition-colors hover:bg-ash-100 hover:text-ash-900 dark:text-ash-400 dark:hover:bg-white/5 dark:hover:text-ash-100"
+                title="Studio name"
+                aria-label="Studio name"
+              >
+                <Settings size={18} strokeWidth={1.75} />
+              </button>
+
               <ThemeToggle choice={themeChoice} onCycle={cycleTheme} />
 
               <button
@@ -970,6 +1029,15 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
           )}
         </AnimatePresence>
 
+        {/* NAMA STUDIO */}
+        {studioOpen && (
+          <StudioNameModal
+            initial={studioName}
+            onClose={() => setStudioOpen(false)}
+            onSave={saveStudioName}
+          />
+        )}
+
         {/* CUSTOM EDIT MODAL */}
         {editingProject && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-slide-up-fade">
@@ -1135,6 +1203,90 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
  * "Delete" hilang di baliknya. Dengan satu penanda di induk, hanya satu kartu
  * yang pernah terangkat, jadi tumpang tindih itu tidak mungkin terjadi lagi.
  */
+/**
+ * Menyetel nama studio yang dilihat klien di kepala galerinya.
+ *
+ * Nilainya disalin ke state lokal saat modal dibuka, bukan diikat langsung ke
+ * state dashboard: mengetik lalu menutup tanpa menyimpan harus membuang
+ * ketikannya, bukan diam-diam mengubah tampilan tombol di kepala halaman.
+ */
+function StudioNameModal({ initial, onClose, onSave }) {
+  const [nilai, setNilai] = useState(initial);
+  const [menyimpan, setMenyimpan] = useState(false);
+
+  const kirim = async (e) => {
+    e.preventDefault();
+    setMenyimpan(true);
+    const berhasil = await onSave(nilai.trim());
+    setMenyimpan(false);
+    if (berhasil) onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-slide-up-fade">
+      <div className="relative w-full max-w-md rounded-2xl border border-ash-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-ash-900">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 p-2 text-ash-500 transition-colors hover:text-ash-600 dark:hover:text-ash-200"
+          aria-label="Close"
+        >
+          <X size={20} strokeWidth={1.75} />
+        </button>
+
+        <h2 className="mb-1 text-xl font-semibold tracking-tight">Studio name</h2>
+        <p className="mb-5 text-sm text-ash-600 dark:text-ash-400">
+          Shown at the top of every gallery your clients open, in place of
+          &ldquo;PhotoFlow&rdquo;. Leave it empty to keep the default.
+        </p>
+
+        <form onSubmit={kirim} className="space-y-4">
+          <input
+            type="text"
+            autoFocus
+            maxLength={60}
+            value={nilai}
+            onChange={(e) => setNilai(e.target.value)}
+            placeholder="e.g. Cahaya Studio"
+            className="w-full rounded-xl border border-ash-200 bg-ash-50 px-4 py-3 text-sm outline-none focus:border-ash-500 dark:border-white/10 dark:bg-black/20 dark:focus:border-ash-400"
+          />
+
+          {/* Pratinjau, bukan sekadar keterangan. Yang diubah di sini tampil di
+              halaman lain yang dibuka orang lain; tanpa melihat bentuknya,
+              satu-satunya cara memastikan adalah mengirim tautan ke diri
+              sendiri. */}
+          <div className="rounded-xl border border-ash-200 bg-ash-50 p-3 dark:border-white/10 dark:bg-white/[0.03]">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-ash-500">
+              Your client sees
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-ash-200 bg-ash-100 text-ash-700 dark:border-white/10 dark:bg-white/5 dark:text-ash-200">
+                <BrandMark size={18} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold tracking-tight text-ash-900 dark:text-white">
+                  {nilai.trim() || 'PhotoFlow'}
+                </p>
+                <p className="truncate text-xs font-medium text-ash-600 dark:text-ash-400">
+                  Their name
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={menyimpan}
+            className="w-full rounded-xl bg-ash-800 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors duration-tint hover:bg-ash-900 disabled:opacity-50 dark:bg-ash-100 dark:text-ash-950 dark:hover:bg-white"
+          >
+            {menyimpan ? 'Saving...' : 'Save'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Empat angka di atas daftar project.
  *

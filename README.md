@@ -403,3 +403,14 @@ Repo ini menyimpan dua berkas yang menjelaskan sisi keamanannya:
   perbaikannya.
 - [`FINDINGS.md`](FINDINGS.md) — seluruh temuan beserta statusnya, termasuk yang
   sengaja dibiarkan terbuka dan alasannya.
+
+### Nama studio pada galeri klien
+
+Galeri klien menampilkan nama studio fotografernya di kepala halaman,
+menggantikan "PhotoFlow", beserta pita sampul yang memakai foto pertama galeri
+itu sendiri. Disetel lewat ikon roda gigi di dashboard; kosong berarti kembali
+ke "PhotoFlow", jadi fitur ini pilihan.
+
+Tersimpan di `profiles.studio_name`. Lambangnya tetap lambang PhotoFlow —
+menggantinya menuntut unggahan berkas, dan itu menuntut penyimpanan berkas yang
+belum ada di aplikasi ini.
