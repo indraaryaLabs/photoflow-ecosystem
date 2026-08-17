@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -42,9 +43,23 @@ func (h *Handler) GetGallery(c *gin.Context) {
 	// drive_folder_id, magic_link_token, dan nomor WhatsApp klien kepada siapa
 	// pun yang memegang tautannya.
 	c.JSON(http.StatusOK, gin.H{
-		"project": models.NewGalleryProject(project),
+		"project": models.NewGalleryProject(project, h.namaStudio(project.UserID)),
 		"photos":  models.NewGalleryPhotos(photos),
 	})
+}
+
+// namaStudio membaca nama studio pemilik project.
+//
+// Mengembalikan string kosong pada kegagalan apa pun, termasuk profil yang
+// belum ada. Galeri klien tidak boleh mati karena sebuah nama tidak terbaca —
+// tanpa nama itu yang tampil hanya "PhotoFlow", persis seperti sebelum fitur
+// ini ada.
+func (h *Handler) namaStudio(userID string) string {
+	var profil models.Profile
+	if err := h.DB.Where("id = ?", userID).First(&profil).Error; err != nil {
+		return ""
+	}
+	return strings.TrimSpace(profil.StudioName)
 }
 
 // tandaiPernahDibuka mencatat kapan galeri ini pertama kali dibuka.

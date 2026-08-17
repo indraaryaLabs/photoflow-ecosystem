@@ -35,7 +35,7 @@ func TestGalleryProjectHanyaMemuatKolomYangDipakaiKlien(t *testing.T) {
 		Status:         "pending",
 	}
 
-	raw, err := json.Marshal(models.NewGalleryProject(project))
+	raw, err := json.Marshal(models.NewGalleryProject(project, "Studio Cahaya"))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -51,6 +51,7 @@ func TestGalleryProjectHanyaMemuatKolomYangDipakaiKlien(t *testing.T) {
 		"max_selections": float64(12),
 		"status":         "pending",
 		"admin_whatsapp": "6281234567890",
+		"studio_name":    "Studio Cahaya",
 	}
 
 	for kunci, nilai := range diharapkan {

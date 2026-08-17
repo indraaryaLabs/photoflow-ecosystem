@@ -55,6 +55,15 @@ type Photo struct {
 type Profile struct {
 	ID                 string `gorm:"type:uuid;primaryKey" json:"id"`
 	GdriveRefreshToken string `gorm:"column:gdrive_refresh_token;type:text" json:"gdrive_refresh_token"`
+	// Nama studio yang dilihat klien di galerinya.
+	//
+	// Galeri klien selama ini menampilkan "PhotoFlow" di pojok kiri atas —
+	// nama perkakas, bukan nama orang yang mengerjakan fotonya. Bagi klien
+	// itu merek asing yang tidak ia kenal, dan bagi fotografer itu satu-satunya
+	// halaman yang akan dibuka kliennya, dipinjamkan gratis kepada nama lain.
+	//
+	// Kosong berarti kembali ke "PhotoFlow": fitur ini pilihan, bukan syarat.
+	StudioName string `gorm:"column:studio_name;type:text" json:"studio_name"`
 }
 
 func (Profile) TableName() string {
@@ -141,16 +150,24 @@ type GalleryProject struct {
 	MaxSelections int    `json:"max_selections"`
 	Status        string `json:"status"`
 	AdminWhatsApp string `json:"admin_whatsapp"`
+	// Nama studio fotografernya, kalau ia mengisinya. Tidak berasal dari baris
+	// Project — diambil dari profil pemiliknya dan disuntikkan oleh handler.
+	StudioName string `json:"studio_name"`
 }
 
 // NewGalleryProject menyalin hanya kolom yang boleh dilihat klien.
-func NewGalleryProject(p Project) GalleryProject {
+//
+// studioName datang terpisah karena tidak tinggal di tabel projects. Dijadikan
+// parameter, bukan diambil di dalam sini, supaya struct ini tetap tidak
+// menyentuh database sama sekali.
+func NewGalleryProject(p Project, studioName string) GalleryProject {
 	return GalleryProject{
 		ProjectName:   p.ProjectName,
 		ClientName:    p.ClientName,
 		MaxSelections: p.MaxSelections,
 		Status:        p.Status,
 		AdminWhatsApp: p.AdminWhatsApp,
+		StudioName:    studioName,
 	}
 }
 
