@@ -3,7 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Check, CheckCircle2, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { cn, swipeConfidenceThreshold, swipePower } from '../lib/utils';
 
-const PreviewModal = ({ 
+/** Alamat versi resolusi tinggi sebuah foto. */
+function resolusiTinggi(photo) {
+  const thumb = photo.thumbnailLink || photo.thumbnail_url || '';
+  return thumb.replace('=s1000', '=s2000').replace('&sz=w800', '&sz=w2000');
+}
+
+const PreviewModal = ({
   photos, 
   previewState, 
   onClose, 
@@ -22,6 +28,11 @@ const PreviewModal = ({
   // dimuat" muncul dengan sendirinya.
   const [loadedIndex, setLoadedIndex] = useState(null);
   const isImgLoaded = loadedIndex === index;
+
+  // Sama untuk thumbnail-nya, dan alasannya sama: menyimpan "sudah/belum" akan
+  // menuntut penyetelan ulang tiap kali foto berganti.
+  const [thumbLoadedIndex, setThumbLoadedIndex] = useState(null);
+  const isThumbLoaded = thumbLoadedIndex === index;
 
   const [scale, setScale] = useState(1);
   const constraintsRef = useRef(null);
@@ -62,12 +73,40 @@ const PreviewModal = ({
     return () => { document.body.style.overflow = 'unset'; };
   }, [isVisible]);
 
+  // Muat dulu foto sebelum dan sesudahnya.
+  //
+  // Ini sebab utama jeda saat berpindah foto. Alamat resolusi tingginya
+  // berbeda dari alamat thumbnail di grid, jadi setiap kali tombol berikutnya
+  // ditekan peramban memulai unduhan yang sama sekali baru ke Google — dan yang
+  // terlihat orangnya adalah layar hitam dengan pemutar berputar.
+  //
+  // Orang membuka pratinjau untuk MEMBANDINGKAN foto, jadi tetangganya hampir
+  // pasti dibuka berikutnya. Diminta lebih awal, gambarnya sudah ada di cache
+  // peramban ketika gilirannya tiba, dan perpindahannya tidak lagi menunggu
+  // jaringan sama sekali.
+  useEffect(() => {
+    if (!isVisible) return;
+
+    // Objek Image dibuang begitu effect ini dibersihkan, tapi unduhannya sudah
+    // masuk cache HTTP peramban — itu yang dipakai <img> berikutnya.
+    const gambar = [index - 1, index + 1]
+      .filter((i) => i >= 0 && i < photos.length)
+      .map((i) => {
+        const img = new Image();
+        img.referrerPolicy = 'no-referrer';
+        img.src = resolusiTinggi(photos[i]);
+        return img;
+      });
+
+    return () => gambar.forEach((img) => { img.src = ''; });
+  }, [isVisible, index, photos]);
+
   if (!isVisible) return null;
 
   const currentPhoto = photos[index];
   const isSelected = selectedIds.has(currentPhoto.id);
   const thumbUrl = currentPhoto.thumbnailLink || currentPhoto.thumbnail_url;
-  const highResUrl = thumbUrl.replace('=s1000', '=s2000').replace('&sz=w800', '&sz=w2000');
+  const highResUrl = resolusiTinggi(currentPhoto);
 
   // Zoom Handlers
   const handleWheel = (e) => {
@@ -100,10 +139,26 @@ const PreviewModal = ({
     }
   };
 
+  // Jarak gesernya 64px, bukan 500px.
+  //
+  // Pada 500px fotonya terbang masuk dari luar layar, dan karena pegasnya harus
+  // menempuh jarak itu, perpindahan terasa jauh dan lamban — persis keluhan
+  // "kayak jauh". Yang perlu disampaikan sebuah geseran hanya ARAH, bukan
+  // jarak; 64px sudah cukup untuk itu, dan tiba jauh lebih cepat.
+  const GESER = 64;
   const slideVariants = {
-    enter: (direction) => ({ x: direction > 0 ? 500 : -500, opacity: 0, scale: 0.95 }),
-    center: { zIndex: 1, x: 0, opacity: 1, scale: 1 },
-    exit: (direction) => ({ zIndex: 0, x: direction < 0 ? 500 : -500, opacity: 0, scale: 0.95 })
+    enter: (direction) => ({ x: direction > 0 ? GESER : -GESER, opacity: 0 }),
+    center: { zIndex: 1, x: 0, opacity: 1 },
+    exit: (direction) => ({ zIndex: 0, x: direction < 0 ? GESER : -GESER, opacity: 0 }),
+  };
+
+  // Tween pendek, bukan pegas. Pegas dengan stiffness 300/damping 30 punya ekor
+  // panjang: gerakannya secara teknis selesai jauh setelah mata menganggapnya
+  // selesai. Untuk perpindahan yang dilakukan berulang-ulang puluhan kali,
+  // ekor itulah yang menumpuk jadi rasa lambat.
+  const slideTransition = {
+    x: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
+    opacity: { duration: 0.14 },
   };
 
   return (
@@ -113,7 +168,11 @@ const PreviewModal = ({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.3 }}
-        className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex flex-col touch-none"
+        // backdrop-blur-xl DIHAPUS. Latarnya hitam 95% — apa pun di belakangnya
+        // sudah tidak terlihat, jadi blurnya tidak pernah tampak sama sekali.
+        // Yang tersisa cuma ongkosnya: satu lapisan blur GPU seluas layar yang
+        // digambar ulang pada setiap frame animasi geser.
+        className="fixed inset-0 z-[100] bg-black/95 flex flex-col touch-none"
       >
         <div className="absolute top-0 inset-x-0 z-50 flex items-center justify-between p-4 sm:p-6 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
           <div className="flex items-center gap-3 pointer-events-auto">
@@ -159,7 +218,14 @@ const PreviewModal = ({
 
         {/* Swipe / Zoom Container */}
         <div className="relative flex-1 w-full h-full overflow-hidden" onClick={scale === 1 ? onClose : undefined}>
-          <AnimatePresence initial={false} custom={direction} mode="wait">
+          {/* mode="wait" DIHAPUS.
+              Dengannya, foto berikutnya baru dipasang setelah foto sebelumnya
+              selesai keluar — jadi permintaan gambarnya pun baru dimulai
+              setelah animasi keluar habis. Ratusan milidetik terbuang sebelum
+              satu byte pun diminta, dan yang terlihat orangnya adalah layar
+              hitam. Tanpa mode="wait" keduanya bersilangan, dan gambar baru
+              mulai dimuat pada milidetik pertama. */}
+          <AnimatePresence initial={false} custom={direction}>
             <motion.div
               key={index}
               custom={direction}
@@ -167,7 +233,7 @@ const PreviewModal = ({
               initial="enter"
               animate="center"
               exit="exit"
-              transition={{ x: { type: "spring", stiffness: 300, damping: 30 }, opacity: { duration: 0.2 } }}
+              transition={slideTransition}
               // Disable drag slider jika gambar sedang dizoom!
               drag={scale === 1 ? "x" : false}
               dragConstraints={{ left: 0, right: 0 }}
@@ -191,17 +257,37 @@ const PreviewModal = ({
                 onClick={(e) => e.stopPropagation()} // Prevent close on image click
               >
                 
-                {/* Blur-up Placeholder */}
-                {!isImgLoaded && (
-                  <img 
-                    src={thumbUrl} 
-                    alt=""
-                    aria-hidden="true"
-                    referrerPolicy="no-referrer"
-                    className="absolute max-h-[85vh] w-auto max-w-full object-contain blur-xl opacity-60 scale-105" 
-                  />
-                )}
-                {!isImgLoaded && (
+                {/* Lapisan dasar: thumbnail yang SAMA dengan yang dipakai grid.
+                    Gambar itu sudah ada di cache peramban sejak galeri dimuat,
+                    jadi ia tergambar pada frame pertama — tanpa jaringan, tanpa
+                    jeda. Fotonya langsung terlihat, hanya belum tajam, dan versi
+                    tajamnya memudar masuk di atasnya begitu tiba.
+
+                    Sebelumnya tempat ini diisi pemutar berputar di atas layar
+                    hitam. Padahal gambar yang bisa ditampilkan seketika sudah
+                    ada di tangan sejak awal.
+
+                    Blurnya `blur-md`, bukan `blur-xl`: yang sedang ditutupi
+                    hanya selisih ketajaman antara thumbnail dan resolusi
+                    penuh, bukan gambar yang sama sekali belum ada. Dan `scale`
+                    dilepas — membesarkan gambar buram membuat fotonya tampak
+                    melompat sedikit tepat saat versi tajamnya muncul. */}
+                <img
+                  src={thumbUrl}
+                  alt=""
+                  aria-hidden="true"
+                  referrerPolicy="no-referrer"
+                  onLoad={() => setThumbLoadedIndex(index)}
+                  className={cn(
+                    'absolute max-h-[85vh] w-auto max-w-full object-contain rounded-xl',
+                    isImgLoaded ? 'opacity-0' : 'opacity-100 blur-md',
+                  )}
+                />
+
+                {/* Pemutar berputar hanya kalau thumbnail-nya pun belum ada —
+                    keadaan yang sekarang jarang, dan satu-satunya keadaan yang
+                    benar-benar tidak punya apa pun untuk ditampilkan. */}
+                {!isImgLoaded && !isThumbLoaded && (
                   <div className="absolute inset-0 flex items-center justify-center z-10">
                     <Loader2 size={32} strokeWidth={1.75} className="text-white/50 animate-spin" />
                   </div>
@@ -267,7 +353,12 @@ const PreviewModal = ({
           <button
             onClick={() => onToggleSelect(currentPhoto.id)}
             className={cn(
-              "px-8 py-3.5 rounded-full font-semibold text-base flex items-center gap-2 transition-all active:scale-95 w-full max-w-[200px] justify-center shadow-xl pointer-events-auto",
+              // max-w dinaikkan dari 200px dan padding diturunkan: pada 200px
+              // "Select photo" terbungkus jadi dua baris, dan tombol utama
+              // setinggi dua baris di tengah bawah layar terlihat seperti
+              // kesalahan tata letak. `whitespace-nowrap` menjaga agar
+              // terjemahan yang lebih panjang pun tidak mengulanginya.
+              "px-6 py-3.5 rounded-full font-semibold text-base flex items-center gap-2 transition-all active:scale-95 w-full max-w-[230px] justify-center whitespace-nowrap shadow-xl pointer-events-auto",
               isSelected 
                 ? "bg-white/10 text-white hover:bg-white/20 border border-white/20 backdrop-blur-md" 
                 : "bg-white text-ash-950 hover:bg-ash-100 border border-white/20 shadow-black/40"
