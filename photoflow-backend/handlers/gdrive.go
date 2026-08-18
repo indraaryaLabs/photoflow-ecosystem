@@ -4,8 +4,10 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"photoflow-backend/middleware"
 	"photoflow-backend/models"
@@ -76,10 +78,23 @@ func (h *Handler) GalleryPhotos(c *gin.Context) {
 		return
 	}
 
-	// Galeri yang sudah disubmit SENGAJA tetap membaca Drive, sama seperti
-	// sebelumnya. Setelah submit, tabel photos hanya berisi pilihan klien dengan
-	// thumbnail_url kosong, jadi menyajikannya di sini akan menampilkan gambar
-	// kosong. Penguncian tampilan sudah ditangani frontend lewat status project.
+	// Salinan di database yang dilayani, BUKAN pembacaan Drive.
+	//
+	// Sebelumnya rute ini memanggil Google pada setiap kunjungan. Untuk folder
+	// berisi 2.000 berkas itu dua halaman berurutan ke Drive — beberapa detik,
+	// dibayar oleh setiap klien setiap kali membuka galerinya, untuk daftar yang
+	// hampir tidak pernah berubah di antara dua kunjungan.
+	//
+	// Komentar yang dulu ada di sini menyebut salinan itu tidak dapat dipakai
+	// karena "setelah submit, tabel photos hanya berisi pilihan klien dengan
+	// thumbnail_url kosong". Itu sudah tidak berlaku sejak markSelection
+	// menandai pilihan alih-alih mengganti barisnya: salinannya kini utuh,
+	// termasuk untuk galeri yang sudah disubmit.
+	if !perluBacaDrive(project, c.Query("refresh") == "1") {
+		h.respondWithStoredPhotos(c, project, "")
+		return
+	}
+
 	store, err := h.StoreForUser(c.Request.Context(), project.UserID)
 	if err != nil {
 		h.respondWithStoredPhotos(c, project, driveFallbackReason(err))
@@ -93,7 +108,86 @@ func (h *Handler) GalleryPhotos(c *gin.Context) {
 		return
 	}
 
+	// Hasilnya disimpan supaya kunjungan berikutnya tidak perlu menunggu Drive
+	// lagi. Kegagalannya tidak menggagalkan balasan: yang diminta klien adalah
+	// daftar fotonya, dan daftar itu sudah ada di tangan.
+	if err := h.simpanSalinanFoto(project, files); err != nil {
+		log.Printf("⚠️ Gagal menyimpan salinan foto project %s: %v", project.ID, err)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"files": files, "source": "drive"})
+}
+
+// umurSalinanMaks menentukan kapan salinan dianggap layak disegarkan.
+//
+// Sepuluh menit adalah kompromi: cukup pendek sehingga foto yang baru
+// ditambahkan ke folder muncul dalam satu sesi kerja, cukup panjang sehingga
+// satu galeri yang dibuka berkali-kali tidak memanggil Drive berkali-kali.
+const umurSalinanMaks = 10 * time.Minute
+
+// jedaSegarMin menahan pembacaan Drive yang terlalu berdekatan.
+//
+// Rute ini publik: siapa pun yang memegang magic link dapat menambahkan
+// `?refresh=1`. Tanpa jeda, satu orang yang menyegarkan halaman berulang kali
+// akan memanggil Drive berulang kali atas nama fotografernya.
+const jedaSegarMin = time.Minute
+
+// perluBacaDrive memutuskan apakah Drive harus dibaca untuk permintaan ini.
+//
+// Salinan yang sudah lawas TIDAK membuat klien menunggu. Ia tetap disajikan
+// apa adanya, ditandai `stale`, dan frontend yang meminta penyegarannya lewat
+// permintaan kedua sesudah fotonya tergambar. Itulah arti "segarkan di latar":
+// yang menunggu Google tidak boleh orang yang sedang membuka galeri.
+//
+// Jadi hanya ada dua alasan membaca Drive di sini: belum ada salinan sama
+// sekali, atau permintaan penyegaran yang jedanya sudah lewat.
+func perluBacaDrive(project models.Project, diminta bool) bool {
+	if project.PhotosSyncedAt == nil {
+		return true
+	}
+	return diminta && time.Since(*project.PhotosSyncedAt) >= jedaSegarMin
+}
+
+// simpanSalinanFoto memperbarui daftar foto tersimpan dari hasil pembacaan Drive.
+//
+// Pilihan klien dipertahankan: baris yang namanya masih ada di folder tetap
+// membawa is_selected-nya. Itu sebabnya daftarnya tidak sekadar dihapus lalu
+// disisipkan ulang.
+func (h *Handler) simpanSalinanFoto(project models.Project, files []storage.PhotoRef) error {
+	return h.DB.Transaction(func(tx *gorm.DB) error {
+		var terpilih []string
+		if err := tx.Model(&models.Photo{}).
+			Where("project_id = ? AND is_selected", project.ID).
+			Pluck("file_name", &terpilih).Error; err != nil {
+			return err
+		}
+		pilihan := make(map[string]bool, len(terpilih))
+		for _, n := range terpilih {
+			pilihan[n] = true
+		}
+
+		if err := tx.Where("project_id = ?", project.ID).Delete(&models.Photo{}).Error; err != nil {
+			return err
+		}
+
+		baru := make([]models.Photo, 0, len(files))
+		for _, f := range files {
+			baru = append(baru, models.Photo{
+				ProjectID:    project.ID,
+				FileName:     f.Name,
+				ThumbnailURL: f.ThumbnailLink,
+				IsSelected:   pilihan[f.Name],
+			})
+		}
+		if err := sisipkanFoto(tx, baru); err != nil {
+			return err
+		}
+
+		sekarang := time.Now().UTC()
+		return tx.Model(&models.Project{}).
+			Where("id = ?", project.ID).
+			Update("photos_synced_at", sekarang).Error
+	})
 }
 
 // driveFallbackReason menerjemahkan kesalahan jadi alasan singkat yang aman
@@ -131,6 +225,29 @@ func (h *Handler) respondWithStoredPhotos(c *gin.Context, project models.Project
 			Name:          photo.FileName,
 			ThumbnailLink: photo.ThumbnailURL,
 		})
+	}
+
+	// Dua keadaan yang sangat berbeda, dan frontend harus dapat membedakannya.
+	//
+	// reason kosong berarti salinan ini memang yang sengaja disajikan, dan
+	// semuanya sehat. reason terisi berarti Drive gagal dibaca dan inilah yang
+	// tersisa — galeri boleh tampil, tapi klien perlu diberi tahu bahwa
+	// daftarnya mungkin tertinggal.
+	//
+	// Sebelum ada pembedaan ini keduanya sama-sama bernama "stored", sehingga
+	// menyajikan salinan sebagai jalur normal akan memunculkan spanduk
+	// peringatan pada galeri yang sebenarnya baik-baik saja.
+	if reason == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"files":  files,
+			"source": "cache",
+			// Pemberi tahu frontend bahwa salinannya layak disegarkan di latar.
+			// Keputusannya dibuat di sini, bukan di peramban, supaya ambangnya
+			// hanya ada di satu tempat.
+			"stale": project.PhotosSyncedAt == nil ||
+				time.Since(*project.PhotosSyncedAt) >= umurSalinanMaks,
+		})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{

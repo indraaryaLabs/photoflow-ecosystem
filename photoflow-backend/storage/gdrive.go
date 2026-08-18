@@ -218,10 +218,18 @@ func (g *GDriveStore) ListPhotos(ctx context.Context, sourceRef string) ([]Photo
 			}
 			thumbnail := file.ThumbnailLink
 			if thumbnail != "" {
-				// Hack arsitektur web untuk membaca file RAW kualitas tinggi di
-				// frontend: hapus batasan "=s220" menjadi "=s1000" agar
-				// resolusi mencapai 1000px.
-				thumbnail = strings.Replace(thumbnail, "=s220", "=s1000", -1)
+				// Drive membatasi thumbnail-nya di "=s220", terlalu kecil untuk
+				// petak galeri pada layar ber-DPR tinggi. Yang disimpan di sini
+				// ukuran DASAR; frontend menyesuaikannya sendiri — s400 atau
+				// s800 untuk petak grid, s1600 untuk layar pratinjau.
+				//
+				// Sebelumnya nilainya "=s1000", dipilih supaya pratinjaunya
+				// cukup tajam, lalu alamat yang sama dipakai juga untuk petak
+				// selebar 250-370px. Galeri 2.000 foto karena itu memindahkan
+				// sekitar 140 MB — lebih besar daripada yang sanggup ditahan
+				// cache peramban, sehingga menggulir jauh lalu kembali ke atas
+				// berarti mengunduh ulang semuanya.
+				thumbnail = strings.Replace(thumbnail, "=s220", "=s400", -1)
 			}
 
 			ref := PhotoRef{

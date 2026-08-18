@@ -2,11 +2,21 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, CheckCircle2, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { cn, swipeConfidenceThreshold, swipePower } from '../lib/utils';
+import { ubahUkuran, UKURAN_GRID, UKURAN_PRATINJAU } from '../lib/thumbnailUrl';
 
 /** Alamat versi resolusi tinggi sebuah foto. */
 function resolusiTinggi(photo) {
-  const thumb = photo.thumbnailLink || photo.thumbnail_url || '';
-  return thumb.replace('=s1000', '=s2000').replace('&sz=w800', '&sz=w2000');
+  return ubahUkuran(photo.thumbnailLink || photo.thumbnail_url || '', UKURAN_PRATINJAU);
+}
+
+/**
+ * Alamat yang SAMA PERSIS dengan yang dipakai grid.
+ *
+ * Harus sama persis, kalau tidak lapisan dasarnya bukan gambar dari cache
+ * melainkan unduhan baru — dan seluruh gunanya, yaitu tampil seketika, hilang.
+ */
+function versiGrid(photo) {
+  return ubahUkuran(photo.thumbnailLink || photo.thumbnail_url || '', UKURAN_GRID);
 }
 
 const PreviewModal = ({
@@ -105,7 +115,7 @@ const PreviewModal = ({
 
   const currentPhoto = photos[index];
   const isSelected = selectedIds.has(currentPhoto.id);
-  const thumbUrl = currentPhoto.thumbnailLink || currentPhoto.thumbnail_url;
+  const thumbUrl = versiGrid(currentPhoto);
   const highResUrl = resolusiTinggi(currentPhoto);
 
   // Zoom Handlers
