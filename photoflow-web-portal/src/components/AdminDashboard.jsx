@@ -13,6 +13,7 @@ import ThemeToggle from './ThemeToggle';
 import SelectionListModal from './SelectionListModal';
 import { sudahDilihat, tandaiDilihat, waktuRelatif } from '../lib/submissions';
 import { ringkasProject } from '../lib/dashboardSummary';
+import { bacaCache, tulisCache, hapusCache } from '../lib/projectCache';
 import { PRIVACY_PATH, TERMS_PATH } from '../lib/legal';
 
 
@@ -141,7 +142,24 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
   // --- API INTEGRATION ---
   const fetchProjects = async () => {
     try {
-      setIsLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id ?? null;
+
+      // Salinan terakhir digambar SEBELUM permintaan berangkat.
+      //
+      // Tanpa ini dashboard selalu dibuka dengan rangka abu-abu lalu menunggu
+      // satu perjalanan jaringan. Perjalanannya tidak bisa dihilangkan, tapi
+      // menunggunya bisa: daftar yang sama hampir selalu muncul lagi persis
+      // seperti terakhir dilihat. Rangkanya tetap dipakai untuk kunjungan
+      // pertama, yang memang belum punya apa-apa untuk ditampilkan.
+      const tersimpan = bacaCache(uid);
+      if (tersimpan?.length) {
+        setProjects(tersimpan);
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+      }
+
       const token = await getAccessToken();
       if (!token) return; // Guard: skip fetch if no session
 
@@ -157,6 +175,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
       if (!checkedRes.ok) throw new Error('Could not load your projects.');
       const data = await checkedRes.json();
       setProjects(data || []);
+      tulisCache(uid, data || []);
     } catch (err) {
       if (err.message === 'Failed to fetch') {
         showToast('Could not reach the server. Check your internet connection.', 'error');
@@ -616,6 +635,11 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
     setFormData({ projectName: '', clientName: '', maxSelection: 50, driveLink: '', clientWa: '' });
     setEditingProject(null);
     setDeletingProject(null);
+
+    // Salinan daftar project dibuang bersama sesinya. Meninggalkannya berarti
+    // orang berikutnya yang membuka peramban ini sempat melihat project milik
+    // pemilik akun sebelumnya.
+    hapusCache(userId);
 
     await supabase.auth.signOut();
     // Perpindahan sisi klien. signOut memicu onAuthStateChange di App, yang
