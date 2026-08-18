@@ -286,6 +286,20 @@ export default function App() {
           setPhotoSource(photosData.source === 'stored'
             ? { stored: true, reason: photosData.reason }
             : null);
+
+          // Salinan yang sudah lawas disegarkan SESUDAH fotonya tergambar.
+          //
+          // Backend melayani galeri dari salinan database supaya klien tidak
+          // menunggu Google membaca ribuan berkas. Ongkosnya: foto yang baru
+          // ditambahkan ke folder belum tentu ada di salinan itu. Permintaan
+          // kedua ini yang menutupnya — dan karena berangkat setelah layar
+          // terisi, tidak ada yang menunggunya.
+          //
+          // Backend sendiri yang memutuskan `stale`, sehingga ambangnya hanya
+          // ada di satu tempat, dan menolak menyegarkan lebih rapat dari satu
+          // menit agar rute publik ini tidak bisa dipakai memanggil Drive
+          // berulang kali atas nama fotografernya.
+          if (photosData.stale) segarkanDiLatar();
         } catch (photosErr) {
           // Galeri tidak boleh mati hanya karena daftar foto gagal diambil:
           // salinannya ikut terkirim bersama data project. Bentuknya diselaraskan
@@ -308,8 +322,52 @@ export default function App() {
       }
     };
 
+    // Menyegarkan daftar foto tanpa mengganggu pekerjaan yang sedang berjalan.
+    //
+    // Yang paling mudah rusak di sini adalah pilihan klien. Daftar dari Drive
+    // memakai id berkas Google, sedangkan salinan database memakai id barisnya
+    // sendiri — jadi menukar daftar begitu saja akan membuat setiap foto yang
+    // sudah dipilih kehilangan tandanya.
+    //
+    // Karena itu daftarnya hanya ditukar kalau ISINYA memang berbeda, dan
+    // pilihannya dipetakan ulang lewat nama berkas. Pada kunjungan biasa, di
+    // mana folder tidak berubah, tidak ada satu pun yang diganti dan klien
+    // tidak melihat apa-apa terjadi.
+    const segarkanDiLatar = () => {
+      const jalankan = async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/p/${token}/photos?refresh=1`);
+          if (!res.ok) return;
+          const baru = (await res.json()).files || [];
+          if (!baru.length) return;
+
+          setPhotos((lama) => {
+            const samaSaja =
+              lama.length === baru.length &&
+              lama.every((p, i) => p.name === baru[i].name);
+            if (samaSaja) return lama;
+
+            setSelectedIds((terpilih) => {
+              const namaTerpilih = lama
+                .filter((p) => terpilih.has(p.id))
+                .map((p) => p.name);
+              return petakanKeId(namaTerpilih, baru, project?.max_selections);
+            });
+            return baru;
+          });
+        } catch {
+          // Galeri yang sedang tampil tetap benar. Penyegaran yang gagal tidak
+          // punya apa pun untuk dilaporkan kepada klien.
+        }
+      };
+
+      const idle = window.requestIdleCallback;
+      if (idle) idle(jalankan, { timeout: 4000 });
+      else setTimeout(jalankan, 1500);
+    };
+
     fetchGallery();
-  }, [token, galleryQuery]);
+  }, [token, galleryQuery, project?.max_selections]);
 
   // ─── Callbacks ───────────────────────────────────────────────
   const addToast = useCallback((message) => {

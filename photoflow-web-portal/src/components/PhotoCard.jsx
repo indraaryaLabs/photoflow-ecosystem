@@ -2,6 +2,7 @@ import { memo, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Check, Maximize2, ImageOff } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { srcsetGrid, ubahUkuran, UKURAN_GRID } from '../lib/thumbnailUrl';
 
 const PhotoCard = ({
   photo, index, width, height, isSelected, isLocked, onToggle, onOpenPreview, onMeasure,
@@ -74,7 +75,14 @@ const PhotoCard = ({
 
       {adaGambar ? (
         <img
-          src={photo.thumbnailLink}
+          // Ukuran petak, bukan ukuran pratinjau. Lihat lib/thumbnailUrl.js:
+          // satu alamat untuk keduanya membuat galeri besar memindahkan
+          // berkali-kali lipat byte yang benar-benar ditampilkan.
+          src={ubahUkuran(photo.thumbnailLink, UKURAN_GRID)}
+          srcSet={srcsetGrid(photo.thumbnailLink)}
+          // Petak terlebar di galeri ini sekitar 370px; di luar itu peramban
+          // tetap memilih varian 2x.
+          sizes="(max-width: 640px) 50vw, 400px"
           alt={photo.name || 'Gallery photo'}
           loading="lazy"
           // Pengurai gambar dijalankan di luar utas utama. Tanpa ini peramban

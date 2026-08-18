@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -88,24 +89,40 @@ func (h *Handler) CreateProject(c *gin.Context) {
 		return
 	}
 
-	photosToInsert, ok := h.fetchDrivePhotos(c.Request.Context(), userID, folderID, newProject.ID)
-	if !ok {
-		c.JSON(http.StatusCreated, gin.H{
-			"message": "Project dibuat, tapi gagal menarik foto dari Drive.",
-			"project": newProject,
-		})
-		return
-	}
-
-	if err := sisipkanFoto(h.DB, photosToInsert); err != nil {
-		log.Printf("⚠️ Gagal menyimpan daftar foto project %s: %v", newProject.ID, err)
-	}
-
+	// Balasan dikirim TANPA menunggu Drive.
+	//
+	// Sebelumnya pembuatan project menarik seluruh daftar foto lebih dulu.
+	// Untuk folder berisi 2.000 berkas itu dua halaman berurutan ke Google —
+	// beberapa detik ketika yang sebenarnya diminta orangnya cuma satu baris
+	// project, dan barisnya sudah tersimpan pada saat ini.
+	//
+	// Penarikan fotonya dipindahkan ke permintaan kedua: frontend memanggil
+	// /resync sesudah formulirnya tertutup. Endpoint itu sudah ada, sudah
+	// dipakai, dan sudah menangani folder yang tidak terbaca.
+	//
+	// Ongkos yang diterima: kegagalan membaca folder tidak lagi muncul saat
+	// tombol ditekan, melainkan beberapa detik sesudahnya. Sebagai gantinya
+	// tombolnya tidak pernah menggantung, dan project yang folder-nya belum
+	// siap tetap tersimpan alih-alih hilang bersama kegagalannya.
 	c.JSON(http.StatusCreated, gin.H{
-		"message":      "Project berhasil dibuat & tersinkronisasi!",
-		"data":         newProject,
-		"photos_found": len(photosToInsert),
+		"message": "Project berhasil dibuat.",
+		"data":    newProject,
+		// Frontend memakainya sebagai tanda bahwa daftar foto masih harus
+		// ditarik, dan menampilkan "Syncing photos..." sampai selesai.
+		"needs_sync": true,
 	})
+}
+
+// tandaiTersinkron mencatat bahwa daftar foto project baru saja ditarik dari
+// Drive.
+//
+// Galeri klien memakai penanda ini untuk memutuskan kapan salinannya layak
+// disegarkan. Tanpa penanda, setiap kunjungan akan menyimpulkan salinannya
+// belum pernah ada dan kembali membaca Drive — persis yang hendak dihentikan.
+func tandaiTersinkron(db *gorm.DB, projectID string) error {
+	return db.Model(&models.Project{}).
+		Where("id = ?", projectID).
+		Update("photos_synced_at", time.Now().UTC()).Error
 }
 
 // ListProjects mengembalikan project milik pemanggil saja.
@@ -305,7 +322,10 @@ func (h *Handler) ResyncProject(c *gin.Context) {
 		if err := tx.Where("project_id = ?", project.ID).Delete(&models.Photo{}).Error; err != nil {
 			return err
 		}
-		return sisipkanFoto(tx, baru)
+		if err := sisipkanFoto(tx, baru); err != nil {
+			return err
+		}
+		return tandaiTersinkron(tx, project.ID)
 	}); err != nil {
 		log.Printf("🔴 Resync %s: %v", project.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan daftar foto"})
@@ -384,7 +404,10 @@ func (h *Handler) UpdateProject(c *gin.Context) {
 		if err := tx.Where("project_id = ?", project.ID).Delete(&models.Photo{}).Error; err != nil {
 			return err
 		}
-		return sisipkanFoto(tx, newPhotos)
+		if err := sisipkanFoto(tx, newPhotos); err != nil {
+			return err
+		}
+		return tandaiTersinkron(tx, project.ID)
 	}); err != nil {
 		log.Printf("🔴 Update project %s: %v", project.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengupdate project"})
