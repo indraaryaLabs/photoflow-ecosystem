@@ -37,6 +37,16 @@ type Project struct {
 	// Hanya waktu pertama yang disimpan, bukan yang terakhir: yang hendak
 	// dijawab "sudah sampai atau belum", bukan seberapa sering dilihat.
 	FirstViewedAt *time.Time `gorm:"column:first_viewed_at" json:"first_viewed_at"`
+	// Kapan daftar foto terakhir kali ditarik dari Drive.
+	//
+	// Galeri klien dilayani dari salinan di tabel photos, bukan dengan membaca
+	// Drive setiap kali dibuka — membaca 2.000 berkas dari Google memakan
+	// beberapa detik, dan itu dibayar oleh setiap klien pada setiap kunjungan.
+	// Kolom ini yang menentukan kapan salinan itu layak disegarkan.
+	//
+	// nil berarti belum pernah ditarik sama sekali, dan dalam keadaan itu Drive
+	// memang harus dibaca sebelum ada yang bisa ditampilkan.
+	PhotosSyncedAt *time.Time `gorm:"column:photos_synced_at" json:"photos_synced_at"`
 	CreatedAt     time.Time  `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt     time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 }
