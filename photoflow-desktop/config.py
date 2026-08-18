@@ -29,6 +29,17 @@ BACKEND_URL = os.environ.get(
     "https://photoflow-backend.vercel.app",
 ).rstrip("/")
 
+# Aplikasi web, dituju tombol "Open Web Dashboard".
+#
+# Alamatnya dulu ditulis langsung di dalam script.js, satu-satunya alamat di
+# aplikasi ini yang tidak dapat ditimpa lewat environment. Akibatnya mengganti
+# nama project Vercel mematikan tombol itu di setiap salinan yang sudah
+# terpasang, dan satu-satunya perbaikan adalah merilis ulang installer-nya.
+WEB_APP_URL = os.environ.get(
+    "PHOTOFLOW_WEB_APP_URL",
+    "https://photoflow.vercel.app",
+).rstrip("/")
+
 SUPABASE_URL = os.environ.get(
     "PHOTOFLOW_SUPABASE_URL",
     "https://fmmgdpfybzsdgwgrbbdo.supabase.co",
