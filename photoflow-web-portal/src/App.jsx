@@ -13,6 +13,7 @@ import { openedFromRecoveryLink } from './lib/recovery';
 import { useTheme } from './lib/theme';
 import { bacaDraf, simpanDraf, hapusDraf, petakanKeId } from './lib/selectionDraft';
 import { withViewTransition } from './lib/viewTransition';
+import { useRoute } from './lib/router';
 
 // Tiga bagian yang dimuat hanya kalau benar-benar dibuka.
 //
@@ -58,7 +59,7 @@ export default function App() {
   const DASHBOARD_PATH = '/dashboard';
   const LEGACY_DASHBOARD_PATH = '/admin';
 
-  const { pathname, search, hash } = window.location;
+  const { pathname, search, navigasi } = useRoute();
   const isLegacyDashboardRoute = pathname === LEGACY_DASHBOARD_PATH || pathname.startsWith(LEGACY_DASHBOARD_PATH + '/');
   const isDashboardRoute = pathname === DASHBOARD_PATH || pathname.startsWith(DASHBOARD_PATH + '/');
 
@@ -126,6 +127,51 @@ export default function App() {
 
   // ─── 4. Hooks / Effects ──────────────────────────────────────
 
+  // Rapikan URL tanpa memuat ulang halaman.
+  //
+  // Dua jalur menampilkan dashboard tapi tidak menuliskannya di bilah alamat:
+  // `/admin` yang lama, dan `/` ketika orangnya sudah masuk. Keduanya dulu
+  // diperbaiki dengan `window.location.replace`, yang berarti MEMBANGUN ULANG
+  // SELURUH APLIKASI hanya untuk mengubah teks di bilah alamat.
+  //
+  // Dikerjakan di effect, bukan saat render: mengalihkan saat render membuang
+  // satu render dan memperlihatkan satu kedipan layar kosong. Di sini layarnya
+  // sudah tergambar lebih dulu, dan alamatnya menyusul pada frame yang sama.
+  //
+  // `ganti: true` supaya tombol kembali tidak memantulkan orangnya ke jalur
+  // yang baru saja ditinggalkan.
+  useEffect(() => {
+    if (!isAdminAuthenticated) return;
+
+    const perluDirapikan =
+      isLegacyDashboardRoute || (isHome && !token && !isPasswordRecovery);
+
+    if (perluDirapikan) navigasi(DASHBOARD_PATH, { ganti: true });
+  }, [isAdminAuthenticated, isLegacyDashboardRoute, isHome, token, isPasswordRecovery, navigasi]);
+
+  // Ambil berkas dashboard lebih awal, selagi layar masuk terbuka.
+  //
+  // Setelah routing tidak lagi memuat ulang halaman, sisa jeda sesudah menekan
+  // "Sign In" tinggal satu hal: berkas dashboard baru MULAI diunduh pada detik
+  // tombolnya ditekan. Padahal orang menghabiskan beberapa detik mengetik email
+  // dan password lebih dulu, dan selama itu jaringannya menganggur.
+  //
+  // Diminta di sini, berkasnya hampir selalu sudah ada di cache ketika
+  // gilirannya tiba. Yang membukanya hanya orang yang memang sedang berada di
+  // layar masuk, jadi klien galeri tidak ikut membayar apa pun.
+  useEffect(() => {
+    if (!perluAuth || isAdminAuthenticated) return;
+
+    const ambil = () => { import('./components/AdminDashboard'); };
+    const idle = window.requestIdleCallback;
+    if (idle) {
+      const id = idle(ambil, { timeout: 3000 });
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const t = setTimeout(ambil, 1500);
+    return () => clearTimeout(t);
+  }, [perluAuth, isAdminAuthenticated]);
+
   // Auth Session Checker.
   //
   // Klien galeri dilewati seluruhnya, dan itu bukan penghematan kecil:
@@ -177,8 +223,10 @@ export default function App() {
         // modul yang sama.
         const { supabase } = await import('./lib/supabase');
         await supabase.auth.signOut();
-        // Paksa kembali ke halaman root (login)
-        window.location.href = '/';
+        // Kembali ke layar masuk. signOut memicu onAuthStateChange, yang
+        // mematikan penanda autentikasi, jadi jalur '/' menggambar layar masuk
+        // dengan sendirinya — tanpa memuat ulang halaman.
+        navigasi('/');
       }, 1800000); // 30 Menit
     };
 
@@ -195,7 +243,7 @@ export default function App() {
       window.removeEventListener('keydown', resetTimer);
       window.removeEventListener('click', resetTimer);
     };
-  }, [isAdminAuthenticated]);
+  }, [isAdminAuthenticated, navigasi]);
 
   // Fetch Gallery Data
   useEffect(() => {
@@ -464,28 +512,20 @@ export default function App() {
   // Pemulihan password mendahului seluruh routing lain: sesi yang dibawa
   // tautan itu memang sah, tapi tujuannya bukan masuk ke dashboard.
   if (isPasswordRecovery) {
-    return <Suspense fallback={<Memuat />}><AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} /></Suspense>;
+    return <Suspense fallback={<Memuat />}><AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} onNavigate={navigasi} /></Suspense>;
   }
 
-  // Jalur lama /admin dialihkan, tidak dilayani. Kalau dilayani begitu saja,
-  // dua jalur akan menampilkan halaman yang sama selamanya dan yang lama tidak
-  // akan pernah hilang dari peredaran. `replace` dipakai supaya tombol kembali
-  // tidak memantulkan orangnya ke jalur lama lagi.
-  if (isLegacyDashboardRoute) {
-    window.location.replace(DASHBOARD_PATH + search + hash);
-    return null;
-  }
 
   // Strict Auth Guard Routing
-  if (isDashboardRoute) {
+  if (isDashboardRoute || isLegacyDashboardRoute) {
     if (isAdminAuthenticated) {
       return (
         <Suspense fallback={<Memuat />}>
-          <AdminDashboard themeChoice={themeChoice} cycleTheme={cycleTheme} />
+          <AdminDashboard themeChoice={themeChoice} cycleTheme={cycleTheme} onNavigate={navigasi} />
         </Suspense>
       );
     } else {
-      return <Suspense fallback={<Memuat />}><AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} /></Suspense>;
+      return <Suspense fallback={<Memuat />}><AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} onNavigate={navigasi} /></Suspense>;
     }
   }
 
@@ -493,10 +533,15 @@ export default function App() {
     if (token) {
       // Biarkan kosong agar proses berlanjut ke bawah (menampilkan galeri klien)
     } else if (isAdminAuthenticated) {
-      window.location.replace(DASHBOARD_PATH);
-      return null;
+      // URL-nya dirapikan oleh effect di atas, bukan di sini: mengalihkan saat
+      // render berarti satu render terbuang dan satu kedipan layar kosong.
+      return (
+        <Suspense fallback={<Memuat />}>
+          <AdminDashboard themeChoice={themeChoice} cycleTheme={cycleTheme} onNavigate={navigasi} />
+        </Suspense>
+      );
     } else {
-      return <Suspense fallback={<Memuat />}><AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} /></Suspense>;
+      return <Suspense fallback={<Memuat />}><AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} onNavigate={navigasi} /></Suspense>;
     }
   }
 

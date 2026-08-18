@@ -15,42 +15,6 @@ import { sudahDilihat, tandaiDilihat, waktuRelatif } from '../lib/submissions';
 import { ringkasProject } from '../lib/dashboardSummary';
 import { PRIVACY_PATH, TERMS_PATH } from '../lib/legal';
 
-// --- STYLES & ANIMATIONS ---
-const globalStyles = `
-  @keyframes slideInRight {
-    from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-  }
-  @keyframes slideUpFade {
-    from { transform: translateY(10px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
-  }
-  @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-  .animate-slide-up-fade {
-    animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
-  .animate-toast {
-    animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
-  .skeleton-shimmer {
-    background: linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.08) 50%, transparent 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s ease-in-out infinite;
-  }
-  .light .skeleton-shimmer, :not(.dark) .skeleton-shimmer {
-    background: linear-gradient(90deg, transparent 25%, rgba(0,0,0,0.04) 50%, transparent 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s ease-in-out infinite;
-  }
-  /* Custom Scrollbar for premium feel */
-  ::-webkit-scrollbar { width: 8px; height: 8px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--color-ash-600); border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--color-ash-500); }
-`;
 
 /**
  * Nomor WhatsApp fotografer sendiri, dari metadata akunnya.
@@ -73,7 +37,7 @@ async function nomorWhatsAppSendiri() {
   return session?.user?.user_metadata?.whatsapp || '';
 }
 
-export default function AdminDashboard({ themeChoice, cycleTheme }) {
+export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) {
   // --- STATE MANAGEMENT ---
   const [toast, setToast] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -145,7 +109,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
     if (!session?.access_token) {
       // No valid session found, force logout and redirect
       await supabase.auth.signOut();
-      window.location.href = '/';
+      onNavigate('/');
       return null;
     }
     return session.access_token;
@@ -170,7 +134,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
 
     showToast('Your session has expired. Please sign in again.', 'error');
     await supabase.auth.signOut();
-    setTimeout(() => { window.location.href = '/'; }, 1000);
+    setTimeout(() => onNavigate('/'), 1000);
     return null;
   };
 
@@ -286,6 +250,8 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
 
       const { auth_url: authUrl } = await res.json();
       if (!authUrl) throw new Error('Could not start the Google Drive connection.');
+      // Yang satu ini memang harus navigasi sungguhan: tujuannya layar
+      // persetujuan milik Google, di luar aplikasi ini.
       window.location.href = authUrl;
     } catch (err) {
       showToast(err.message || 'Could not start the Google Drive connection.', 'error');
@@ -652,7 +618,10 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
     setDeletingProject(null);
 
     await supabase.auth.signOut();
-    window.location.href = '/';
+    // Perpindahan sisi klien. signOut memicu onAuthStateChange di App, yang
+    // mematikan penanda autentikasi, sehingga jalur '/' menggambar layar masuk
+    // dengan sendirinya — tanpa membangun ulang seluruh aplikasi.
+    onNavigate('/');
   };
 
   // --- RENDER ---
@@ -664,7 +633,6 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
   if (connectingDrive) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-5 bg-ash-50 dark:bg-ash-950 text-center px-6">
-        <style>{globalStyles}</style>
         <Loader2 size={36} strokeWidth={1.75} className="text-ash-600 dark:text-ash-400 animate-spin" aria-hidden="true" />
         <div>
           <p className="text-lg font-semibold text-ash-900 dark:text-ash-100">Connecting Google Drive</p>
@@ -679,13 +647,15 @@ export default function AdminDashboard({ themeChoice, cycleTheme }) {
 
   return (
     <div className="min-h-screen transition-colors duration-tint">
-      <style>{globalStyles}</style>
 
       {/* MAIN LAYOUT */}
       <div className="min-h-screen bg-ash-50 dark:bg-ash-950 text-ash-900 dark:text-ash-100 font-sans">
 
         {/* HEADER (Sticky, Glassmorphism) */}
-        <header className="sticky top-0 z-40 bg-white/70 dark:bg-ash-950/70 backdrop-blur-xl border-b border-ash-200 dark:border-white/10 transition-colors duration-tint">
+        {/* backdrop-blur-md, bukan -xl: kepala melekat ini digambar ulang
+            pada setiap frame penggulingan, selebar layar. Lihat
+            Header.jsx untuk alasan lengkapnya. */}
+        <header className="sticky top-0 z-40 bg-white/70 dark:bg-ash-950/70 backdrop-blur-md border-b border-ash-200 dark:border-white/10 transition-colors duration-tint">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="grid h-9 w-9 place-items-center rounded-lg border border-ash-200 bg-ash-100 text-ash-700 dark:border-white/10 dark:bg-white/5 dark:text-ash-200">
