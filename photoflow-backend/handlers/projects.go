@@ -97,8 +97,8 @@ func (h *Handler) CreateProject(c *gin.Context) {
 		return
 	}
 
-	if len(photosToInsert) > 0 {
-		h.DB.Create(&photosToInsert)
+	if err := sisipkanFoto(h.DB, photosToInsert); err != nil {
+		log.Printf("⚠️ Gagal menyimpan daftar foto project %s: %v", newProject.ID, err)
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
@@ -200,9 +200,20 @@ func (h *Handler) withPhotoCounts(projects []models.Project) []projectWithCount 
 // semua project sekaligus, dan query per baris akan tumbuh bersama jumlah
 // project yang dimiliki fotografer.
 //
-// Batasnya dipasang di Go, bukan di SQL. Membatasi per-grup di SQL menuntut
-// window function, dan yang dihemat tidak sebanding: yang diambil hanya kolom
-// url, dan galeri terbesar sekalipun berisi ribuan baris pendek.
+// Batasnya dipasang di SQL, memakai window function.
+//
+// Sebelumnya query ini mengambil SELURUH baris foto milik semua project lalu
+// membuang kelebihannya di Go. Komentar di tempat ini dulu menyebut ongkosnya
+// tidak sebanding karena "galeri terbesar sekalipun berisi ribuan baris
+// pendek" — dan itu keliru pada dua hitungan. Barisnya tidak pendek: isinya
+// URL thumbnail Google sepanjang ratusan karakter. Dan ribuan itu dikalikan
+// jumlah project: seorang fotografer dengan lima pemotretan berisi 2.000 foto
+// menarik 10.000 baris, sekitar satu setengah megabita, dari database ke fungsi
+// serverless SETIAP KALI dashboard dibuka — untuk menampilkan dua puluh
+// thumbnail.
+//
+// ROW_NUMBER memangkasnya di sisi database, sehingga yang melintas persis
+// sebanyak yang dipakai.
 func (h *Handler) previewThumbnails(ids []string) map[string][]string {
 	const perProject = 4
 
@@ -211,11 +222,14 @@ func (h *Handler) previewThumbnails(ids []string) map[string][]string {
 		ThumbnailURL string
 	}
 	var hasil []baris
-	if err := h.DB.Model(&models.Photo{}).
-		Select("project_id, thumbnail_url").
-		Where("project_id IN ? AND thumbnail_url <> ''", ids).
-		Order("project_id, file_name").
-		Scan(&hasil).Error; err != nil {
+	err := h.DB.Raw(`
+		SELECT project_id, thumbnail_url FROM (
+			SELECT project_id, thumbnail_url,
+			       ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY file_name) AS urutan
+			FROM photos
+			WHERE project_id IN ? AND thumbnail_url <> ''
+		) t WHERE urutan <= ?`, ids, perProject).Scan(&hasil).Error
+	if err != nil {
 		// Kartu tanpa pratinjau tetap berguna; ini bukan alasan menggagalkan
 		// seluruh daftar project.
 		log.Printf("⚠️ Gagal mengambil pratinjau: %v", err)
@@ -224,9 +238,7 @@ func (h *Handler) previewThumbnails(ids []string) map[string][]string {
 
 	peta := make(map[string][]string, len(ids))
 	for _, b := range hasil {
-		if len(peta[b.ProjectID]) < perProject {
-			peta[b.ProjectID] = append(peta[b.ProjectID], b.ThumbnailURL)
-		}
+		peta[b.ProjectID] = append(peta[b.ProjectID], b.ThumbnailURL)
 	}
 	return peta
 }
@@ -293,10 +305,7 @@ func (h *Handler) ResyncProject(c *gin.Context) {
 		if err := tx.Where("project_id = ?", project.ID).Delete(&models.Photo{}).Error; err != nil {
 			return err
 		}
-		if len(baru) == 0 {
-			return nil
-		}
-		return tx.Create(&baru).Error
+		return sisipkanFoto(tx, baru)
 	}); err != nil {
 		log.Printf("🔴 Resync %s: %v", project.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan daftar foto"})
@@ -375,10 +384,7 @@ func (h *Handler) UpdateProject(c *gin.Context) {
 		if err := tx.Where("project_id = ?", project.ID).Delete(&models.Photo{}).Error; err != nil {
 			return err
 		}
-		if len(newPhotos) == 0 {
-			return nil
-		}
-		return tx.Create(&newPhotos).Error
+		return sisipkanFoto(tx, newPhotos)
 	}); err != nil {
 		log.Printf("🔴 Update project %s: %v", project.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengupdate project"})
