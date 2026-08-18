@@ -428,7 +428,21 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
 
       showToast('Project deleted.');
       setDeletingProject(null);
-      fetchProjects();
+
+      // Kartunya dibuang dari daftar di layar, BUKAN dengan mengambil ulang
+      // seluruh daftar dari server.
+      //
+      // fetchProjects() di sini berarti permintaan HTTP kedua beserta tiga
+      // query-nya, hanya untuk mengetahui satu hal yang sudah pasti: baris yang
+      // barusan dihapus memang sudah tidak ada. Sementara itu pemutar berputar
+      // tetap berjalan dan kartunya masih terlihat di layar.
+      setProjects((sebelumnya) => {
+        const sesudah = sebelumnya.filter((p) => p.id !== deletingProject.id);
+        // Salinan lokal ikut diperbarui, kalau tidak project yang sudah dihapus
+        // akan muncul lagi sekejap pada kunjungan berikutnya.
+        tulisCache(userId, sesudah);
+        return sesudah;
+      });
     } catch (err) {
       if (err.message === 'Failed to fetch') {
         showToast('The server did not respond. Please try again later.', 'error');
@@ -575,30 +589,37 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
         throw new Error(errorData?.error || errorData?.message || 'Could not create the project.');
       }
 
-      // Backend membedakan "dibuat dan fotonya tertarik" dari "dibuat, tapi
-      // Drive gagal dibaca" — dan sampai sekarang perbedaan itu dibuang di
-      // sini, diganti satu kalimat hijau. Fotografer diberi tahu berhasil untuk
-      // project yang isinya nol foto, lalu mengirim galeri kosong ke kliennya.
       const body = await checkedRes.json().catch(() => null);
-      const jumlahFoto = body?.photos_found;
+      const dibuat = body?.data;
 
-      await fetchProjects();
-      await fetchDriveStatus();
+      // Formulir ditutup SEKARANG, tidak menunggu foto ditarik.
+      //
+      // Menarik 2.000 berkas dari Drive memakan beberapa detik, dan sebelumnya
+      // seluruh detik itu dihabiskan dengan formulir masih terbuka dan tombolnya
+      // berputar — padahal project-nya sudah tersimpan sejak permintaan pertama
+      // dibalas.
       setFormData({ projectName: '', clientName: '', maxSelection: 50, driveLink: '', clientWa: '' });
-
       setFormOpen(false);
+      showToast('Project created. Pulling photos from Drive...');
 
-      if (typeof jumlahFoto === 'number' && jumlahFoto > 0) {
-        showToast(`Project created. ${jumlahFoto} photos pulled from Drive.`);
+      // Kartunya muncul seketika, dengan jumlah foto nol. Baris keterangannya
+      // sudah menuliskan "No photos yet" untuk keadaan itu, jadi tidak ada yang
+      // perlu ditambahkan supaya jujur.
+      if (dibuat) {
+        setProjects((sebelumnya) => [{ ...dibuat, photo_count: 0, previews: [] }, ...sebelumnya]);
+      }
+
+      // Penarikan fotonya jalan sendiri. Endpoint resync sudah menangani folder
+      // yang tidak terbaca beserta pesannya, jadi tidak ada penanganan kedua di
+      // sini — yang perlu ditambahkan cuma menyegarkan daftarnya setelah selesai.
+      if (dibuat?.id) {
+        handleResync(dibuat).finally(() => {
+          fetchProjects();
+          fetchDriveStatus();
+        });
       } else {
-        // Sebabnya yang paling sering: foldernya belum dibagikan. Menyebutkan
-        // tindakan yang harus diambil lebih berguna daripada melaporkan bahwa
-        // sesuatu gagal.
-        showToast(
-          body?.message
-            || 'Project created, but no photos came back. Check that the folder is shared as "Anyone with the link".',
-          'error'
-        );
+        await fetchProjects();
+        await fetchDriveStatus();
       }
     } catch (err) {
       if (err.message === 'Failed to fetch') {
