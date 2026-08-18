@@ -11,6 +11,20 @@ const PhotoCard = ({
   const adaGambar = Boolean(photo.thumbnailLink) && !gagalMuat;
   const kurangiGerak = useReducedMotion();
 
+  // Ukuran asli dilaporkan HANYA kalau Drive tidak mengirimkannya.
+  //
+  // Sebelumnya setiap gambar melaporkannya, termasuk yang ukurannya sudah
+  // diketahui — nilainya dibuang oleh pemanggilnya, tapi perubahan state-nya
+  // tetap terjadi dan tetap menyusun ulang seluruh tata letak. Pada galeri
+  // besar itu ribuan penyusunan ulang untuk angka yang tidak dipakai sama
+  // sekali.
+  const perluDiukur = !photo.width || !photo.height;
+
+  const tandaiTermuat = (el) => {
+    setIsLoaded(true);
+    if (perluDiukur) onMeasure?.(photo.id, el.naturalWidth, el.naturalHeight);
+  };
+
   return (
     <motion.div
       // Lebar dan tinggi datang dari perhitungan baris, bukan dari kelas rasio
@@ -69,10 +83,18 @@ const PhotoCard = ({
           // menggulir -- bukan saat memuat.
           decoding="async"
           referrerPolicy="no-referrer"
-          onLoad={(e) => {
-            setIsLoaded(true);
-            onMeasure?.(photo.id, e.currentTarget.naturalWidth, e.currentTarget.naturalHeight);
+          // Callback ref, bukan hanya onLoad.
+          //
+          // Dengan hanya baris yang terlihat yang digambar, kartu dipasang dan
+          // dilepas terus-menerus selama menggulir. Gambar yang sudah ada di
+          // cache tidak selalu memicu onLoad lagi saat dipasang ulang, dan
+          // kalaupun memicu, ia terjadi setelah frame pertama — sehingga foto
+          // yang sudah pernah dilihat berkedip abu-abu setiap kali kembali ke
+          // layar. `complete` menjawabnya sebelum frame itu digambar.
+          ref={(el) => {
+            if (el?.complete && el.naturalWidth) tandaiTermuat(el);
           }}
+          onLoad={(e) => tandaiTermuat(e.currentTarget)}
           onError={() => setGagalMuat(true)}
           // Nama transisi menghubungkan foto ini dengan gambar yang sama di
           // layar pratinjau, sehingga peramban dapat menganimasikan satu ke
