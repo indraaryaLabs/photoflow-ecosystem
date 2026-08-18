@@ -61,6 +61,27 @@ func New(db *gorm.DB, oauthConfig *oauth2.Config, limiter *middleware.Limiter) *
 	}
 }
 
+// batasSisip membatasi berapa baris foto yang masuk dalam satu perintah INSERT.
+//
+// Satu pemotretan berisi 2.000 foto adalah ukuran yang biasa, dan menyisipkan
+// seluruhnya dalam satu perintah punya dua akibat: perintahnya lambat disusun
+// dan dikirim, dan jumlah parameternya tumbuh lurus dengan jumlah foto —
+// Postgres berhenti di 65.535, yang pada lima kolom tercapai di sekitar 13.000
+// foto dan menggagalkan seluruh sinkronisasi sekaligus.
+const batasSisip = 500
+
+// sisipkanFoto menyimpan daftar foto secara bertahap.
+//
+// Menerima *gorm.DB apa pun, termasuk transaksi, karena tiga dari empat
+// pemanggilnya berjalan di dalam transaksi yang lebih dulu menghapus daftar
+// lama.
+func sisipkanFoto(db *gorm.DB, photos []models.Photo) error {
+	if len(photos) == 0 {
+		return nil
+	}
+	return db.CreateInBatches(photos, batasSisip).Error
+}
+
 // errGalleryLocked dikembalikan ketika galeri sudah disubmit sebelumnya.
 var errGalleryLocked = errors.New("galeri sudah dikunci")
 
@@ -209,8 +230,5 @@ func markSelection(tx *gorm.DB, projectID string, selected []models.Photo) error
 			ThumbnailURL: "",
 		})
 	}
-	if len(kurang) == 0 {
-		return nil
-	}
-	return tx.Create(&kurang).Error
+	return sisipkanFoto(tx, kurang)
 }
