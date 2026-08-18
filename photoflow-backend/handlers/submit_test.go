@@ -22,6 +22,14 @@ import (
 // menghapus dan membangun ulang tabel projects dan photos. Tanpa variabel itu,
 // berkas ini dilewati sehingga `go test ./...` tetap hijau di mesin tanpa
 // Postgres.
+//
+// PENTING: karena membangun ulang skema, paket ini tidak boleh berjalan
+// bersamaan dengan cmd/migrate maupun middleware — keduanya juga mengubah
+// skema pada database yang sama. `go test` menjalankan paket secara paralel
+// secara bawaan, jadi CI memakai `-p 1`. Menjalankannya dengan tangan tanpa
+// bendera itu dapat merah secara acak, dan pesannya tidak akan menunjuk ke
+// sebabnya: `relation "projects" does not exist` pada tes yang jelas baru
+// membuatnya.
 func newSubmitTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
