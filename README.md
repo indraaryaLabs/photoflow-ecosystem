@@ -282,7 +282,8 @@ menggagalkan submit.
 ### Alamat yang diizinkan (CORS)
 
 `ALLOWED_ORIGINS` berisi daftar origin yang boleh memanggil backend, dipisah
-koma. Kosong berarti memakai bawaan (`photoflow-ecosystem.vercel.app` dan
+koma. Kosong berarti memakai bawaan (`photoflow.vercel.app`,
+`photoflow-ecosystem.vercel.app` sebagai alamat lama, dan
 `localhost:5173`).
 
 Variabel ini yang harus diisi lebih dulu **sebelum** mengganti alamat frontend.
@@ -341,7 +342,7 @@ data yang sedang dipakai.
 
 ## Demo
 
-- Web portal: https://photoflow-ecosystem.vercel.app
+- Web portal: https://photoflow.vercel.app
 - API: https://photoflow-backend.vercel.app
 
 ### Coba tanpa akun
@@ -353,13 +354,13 @@ membuka galeri sungguhan, persis seperti yang diterima klien lewat WhatsApp.
 maksimalnya:
 
 ```
-https://photoflow-ecosystem.vercel.app/?token=fb0bd309058553e34dbe46f19f04a405
+https://photoflow.vercel.app/?token=fb0bd309058553e34dbe46f19f04a405
 ```
 
 **Galeri yang sudah dikirim** — terkunci, tidak menerima perubahan lagi:
 
 ```
-https://photoflow-ecosystem.vercel.app/?token=51fafe800d88d1bf22ffbd6f6b13cac6
+https://photoflow.vercel.app/?token=51fafe800d88d1bf22ffbd6f6b13cac6
 ```
 
 Nomor WhatsApp pada kedua galeri itu sengaja placeholder. Baris project
