@@ -22,8 +22,13 @@ import ThemeToggle from './ThemeToggle';
 const Header = ({ project, themeChoice, cycleTheme }) => {
   const studio = project?.studio_name?.trim();
 
+  // backdrop-blur-md, bukan -xl. Kepala ini melekat di atas layar, jadi blurnya
+  // digambar ulang pada SETIAP frame penggulingan, selebar layar. Di halaman
+  // yang seluruh isinya menggulir melewati foto, itu ongkos yang dibayar
+  // terus-menerus. Radius 24px turun ke 12px kira-kira memotongnya separuh, dan
+  // di belakang latar 70% pekat selisihnya praktis tidak terlihat.
   return (
-    <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-white/70 dark:bg-ash-950/70 border-b border-ash-200 dark:border-ash-800/50 transition-colors duration-tint">
+    <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-white/70 dark:bg-ash-950/70 border-b border-ash-200 dark:border-ash-800/50 transition-colors duration-tint">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-8 h-8 shrink-0 rounded-xl border border-ash-200 bg-ash-100 text-ash-700 dark:border-white/10 dark:bg-white/5 dark:text-ash-200 flex items-center justify-center">

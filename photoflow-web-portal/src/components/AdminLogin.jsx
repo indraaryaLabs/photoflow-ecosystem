@@ -40,7 +40,7 @@ function describeAuthError(error) {
   return 'The server is having trouble. Please try again shortly.';
 }
 
-export default function AdminLogin({ themeChoice, cycleTheme }) {
+export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -93,7 +93,17 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
       if (error) {
         setFeedback({ type: 'error', message: describeAuthError(error) });
       } else {
-        window.location.href = '/dashboard';
+        // Perpindahan sisi klien, bukan muat ulang halaman.
+        //
+        // `window.location.href` di sini membuang seluruh aplikasi yang baru
+        // saja selesai dibangun lalu membangunnya lagi dari nol — tepat pada
+        // saat sesinya sudah ada di tangan dan dashboard-nya sudah bisa
+        // digambar. Yang terlihat orangnya adalah layar putih beberapa detik
+        // sesudah menekan tombol yang seharusnya menyelesaikan pekerjaan.
+        // `ganti` supaya '/' tidak tertinggal di riwayat: tombol kembali dari
+        // dashboard tidak boleh memantulkan orang yang sudah masuk kembali ke
+        // formulir masuk.
+        onNavigate('/dashboard', { ganti: true });
       }
     } else {
       // Validasi nomor WhatsApp sebelum registrasi
@@ -366,7 +376,7 @@ export default function AdminLogin({ themeChoice, cycleTheme }) {
                 <motion.button
                   whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => window.location.href = '/dashboard'}
+                  onClick={() => onNavigate('/dashboard', { ganti: true })}
                   className="relative w-full py-3.5 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm overflow-hidden group shadow-sm transition-all duration-feedback"
                 >
                   <div className="flex items-center justify-center gap-2">
