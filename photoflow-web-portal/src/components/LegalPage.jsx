@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 
 import BrandMark from './BrandMark';
@@ -35,16 +34,6 @@ import {
 export default function LegalPage({ doc, themeChoice, cycleTheme }) {
   const isPrivacy = doc === 'privacy';
   const title = isPrivacy ? 'Privacy Policy' : 'Terms of Service';
-
-  // Judul tab diperbarui karena satu-satunya judul di dokumen ini ditulis di
-  // index.html: "PhotoFlow — Client Portal". Yang menyimpan tautan kebijakan
-  // privasi ke bookmark — dan pengulas Google termasuk — akan mendapat bookmark
-  // yang tidak menyebut kebijakan apa pun.
-  useEffect(() => {
-    const sebelumnya = document.title;
-    document.title = `${title} — PhotoFlow`;
-    return () => { document.title = sebelumnya; };
-  }, [title]);
 
   return (
     <div className="min-h-screen bg-ash-50 dark:bg-ash-950 transition-colors duration-tint font-sans">
