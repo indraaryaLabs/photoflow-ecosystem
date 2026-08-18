@@ -29,7 +29,7 @@ func TestAllowedOriginsMenggantikanBawaanSepenuhnya(t *testing.T) {
 	}
 	// Menggantikan, bukan menambah. Alamat lama yang sudah tidak dipakai tidak
 	// boleh diam-diam tetap diizinkan hanya karena pernah jadi bawaan.
-	if izin["https://photoflow-ecosystem.vercel.app"] {
+	if izin["http://localhost:5173"] {
 		t.Fatal("alamat bawaan masih diizinkan padahal sudah diganti")
 	}
 }

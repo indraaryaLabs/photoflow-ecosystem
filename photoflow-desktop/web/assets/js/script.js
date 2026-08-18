@@ -2836,7 +2836,10 @@ let selectedSyncProjectName = null;
 const btnOpenWebAdmin = document.getElementById('btn-open-web-admin');
 if (btnOpenWebAdmin) {
     btnOpenWebAdmin.addEventListener('click', () => {
-        eel.open_url('https://photoflow-ecosystem.vercel.app/admin')();
+        // Alamatnya ditentukan di config.py, bukan di sini: satu-satunya
+        // alamat yang pernah ditulis langsung di berkas ini, dan karena itu
+        // satu-satunya yang mati diam-diam ketika nama project Vercel diganti.
+        eel.open_web_dashboard()();
     });
 }
 
