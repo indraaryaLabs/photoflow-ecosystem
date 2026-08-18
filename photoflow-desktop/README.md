@@ -122,6 +122,7 @@ Semua nilai di `config.py` bisa ditimpa lewat environment variable:
 | Variabel | Isi |
 |---|---|
 | `PHOTOFLOW_BACKEND_URL` | Alamat API PhotoFlow |
+| `PHOTOFLOW_WEB_APP_URL` | Alamat aplikasi web, dituju tombol "Open Web Dashboard" |
 | `PHOTOFLOW_SUPABASE_URL` | Alamat project Supabase |
 | `PHOTOFLOW_SUPABASE_ANON_KEY` | Anon key Supabase |
 | `PHOTOFLOW_SENTRY_DSN` | DSN Sentry; kosongkan untuk mematikan pelaporan crash |

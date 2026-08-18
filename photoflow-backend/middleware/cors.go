@@ -11,7 +11,18 @@ import (
 //
 // Nilai bawaan ini ada supaya repo dapat di-clone lalu dijalankan tanpa
 // menyiapkan apa pun, sama seperti alasan VITE_API_BASE punya nilai bawaan.
+// Alamat lama SENGAJA masih ada di sini.
+//
+// Mengganti nama project Vercel mengubah alamat frontend, dan selama masa
+// peralihan keduanya hidup: tautan galeri yang sudah beredar di WhatsApp masih
+// menunjuk alamat lama, dan Vercel masih melayaninya. Menghapusnya sekarang
+// berarti setiap klien yang membuka tautan lama melihat galeri kosong tanpa
+// satu pun pesan yang menjelaskan kenapa — kegagalan CORS tidak muncul di
+// layar, hanya di konsol peramban.
+//
+// Boleh dibuang setelah tautan lama tidak lagi dipakai siapa pun.
 var defaultOrigins = []string{
+	"https://photoflow.vercel.app",
 	"https://photoflow-ecosystem.vercel.app",
 	"http://localhost:5173", // Vite dev server
 }

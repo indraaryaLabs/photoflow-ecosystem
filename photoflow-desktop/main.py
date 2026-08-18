@@ -1365,6 +1365,16 @@ def check_for_updates():
 def open_url(url):
     webbrowser.open(url)
 
+
+@eel.expose
+def open_web_dashboard():
+    """Open the photographer's dashboard in the default browser.
+
+    The address lives in config.py so it can be overridden with
+    PHOTOFLOW_WEB_APP_URL, the same as every other address this app talks to.
+    """
+    webbrowser.open(f"{config.WEB_APP_URL}/dashboard")
+
 # ── Custom Bottle Route for Thumbnails ──────────────────────
 import bottle
 
