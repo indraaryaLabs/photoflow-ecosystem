@@ -13,23 +13,22 @@ import {
 /**
  * Kebijakan privasi dan ketentuan layanan.
  *
- * Dua alasan halaman ini ada, dan yang kedua adalah yang mendesak:
+ * Aplikasi ini menyimpan email fotografer dan nomor telepon klien ORANG LAIN.
+ * Menyimpan data seperti itu tanpa satu pun halaman yang mengatakan apa yang
+ * disimpan dan bagaimana menghapusnya bukan kelalaian kecil.
  *
- * 1. Aplikasi ini menyimpan email, nomor telepon klien orang lain, dan sebuah
- *    refresh token Google. Menyimpan semua itu tanpa satu pun halaman yang
- *    mengatakan apa yang disimpan dan bagaimana menghapusnya bukan kelalaian
- *    kecil.
- * 2. Scope `drive.readonly` termasuk scope terbatas milik Google. Selama
- *    aplikasinya belum diverifikasi, layar persetujuan menampilkan peringatan
- *    "Google hasn't verified this app" dan sebagian akun menolaknya sama
- *    sekali. Verifikasi itu MENSYARATKAN kebijakan privasi yang dapat dibuka
- *    publik di domain yang sama, memuat pernyataan Limited Use, dan menyebut
- *    dengan tepat data Google apa yang diambil serta untuk apa. Tanpa halaman
- *    ini, pengajuannya ditolak sebelum ditinjau.
+ * Halaman ini semula ditulis juga untuk memenuhi syarat verifikasi OAuth
+ * Google, yang menuntut kebijakan privasi publik memuat pernyataan Limited Use.
+ * Aplikasi web tidak lagi memakai OAuth sama sekali — folder publik dibaca
+ * lewat API key — jadi alasan itu kini hanya berlaku bagi aplikasi desktop.
+ * Isinya tetap, karena alasan pertama tidak pernah bergantung pada Google.
  *
  * Isinya ditulis dari apa yang benar-benar dilakukan kode, bukan dari templat.
  * Kebijakan yang menjanjikan hal yang tidak dikerjakan aplikasinya — atau
- * mendiamkan yang dikerjakan — lebih buruk daripada tidak ada.
+ * mendiamkan yang dikerjakan — lebih buruk daripada tidak ada. Itu sebabnya
+ * dua hal yang tidak enak disebutkan terus terang di sini: folder yang dibaca
+ * PhotoFlow memang dapat dijangkau siapa pun yang memegang tautannya, dan
+ * thumbnail-nya dimuat peramban klien langsung dari Google.
  */
 export default function LegalPage({ doc, themeChoice, cycleTheme }) {
   const isPrivacy = doc === 'privacy';
@@ -155,8 +154,8 @@ function Privacy() {
         </p>
         <List>
           <Term label="Photographers">
-            create an account, connect a Google Drive folder, and share a
-            gallery link with a client.
+            create an account, point a project at a shared Google Drive folder,
+            and send a gallery link to a client.
           </Term>
           <Term label="Clients">
             open that link and pick their favourite photos. Clients never create
@@ -177,7 +176,7 @@ function Privacy() {
             the Google Drive folder link, and — if you choose to fill them in —
             your WhatsApp number and your client&rsquo;s WhatsApp number.
           </Term>
-          <Term label="Google Drive data">
+          <Term label="Drive folder contents">
             described separately in the next section.
           </Term>
           <Term label="Selection activity">
@@ -201,42 +200,71 @@ function Privacy() {
         </p>
       </Section>
 
-      <Section heading="Google user data">
+      <Section heading="Google Drive data">
         <p>
-          Connecting Google Drive is optional and is always started by you. When
-          you connect it, PhotoFlow requests one scope:
+          <strong className="font-medium text-ash-900 dark:text-ash-100">
+            The web app never signs in to your Google Account.
+          </strong>{' '}
+          You paste a link to a Drive folder you have shared as{' '}
+          <em>Anyone with the link</em>, and PhotoFlow reads that folder the same
+          way any visitor holding the link could — through Google&rsquo;s public
+          API, using PhotoFlow&rsquo;s own application key. There is no Google
+          sign-in, no consent screen, and no permission granted to PhotoFlow over
+          your account. PhotoFlow cannot see any folder you have not shared, and
+          cannot reach anything else in your Drive.
         </p>
-        <List>
-          <Term label="https://www.googleapis.com/auth/drive.readonly">
-            read-only access to your Google Drive.
-          </Term>
-        </List>
+        <p>
+          <strong className="font-medium text-ash-900 dark:text-ash-100">
+            What that means for your photos.
+          </strong>{' '}
+          A folder shared this way is readable by anyone who has its Drive link,
+          whether or not they use PhotoFlow. That is a property of the sharing
+          setting, not of PhotoFlow. Share only folders you are willing to have
+          reachable that way, and unshare them when a project is finished.
+        </p>
         <p>
           <strong className="font-medium text-ash-900 dark:text-ash-100">
             What we read.
           </strong>{' '}
-          Only files inside the folder you point a project at, and only their
-          metadata: file name, file ID, thumbnail link, MIME type, and image
+          Only files inside the folder a project points at, and only their
+          metadata: file name, file ID, thumbnail address, MIME type, and image
           dimensions. PhotoFlow does not download, copy, or store your original
-          photo files, and it does not browse folders you have not linked to a
-          project.
+          photo files.
         </p>
         <p>
           <strong className="font-medium text-ash-900 dark:text-ash-100">
             What we store.
           </strong>{' '}
-          A Google refresh token, so your galleries keep working after you close
-          the browser, plus the file names and thumbnail links of the linked
-          folder as a fallback copy — that copy is what a client sees if Google
-          Drive is unreachable when they open the gallery.
+          The file names and thumbnail addresses of the linked folder. This copy
+          is what a gallery is served from, so opening a gallery does not make
+          your client wait for Google; it is refreshed from Drive in the
+          background and when you ask for a re-sync.
         </p>
         <p>
           <strong className="font-medium text-ash-900 dark:text-ash-100">
-            Why read-only.
+            Thumbnails load from Google directly.
+          </strong>{' '}
+          The images in a gallery are fetched by your client&rsquo;s browser
+          straight from Google&rsquo;s servers, not proxied through PhotoFlow.
+          Google therefore sees those requests, including your client&rsquo;s IP
+          address, in the same way it would for any image hosted on Drive.
+        </p>
+        <p>
+          <strong className="font-medium text-ash-900 dark:text-ash-100">
+            Read-only, always.
           </strong>{' '}
           PhotoFlow never writes to, renames, moves, or deletes anything in your
-          Drive. The permission it asks for makes that impossible, not merely
-          unlikely.
+          Drive. The access it uses makes that impossible, not merely unlikely.
+        </p>
+        <p>
+          <strong className="font-medium text-ash-900 dark:text-ash-100">
+            The desktop app is different.
+          </strong>{' '}
+          PhotoFlow&rsquo;s optional desktop application does sign in with Google,
+          using the read-only Drive scope, so that it can work with folders that
+          are not shared publicly. That sign-in is separate, always started by
+          you, and applies only to the desktop application — installing it is not
+          required to use the web app.
         </p>
         <p>
           <strong className="font-medium text-ash-900 dark:text-ash-100">
@@ -269,8 +297,9 @@ function Privacy() {
           >
             Google Account permissions page
           </a>
-          . Doing so stops all Drive access immediately. Ask us to delete the
-          stored refresh token as well, and it is removed from the database.
+          , if you have ever connected it there. To stop the web app reading a
+          folder, change that folder&rsquo;s sharing back to restricted in Google
+          Drive, or delete the project — either takes effect immediately.
         </p>
       </Section>
 
@@ -308,7 +337,8 @@ function Privacy() {
           <Term label="Supabase">database hosting and authentication.</Term>
           <Term label="Vercel">application hosting and request routing.</Term>
           <Term label="Google">
-            the Drive API, only for accounts that connect it.
+            the Drive API, to read the shared folder behind each project and to
+            serve its thumbnails to your client&rsquo;s browser.
           </Term>
           <Term label="Resend">
             delivery of the notification email, only when notifications are
@@ -336,8 +366,10 @@ function Privacy() {
             until you delete the project. Deletion is immediate and permanent —
             there is no recycle bin.
           </Term>
-          <Term label="Your account and Drive token">
-            until you ask us to delete your account.
+          <Term label="Your account">
+            until you ask us to delete it. If you have ever connected the
+            desktop application, its stored Google token is deleted with the
+            account.
           </Term>
           <Term label="Rate-limit counters">
             a matter of hours; old windows are discarded.
@@ -453,11 +485,18 @@ function Terms() {
 
       <Section heading="Google Drive">
         <p>
-          Connecting Google Drive is optional and read-only. Your use of Google
-          Drive itself remains governed by your agreement with Google, and
-          Google may change or withdraw its API at any time. If it does,
-          galleries fall back to the stored file list and may be out of date
-          until the connection is restored.
+          PhotoFlow reads a Drive folder only when you have shared it as{' '}
+          <em>Anyone with the link</em>. Setting that sharing, and removing it
+          when a shoot is over, is your decision and your responsibility —
+          anyone holding the Drive link can reach those files whether or not
+          they use PhotoFlow. Access is read-only in every case; PhotoFlow never
+          alters the contents of your Drive.
+        </p>
+        <p>
+          Your use of Google Drive itself remains governed by your agreement
+          with Google, and Google may change or withdraw its API at any time. If
+          it does, galleries continue to be served from the stored file list and
+          may become out of date until Drive is reachable again.
         </p>
       </Section>
 
