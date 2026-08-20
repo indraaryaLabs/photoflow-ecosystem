@@ -143,15 +143,26 @@ func GetUserAccessToken(ctx context.Context, db *gorm.DB, userID string) (*oauth
 	return source.Token()
 }
 
-// GDriveStore membaca foto dari Google Drive memakai kredensial OAuth milik
-// satu user.
+// ukuranDasarThumbnail adalah sisi terpanjang yang disimpan di database.
+//
+// Yang tersimpan adalah ukuran DASAR; frontend menyesuaikannya sendiri lewat
+// ubahUkuran() — s400/s800 untuk petak grid, s1600 untuk layar pratinjau.
+const ukuranDasarThumbnail = 400
+
+// GDriveStore membaca foto dari sebuah folder Google Drive.
 //
 // Sebelumnya pembacaan folder memakai service account bersama, sehingga backend
 // memegang satu kredensial yang bisa membaca folder milik siapa pun yang pernah
-// membagikannya. Sekarang tiap fotografer memakai izinnya sendiri, dan token
-// yang bocor tidak membuka Drive orang lain.
+// membagikannya. Kredensialnya kini selalu terikat pada satu permintaan: entah
+// izin milik fotografer sendiri, atau — untuk folder yang memang publik — API
+// key yang tidak memberi akses ke apa pun yang tidak publik.
 type GDriveStore struct {
 	service *drive.Service
+
+	// publik menandai bahwa folder dibaca lewat API key, yang hanya berhasil
+	// kalau folder itu memang dibagikan ke publik. Yang bergantung padanya cuma
+	// bentuk alamat thumbnail; lihat alasannya di ListPhotos.
+	publik bool
 }
 
 // NewGDriveStoreForUser membangun store yang memakai kredensial user tertentu.
@@ -168,6 +179,74 @@ func NewGDriveStoreForUser(ctx context.Context, db *gorm.DB, userID string) (*GD
 	return &GDriveStore{service: service}, nil
 }
 
+// NewPublicGDriveStore membangun store yang membaca folder publik memakai API
+// key, tanpa OAuth sama sekali.
+//
+// API key tidak membuka apa pun yang tidak sudah publik, jadi ia tidak bisa
+// menggantikan izin fotografer untuk folder privat. Yang dihapusnya adalah
+// seluruh ongkos OAuth untuk kasus yang justru paling umum di PhotoFlow:
+// fotografer menempel tautan folder yang memang sudah dibagikan ke kliennya.
+//
+// Tanpa OAuth berarti tanpa consent screen, tanpa refresh token yang
+// kedaluwarsa tiap tujuh hari selama consent screen berstatus Testing, dan
+// tanpa keharusan lolos penilaian keamanan CASA yang dituntut scope
+// drive.readonly untuk naik ke Production.
+func NewPublicGDriveStore(ctx context.Context) (*GDriveStore, error) {
+	apiKey := os.Getenv("GOOGLE_API_KEY")
+	if apiKey == "" {
+		return nil, ErrAPIKeyNotConfigured
+	}
+
+	service, err := drive.NewService(ctx, option.WithAPIKey(apiKey))
+	if err != nil {
+		return nil, fmt.Errorf("gagal inisialisasi klien Drive publik: %w", err)
+	}
+	return &GDriveStore{service: service, publik: true}, nil
+}
+
+// alamatThumbnail memilih bentuk alamat thumbnail yang disimpan.
+//
+// Kosong tetap kosong. Alamat susunan sendiri di bawah bisa dibuat untuk
+// berkas apa pun, tapi membuatnya untuk berkas yang Drive sendiri tidak punya
+// thumbnail-nya berarti menukar tanda "tidak ada thumbnail" yang sudah
+// dipahami frontend dengan gambar rusak.
+func alamatThumbnail(publik bool, fileID, thumbnailLink string) string {
+	if thumbnailLink == "" {
+		return ""
+	}
+
+	if publik {
+		// Untuk folder publik alamatnya DISUSUN dari file ID, bukan diambil
+		// dari thumbnailLink. Google mendokumentasikan thumbnailLink sebagai
+		// alamat berumur pendek — hitungan jam — sedangkan galeri dilayani dari
+		// salinan database yang bisa berumur berminggu-minggu. Bentuk ini
+		// diturunkan dari ID berkas dan tidak punya masa berlaku, jadi galeri
+		// lama tidak berubah jadi deretan gambar rusak.
+		//
+		// Hanya dapat dimuat peramban kalau berkasnya publik, dan di cabang ini
+		// hal itu justru selalu benar.
+		return fmt.Sprintf(
+			"https://drive.google.com/thumbnail?id=%s&sz=w%d",
+			fileID, ukuranDasarThumbnail,
+		)
+	}
+
+	// Jalur OAuth melayani folder yang mungkin privat, dan alamat susunan
+	// sendiri tidak dapat dimuat untuk berkas privat. thumbnailLink dari Google
+	// membawa izinnya sendiri, jadi di sini ia satu-satunya pilihan.
+	//
+	// Drive membatasi thumbnail-nya di "=s220", terlalu kecil untuk petak
+	// galeri pada layar ber-DPR tinggi. Sebelumnya nilainya "=s1000", dipilih
+	// supaya pratinjaunya cukup tajam, lalu alamat yang sama dipakai juga untuk
+	// petak selebar 250-370px. Galeri 2.000 foto karena itu memindahkan sekitar
+	// 140 MB — lebih besar daripada yang sanggup ditahan cache peramban,
+	// sehingga menggulir jauh lalu kembali ke atas berarti mengunduh ulang
+	// semuanya.
+	return strings.Replace(
+		thumbnailLink, "=s220", fmt.Sprintf("=s%d", ukuranDasarThumbnail), -1,
+	)
+}
+
 // ListPhotos membaca isi folder Drive, termasuk format RAW.
 func (g *GDriveStore) ListPhotos(ctx context.Context, sourceRef string) ([]PhotoRef, error) {
 	query := fmt.Sprintf("'%s' in parents and trashed = false", sourceRef)
@@ -178,6 +257,19 @@ func (g *GDriveStore) ListPhotos(ctx context.Context, sourceRef string) ([]Photo
 		req := g.service.Files.List().
 			Context(ctx).
 			Q(query).
+			// Tanpa dua parameter ini, Drive hanya melihat "My Drive" dan
+			// mengabaikan seluruh isi Drive Bersama — bukan dengan error,
+			// melainkan dengan daftar kosong. Fotografer yang menaruh
+			// foldernya di Drive Bersama (lazim pada studio ber-Workspace)
+			// karena itu melihat galeri nol foto tanpa satu pun petunjuk
+			// mengapa, padahal foldernya jelas terbuka di peramban.
+			//
+			// supportsAllDrives memberi tahu Drive bahwa klien ini paham
+			// Drive Bersama; includeItemsFromAllDrives yang benar-benar
+			// memasukkan isinya ke hasil. Keduanya harus ada — yang pertama
+			// saja tidak mengubah apa pun pada Files.List.
+			SupportsAllDrives(true).
+			IncludeItemsFromAllDrives(true).
 			// Tanpa orderBy, Drive mengembalikan berkas dalam urutan yang tidak
 			// dijanjikan apa pun. Akibatnya galeri klien tampil teracak, dan
 			// fotografer tidak bisa merujuk "foto ke-12" karena nomor itu
@@ -193,7 +285,12 @@ func (g *GDriveStore) ListPhotos(ctx context.Context, sourceRef string) ([]Photo
 			// maksimum yang diterima API, dan memangkas jumlah perjalanan
 			// jaringan sepuluh kali lipat.
 			PageSize(1000).
-			Fields("nextPageToken, files(id, name, mimeType, thumbnailLink, webContentLink, imageMediaMetadata(width, height))")
+			// webContentLink pernah ada di sini dan tidak pernah dibaca siapa
+			// pun — tidak oleh galeri, tidak oleh dashboard, tidak oleh desktop
+			// app — sementara ia ikut terkirim untuk SETIAP foto. Pada folder
+			// 2.000 berkas itu 2.000 alamat mubazir di respons terbesar yang
+			// dipunyai aplikasi ini.
+			Fields("nextPageToken, files(id, name, mimeType, thumbnailLink, imageMediaMetadata(width, height))")
 		if pageToken != "" {
 			req = req.PageToken(pageToken)
 		}
@@ -216,28 +313,13 @@ func (g *GDriveStore) ListPhotos(ctx context.Context, sourceRef string) ([]Photo
 			if !isImage(file.Name, file.MimeType) {
 				continue
 			}
-			thumbnail := file.ThumbnailLink
-			if thumbnail != "" {
-				// Drive membatasi thumbnail-nya di "=s220", terlalu kecil untuk
-				// petak galeri pada layar ber-DPR tinggi. Yang disimpan di sini
-				// ukuran DASAR; frontend menyesuaikannya sendiri — s400 atau
-				// s800 untuk petak grid, s1600 untuk layar pratinjau.
-				//
-				// Sebelumnya nilainya "=s1000", dipilih supaya pratinjaunya
-				// cukup tajam, lalu alamat yang sama dipakai juga untuk petak
-				// selebar 250-370px. Galeri 2.000 foto karena itu memindahkan
-				// sekitar 140 MB — lebih besar daripada yang sanggup ditahan
-				// cache peramban, sehingga menggulir jauh lalu kembali ke atas
-				// berarti mengunduh ulang semuanya.
-				thumbnail = strings.Replace(thumbnail, "=s220", "=s400", -1)
-			}
+			thumbnail := alamatThumbnail(g.publik, file.Id, file.ThumbnailLink)
 
 			ref := PhotoRef{
-				ID:             file.Id,
-				Name:           file.Name,
-				MimeType:       file.MimeType,
-				ThumbnailLink:  thumbnail,
-				WebContentLink: file.WebContentLink,
+				ID:            file.Id,
+				Name:          file.Name,
+				MimeType:      file.MimeType,
+				ThumbnailLink: thumbnail,
 			}
 			// Tidak semua berkas membawanya: Drive mengisi imageMediaMetadata
 			// hanya untuk format yang dikenalinya, dan sebagian RAW tidak

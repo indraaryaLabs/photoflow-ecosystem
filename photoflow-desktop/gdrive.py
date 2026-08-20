@@ -118,6 +118,23 @@ def reset_drive_service():
     print("[gdrive] ✓ Drive service cache cleared.")
 
 
+# Google Drive memperlakukan Drive Bersama sebagai wilayah terpisah dari
+# "My Drive". Setiap panggilan yang tidak menyertakan supportsAllDrives
+# berpura-pura wilayah itu tidak ada: listing mengembalikan daftar kosong,
+# operasi per-berkas mengembalikan 404, keduanya tanpa menyebut Drive Bersama
+# sama sekali. Studio yang memakai Google Workspace hampir selalu menaruh
+# arsipnya di sana, jadi tanpa ini seluruh aplikasi tampak rusak bagi mereka
+# dengan gejala yang menyesatkan.
+#
+# Konstanta ini dipakai di SETIAP operasi Drive di berkas ini. Kalau nanti ada
+# operasi baru, ia harus ikut membawanya.
+_ALL_DRIVES = {"supportsAllDrives": True}
+
+# Khusus Files.List, supportsAllDrives saja tidak mengubah apa pun; yang
+# benar-benar memasukkan isi Drive Bersama ke hasil adalah parameter kedua.
+_ALL_DRIVES_LIST = {**_ALL_DRIVES, "includeItemsFromAllDrives": True}
+
+
 # ── LIST FILES ─────────────────────────────────────────────
 
 def list_files(folder_id):
@@ -128,6 +145,7 @@ def list_files(folder_id):
         fields="files(id, name, mimeType, size, modifiedTime)",
         orderBy="folder,name",
         pageSize=500,
+        **_ALL_DRIVES_LIST,
     ).execute()
     return results.get("files", [])
 
@@ -144,6 +162,7 @@ def list_folders_only(folder_id):
         fields="files(id, name, mimeType, modifiedTime)",
         orderBy="name",
         pageSize=500,
+        **_ALL_DRIVES_LIST,
     ).execute()
     return results.get("files", [])
 
@@ -159,6 +178,7 @@ def create_drive_folder(folder_name, parent_id):
             "parents": [parent_id],
         },
         fields="id, name",
+        **_ALL_DRIVES,
     ).execute()
     return {"success": True, "id": folder.get("id"), "name": folder.get("name")}
 
@@ -175,6 +195,7 @@ def move_drive_files(file_ids, current_parent, target_parent):
                 addParents=target_parent,
                 removeParents=current_parent,
                 fields="id, parents",
+                **_ALL_DRIVES,
             ).execute()
             moved += 1
         except Exception as exc:
@@ -194,11 +215,14 @@ def copy_drive_files(file_ids, target_parent):
     copied, failed = 0, []
     for fid in file_ids:
         try:
-            original = service.files().get(fileId=fid, fields="name").execute()
+            original = service.files().get(
+                fileId=fid, fields="name", **_ALL_DRIVES
+            ).execute()
             service.files().copy(
                 fileId=fid,
                 body={"name": original.get("name", "Copy"), "parents": [target_parent]},
                 fields="id",
+                **_ALL_DRIVES,
             ).execute()
             copied += 1
         except Exception as exc:
@@ -215,7 +239,9 @@ def trash_drive_files(file_ids):
     trashed, failed = 0, []
     for fid in file_ids:
         try:
-            service.files().update(fileId=fid, body={"trashed": True}).execute()
+            service.files().update(
+                fileId=fid, body={"trashed": True}, **_ALL_DRIVES
+            ).execute()
             trashed += 1
         except Exception as exc:
             print(f"[gdrive] ✗ Trash failed for {fid}: {exc}")
@@ -229,7 +255,7 @@ def trash_drive_files(file_ids):
 def rename_drive_item(file_id, new_name):
     service = get_drive_service()
     updated = service.files().update(
-        fileId=file_id, body={"name": new_name}, fields="id, name"
+        fileId=file_id, body={"name": new_name}, fields="id, name", **_ALL_DRIVES
     ).execute()
     return {"success": True, "id": updated.get("id"), "name": updated.get("name")}
 
@@ -243,7 +269,9 @@ def download_drive_files(file_ids, local_dest_folder):
     downloaded, failed = 0, []
     for fid in file_ids:
         try:
-            meta = service.files().get(fileId=fid, fields="name, mimeType").execute()
+            meta = service.files().get(
+                fileId=fid, fields="name, mimeType", **_ALL_DRIVES
+            ).execute()
             name = meta.get("name", fid)
             mime = meta.get("mimeType", "")
 
@@ -255,7 +283,7 @@ def download_drive_files(file_ids, local_dest_folder):
                 continue
 
             dest_path = _unique_path(local_dest_folder, name)
-            request = service.files().get_media(fileId=fid)
+            request = service.files().get_media(fileId=fid, **_ALL_DRIVES)
             with open(dest_path, "wb") as handle:
                 downloader = MediaIoBaseDownload(handle, request)
                 done = False
@@ -304,6 +332,7 @@ def upload_files_to_drive(file_paths, target_folder_id):
                 body={"name": os.path.basename(path), "parents": [target_folder_id]},
                 media_body=media,
                 fields="id",
+                **_ALL_DRIVES,
             ).execute()
             uploaded += 1
             print(f"[gdrive] ✓ Uploaded: {os.path.basename(path)}")

@@ -47,8 +47,8 @@ type Project struct {
 	// nil berarti belum pernah ditarik sama sekali, dan dalam keadaan itu Drive
 	// memang harus dibaca sebelum ada yang bisa ditampilkan.
 	PhotosSyncedAt *time.Time `gorm:"column:photos_synced_at" json:"photos_synced_at"`
-	CreatedAt     time.Time  `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt     time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
+	CreatedAt      time.Time  `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt      time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 type Photo struct {
