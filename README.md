@@ -20,6 +20,33 @@ fotografer memanen berkas aslinya lewat aplikasi desktop.
 Ditujukan untuk fotografer lepas yang menangani sedikit klien sekaligus, bukan
 untuk studio besar.
 
+## Tampilan
+
+Yang dilihat klien. Tanpa akun, tanpa aplikasi — satu tautan, lalu memilih.
+Barisnya dihitung agar tinggi tiap baris sama sementara rasio asli tiap foto
+dipertahankan; foto potret dan lanskap boleh berdampingan tanpa dipotong.
+
+![Galeri klien](docs/images/gallery-light.jpg)
+
+Mengirim mengunci galeri, jadi tombolnya tidak langsung mengirim. Sisa kuota
+disebut dengan angka, karena kesalahan yang lebih sering terjadi bukan salah
+tekan melainkan mengirim terlalu dini.
+
+![Konfirmasi sebelum mengirim](docs/images/submit-confirm.jpg)
+
+Yang dilihat fotografer. Empat petak ringkasan menjawab satu pertanyaan yang
+diulang setiap hari: mana yang menunggu saya, dan mana yang menunggu klien.
+
+![Dashboard fotografer](docs/images/dashboard-light.png)
+
+Tema gelap mengikuti setelan sistem, dan dapat ditimpa manual.
+
+![Galeri klien pada mode gelap](docs/images/gallery-dark.jpg)
+
+> Foto pada tangkapan layar di atas adalah gambar contoh yang dibangkitkan
+> program, bukan karya fotografer sungguhan. Antarmukanya sendiri asli — semua
+> gambar ini diambil dari aplikasi yang berjalan, bukan dari mockup.
+
 ## Arsitektur
 
 ```mermaid
@@ -61,7 +88,8 @@ flowchart TB
     Auth --> Handlers
     Handlers --> Store
     Handlers --> DB
-    Store -- "OAuth2 token milik pemilik project" --> Drive
+    Store -- "API key — folder yang dibagikan publik" --> Drive
+    Store -- "OAuth2 — hanya aplikasi desktop" --> Drive
 ```
 
 ### Dua jalur masuk, dua model keamanan
@@ -82,11 +110,36 @@ satu project. Karena tidak ada yang bisa diautentikasi, pertahanannya adalah
 entropi tautan, ditambah pembatasan percobaan gagal per IP untuk mempersulit
 penebakan.
 
-### Alur koneksi Google Drive
+### Membaca folder Drive
+
+Aplikasi web tidak memakai OAuth sama sekali. Fotografer menempel tautan folder
+yang sudah dibagikan sebagai *Anyone with the link*, dan backend membacanya
+lewat API key — tanpa layar persetujuan, tanpa refresh token, tanpa akses apa
+pun ke akun Google siapa pun.
+
+Itu bukan penyederhanaan yang dipilih karena lebih mudah. `drive.readonly`
+termasuk *restricted scope* milik Google: selama consent screen berstatus
+Testing, refresh token dicabut setiap tujuh hari, dan naik ke Production
+menuntut penilaian keamanan CASA berbiaya ribuan dolar per tahun. Untuk
+aplikasi yang folder-nya memang selalu dibagikan publik — begitulah cara
+fotografer mengirimkannya ke klien — seluruh ongkos itu dibayar tanpa membeli
+apa pun.
+
+Ada juga alasan yang lebih mengikat: alamat thumbnail yang dipakai galeri
+dimuat peramban klien langsung dari Google, tanpa kredensial. Folder privat
+karena itu tidak dapat ditampilkan kepada klien, dengan atau tanpa OAuth.
+
+Kalau `GOOGLE_API_KEY` kosong, pembacaan jatuh ke kredensial OAuth pemilik
+project. Lihat `storage.TieredStore`.
+
+### Alur koneksi Google Drive (aplikasi desktop)
+
+Hanya aplikasi desktop yang masih memakai OAuth, karena ia bekerja dengan
+berkas asli, bukan dengan thumbnail publik.
 
 ```mermaid
 sequenceDiagram
-    participant D as Dashboard
+    participant D as Aplikasi desktop
     participant B as Backend
     participant DB as PostgreSQL
     participant G as Google
@@ -112,7 +165,7 @@ dibawa kembali browser.
 | Backend | Go 1.26, Gin, GORM |
 | Database | PostgreSQL (Supabase), Row Level Security |
 | Autentikasi | JWT Supabase, diverifikasi lewat JWKS asimetris (ES256/RS256) |
-| Integrasi | Google Drive API, OAuth2 dengan scope `drive.readonly` |
+| Integrasi | Google Drive API lewat API key; OAuth2 `drive.readonly` khusus aplikasi desktop |
 | Frontend | React 19, Vite, Tailwind |
 | Aplikasi desktop | Python 3.11, Eel, PyInstaller, rawpy |
 | Deploy | Vercel (dua project: backend dan web portal), GitHub Actions untuk build desktop |
@@ -128,7 +181,7 @@ photoflow-backend/
   handlers/     handler HTTP dan logikanya
   middleware/   verifikasi JWT, rate limit, CORS, batas ukuran body
   models/       struct database dan struct input
-  storage/      PhotoStore: GDriveStore dan FakeStore
+  storage/      PhotoStore: GDriveStore, TieredStore, FakeStore
 
 photoflow-web-portal/
   src/components/  AdminLogin, AdminDashboard, galeri klien
@@ -297,11 +350,14 @@ gagal memuat.
 pemeriksaan sesi supaya pembukanya tidak mendapat pemuat berputar maupun
 lemparan ke layar masuk.
 
-Keduanya **wajib** sebelum aplikasi ini diajukan ke verifikasi OAuth Google:
-`drive.readonly` adalah scope terbatas, dan verifikasinya mensyaratkan
-kebijakan privasi publik yang memuat pernyataan Limited Use serta menyebut data
-Google apa yang diambil. Tanpa itu pengajuannya ditolak sebelum ditinjau, dan
-layar persetujuan terus menampilkan "Google hasn't verified this app".
+Keduanya ada karena aplikasi ini menyimpan email fotografer dan nomor telepon
+klien orang lain. Menyimpan data seperti itu tanpa satu pun halaman yang
+menyebutkan apa yang disimpan dan bagaimana menghapusnya bukan kelalaian kecil.
+
+Semula keduanya juga ditulis untuk memenuhi syarat verifikasi OAuth Google.
+Aplikasi web tidak lagi memakai OAuth, jadi alasan itu kini hanya berlaku bagi
+aplikasi desktop — sedangkan alasan pertama tidak pernah bergantung pada
+Google.
 
 Satu variabel frontend yang perlu diisi sebelum pengajuan:
 
@@ -415,3 +471,13 @@ ke "PhotoFlow", jadi fitur ini pilihan.
 Tersimpan di `profiles.studio_name`. Lambangnya tetap lambang PhotoFlow —
 menggantinya menuntut unggahan berkas, dan itu menuntut penyimpanan berkas yang
 belum ada di aplikasi ini.
+
+## Lisensi
+
+Source-available, bukan open source. Kode ini boleh dibaca, dijalankan secara
+lokal untuk dinilai, dan dikutip sebagian dengan atribusi. Memakainya untuk
+menjalankan layanan, mendistribusikan ulang, atau menjualnya menuntut izin
+tertulis lebih dulu.
+
+Alasannya, beserta apa yang berubah kalau nanti dijadikan open source sungguhan,
+ada di [`LICENSE`](LICENSE).

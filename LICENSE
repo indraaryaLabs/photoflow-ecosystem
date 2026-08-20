@@ -1,0 +1,43 @@
+Copyright (c) 2026 indraaryaLabs. All rights reserved.
+
+SOURCE-AVAILABLE, NOT OPEN SOURCE
+
+This repository is published so that its source can be read, reviewed, and
+learned from. That is the only permission granted.
+
+You MAY:
+
+  - read the source code;
+  - clone the repository and run it locally for the purpose of evaluating or
+    studying it;
+  - quote short excerpts with attribution, for example in a review, an article,
+    or a discussion.
+
+You MAY NOT, without prior written permission from the copyright holder:
+
+  - use this software, in whole or in substantial part, to operate a service,
+    whether or not that service is charged for;
+  - redistribute, sublicense, or sell copies of this software or of works
+    derived from it;
+  - remove or alter this notice.
+
+No warranty is given. The software is provided "as is", without warranty of any
+kind, express or implied, and the copyright holder is not liable for any claim,
+damage, or other liability arising from it.
+
+For any permission beyond the above, open an issue on the repository.
+
+---
+
+Why this and not MIT.
+
+PhotoFlow is a portfolio project that may also be offered commercially. A
+permissive licence would allow anyone to run it as a competing service, and
+that decision cannot be undone once made: code released under MIT stays
+available under MIT for everyone who already has a copy.
+
+A source-available notice costs nothing for the purpose this repository mostly
+serves — being read — while leaving the commercial question open.
+
+If the intent later changes to genuine open source, replacing this file with a
+standard licence text is a one-file change. Going the other direction is not.
