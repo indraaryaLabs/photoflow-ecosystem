@@ -7,7 +7,7 @@ import PhotoGrid, { DensityPicker } from './components/PhotoGrid';
 import { useDensity } from './lib/useDensity';
 import FloatingBar from './components/FloatingBar';
 import SubmitConfirmModal from './components/SubmitConfirmModal';
-import { PRIVACY_PATH, TERMS_PATH } from './lib/legal';
+import { ingatGaleri, lupakanGaleri, PRIVACY_PATH, TERMS_PATH } from './lib/legal';
 
 import { API_BASE } from './lib/api';
 import { openedFromRecoveryLink } from './lib/recovery';
@@ -83,6 +83,26 @@ export default function App() {
   // yang berhenti lebih awal, jadi tidak perlu disebut lagi di sini.
   const galeriKlien = isHome && Boolean(token);
   const perluAuth = !galeriKlien;
+
+  // Dicatat SELAMA render, bukan di dalam effect.
+  //
+  // Kaki galeri menautkan ke /privacy lewat <a href> biasa, yang memuat ulang
+  // dokumen. Sebuah effect belum tentu sempat berjalan sebelum peramban
+  // meninggalkan halaman kalau tautannya diketuk cepat, dan yang hilang bukan
+  // kenyamanan: klien mendarat di halaman hukum tanpa jalan pulang ke
+  // galerinya.
+  //
+  // Menuliskannya di sini aman karena sasarannya sessionStorage, bukan state
+  // React — tidak ada render yang dipicu, jadi tidak ada putaran yang bisa
+  // terjadi.
+  if (galeriKlien) {
+    ingatGaleri(token, isPreview);
+  } else if (isDashboardRoute || isLegacyDashboardRoute) {
+    // Fotografer yang berpindah ke dashboardnya sendiri tidak sedang menuju ke
+    // mana pun lewat galeri. Membiarkan catatan lama berarti tombol kembali di
+    // halaman hukum melemparnya ke galeri klien yang sudah lama ia tinggalkan.
+    lupakanGaleri();
+  }
 
   // ─── 1. Auth State ───────────────────────────────────────────
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);

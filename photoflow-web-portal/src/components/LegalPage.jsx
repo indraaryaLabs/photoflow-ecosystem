@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
 import {
+  alamatKembali,
   CONTACT_EMAIL,
   CONTACT_FALLBACK_URL,
   EFFECTIVE_DATE,
@@ -34,12 +35,17 @@ export default function LegalPage({ doc, themeChoice, cycleTheme }) {
   const isPrivacy = doc === 'privacy';
   const title = isPrivacy ? 'Privacy Policy' : 'Terms of Service';
 
+  // Klien yang datang dari galerinya dikembalikan KE galeri itu, bukan ke "/".
+  // Lihat alamatKembali() untuk alasannya dan untuk penjagaan yang membuatnya
+  // tidak bisa jadi pengalihan ke luar.
+  const kembali = alamatKembali();
+
   return (
     <div className="min-h-screen bg-ash-50 dark:bg-ash-950 transition-colors duration-tint font-sans">
       <header className="sticky top-0 z-10 border-b border-ash-200/70 bg-ash-50/85 backdrop-blur dark:border-white/5 dark:bg-ash-950/85">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-5 py-3 sm:px-8">
           <a
-            href="/"
+            href={kembali}
             className="inline-flex items-center gap-2 text-ash-900 dark:text-white"
           >
             <BrandMark size={22} title="PhotoFlow" />
@@ -53,11 +59,11 @@ export default function LegalPage({ doc, themeChoice, cycleTheme }) {
 
       <main className="mx-auto max-w-3xl px-5 pb-24 pt-10 sm:px-8">
         <a
-          href="/"
+          href={kembali}
           className="inline-flex items-center gap-1.5 text-sm text-ash-600 hover:text-ash-900 dark:text-ash-400 dark:hover:text-ash-100 transition-colors"
         >
           <ArrowLeft size={15} strokeWidth={1.75} aria-hidden="true" />
-          Back to PhotoFlow
+          {kembali === '/' ? 'Back to PhotoFlow' : 'Back to your gallery'}
         </a>
 
         <h1 className="mt-6 text-3xl font-semibold tracking-tight text-ash-900 dark:text-white">
