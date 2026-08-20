@@ -34,8 +34,8 @@ func callReopen(t *testing.T, h *Handler, projectID, userID string) int {
 	return rec.Code
 }
 
-// tandaiTerpilih meniru keadaan setelah klien mengirim pilihannya.
-func tandaiTerpilih(t *testing.T, h *Handler, projectID string) {
+// markSelected meniru keadaan setelah klien mengirim pilihannya.
+func markSelected(t *testing.T, h *Handler, projectID string) {
 	t.Helper()
 	if err := h.DB.Model(&models.Photo{}).
 		Where("project_id = ?", projectID).
@@ -49,7 +49,7 @@ func tandaiTerpilih(t *testing.T, h *Handler, projectID string) {
 	}
 }
 
-func jumlahTerpilih(t *testing.T, h *Handler, projectID string) int64 {
+func selectedCount(t *testing.T, h *Handler, projectID string) int64 {
 	t.Helper()
 	var n int64
 	h.DB.Model(&models.Photo{}).
@@ -57,13 +57,13 @@ func jumlahTerpilih(t *testing.T, h *Handler, projectID string) int64 {
 	return n
 }
 
-func TestReopenSelectionMembukaDanMengosongkanPilihan(t *testing.T) {
+func TestReopenSelectionUnlocksAndClearsPicks(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 3)
 	h := &Handler{DB: db}
 
-	tandaiTerpilih(t, h, project.ID)
-	if got := jumlahTerpilih(t, h, project.ID); got != 3 {
+	markSelected(t, h, project.ID)
+	if got := selectedCount(t, h, project.ID); got != 3 {
 		t.Fatalf("persiapan salah: terpilih %d, seharusnya 3", got)
 	}
 
@@ -77,7 +77,7 @@ func TestReopenSelectionMembukaDanMengosongkanPilihan(t *testing.T) {
 
 	// Bagian yang paling mudah terlewat. Membuka status tanpa mengosongkan
 	// pilihan menaruh klien kembali di galeri dengan semua foto tercentang.
-	if got := jumlahTerpilih(t, h, project.ID); got != 0 {
+	if got := selectedCount(t, h, project.ID); got != 0 {
 		t.Fatalf("masih ada %d foto tercentang, seharusnya 0", got)
 	}
 
@@ -93,7 +93,7 @@ func TestReopenSelectionMenolakBukanPemilik(t *testing.T) {
 	project := seedProject(t, db, 2)
 	h := &Handler{DB: db}
 
-	tandaiTerpilih(t, h, project.ID)
+	markSelected(t, h, project.ID)
 
 	// UUID sah, tapi milik orang lain. Balasannya 404, bukan 403: membedakan
 	// "tidak ada" dari "bukan milikmu" memberi tahu penebak bahwa project
@@ -105,7 +105,7 @@ func TestReopenSelectionMenolakBukanPemilik(t *testing.T) {
 	if got := projectStatus(t, db, project.ID); got != models.StatusSubmitted {
 		t.Fatalf("status %q, seharusnya tetap %q", got, models.StatusSubmitted)
 	}
-	if got := jumlahTerpilih(t, h, project.ID); got != 2 {
+	if got := selectedCount(t, h, project.ID); got != 2 {
 		t.Fatalf("terpilih %d, seharusnya tetap 2", got)
 	}
 }

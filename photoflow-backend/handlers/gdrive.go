@@ -28,7 +28,7 @@ func (h *Handler) DriveToken(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": code, "code": code})
 			return
 		}
-		log.Printf("🔴 GDrive access token untuk user %s: %v", userID, err)
+		log.Printf("[ERROR] GDrive access token untuk user %s: %v", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghasilkan access token"})
 		return
 	}
@@ -90,7 +90,7 @@ func (h *Handler) GalleryPhotos(c *gin.Context) {
 	// thumbnail_url kosong". Itu sudah tidak berlaku sejak markSelection
 	// menandai pilihan alih-alih mengganti barisnya: salinannya kini utuh,
 	// termasuk untuk galeri yang sudah disubmit.
-	if !perluBacaDrive(project, c.Query("refresh") == "1") {
+	if !shouldReadDrive(project, c.Query("refresh") == "1") {
 		h.respondWithStoredPhotos(c, project, "")
 		return
 	}
@@ -103,7 +103,7 @@ func (h *Handler) GalleryPhotos(c *gin.Context) {
 
 	files, err := store.ListPhotos(c.Request.Context(), project.DriveFolderID)
 	if err != nil {
-		log.Printf("⚠️ Baca folder Drive %s untuk galeri %s: %v", project.DriveFolderID, project.ID, err)
+		log.Printf("[WARN] Baca folder Drive %s untuk galeri %s: %v", project.DriveFolderID, project.ID, err)
 		h.respondWithStoredPhotos(c, project, driveFallbackReason(err))
 		return
 	}
@@ -111,28 +111,28 @@ func (h *Handler) GalleryPhotos(c *gin.Context) {
 	// Hasilnya disimpan supaya kunjungan berikutnya tidak perlu menunggu Drive
 	// lagi. Kegagalannya tidak menggagalkan balasan: yang diminta klien adalah
 	// daftar fotonya, dan daftar itu sudah ada di tangan.
-	if err := h.simpanSalinanFoto(project, files); err != nil {
-		log.Printf("⚠️ Gagal menyimpan salinan foto project %s: %v", project.ID, err)
+	if err := h.storePhotoCopy(project, files); err != nil {
+		log.Printf("[WARN] Gagal menyimpan salinan foto project %s: %v", project.ID, err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"files": files, "source": "drive"})
 }
 
-// umurSalinanMaks menentukan kapan salinan dianggap layak disegarkan.
+// maxCopyAge menentukan kapan salinan dianggap layak disegarkan.
 //
 // Sepuluh menit adalah kompromi: cukup pendek sehingga foto yang baru
 // ditambahkan ke folder muncul dalam satu sesi kerja, cukup panjang sehingga
 // satu galeri yang dibuka berkali-kali tidak memanggil Drive berkali-kali.
-const umurSalinanMaks = 10 * time.Minute
+const maxCopyAge = 10 * time.Minute
 
-// jedaSegarMin menahan pembacaan Drive yang terlalu berdekatan.
+// minRefreshInterval menahan pembacaan Drive yang terlalu berdekatan.
 //
 // Rute ini publik: siapa pun yang memegang magic link dapat menambahkan
 // `?refresh=1`. Tanpa jeda, satu orang yang menyegarkan halaman berulang kali
 // akan memanggil Drive berulang kali atas nama fotografernya.
-const jedaSegarMin = time.Minute
+const minRefreshInterval = time.Minute
 
-// perluBacaDrive memutuskan apakah Drive harus dibaca untuk permintaan ini.
+// shouldReadDrive memutuskan apakah Drive harus dibaca untuk permintaan ini.
 //
 // Salinan yang sudah lawas TIDAK membuat klien menunggu. Ia tetap disajikan
 // apa adanya, ditandai `stale`, dan frontend yang meminta penyegarannya lewat
@@ -141,29 +141,29 @@ const jedaSegarMin = time.Minute
 //
 // Jadi hanya ada dua alasan membaca Drive di sini: belum ada salinan sama
 // sekali, atau permintaan penyegaran yang jedanya sudah lewat.
-func perluBacaDrive(project models.Project, diminta bool) bool {
+func shouldReadDrive(project models.Project, requested bool) bool {
 	if project.PhotosSyncedAt == nil {
 		return true
 	}
-	return diminta && time.Since(*project.PhotosSyncedAt) >= jedaSegarMin
+	return requested && time.Since(*project.PhotosSyncedAt) >= minRefreshInterval
 }
 
-// simpanSalinanFoto memperbarui daftar foto tersimpan dari hasil pembacaan Drive.
+// storePhotoCopy memperbarui daftar foto tersimpan dari hasil pembacaan Drive.
 //
 // Pilihan klien dipertahankan: baris yang namanya masih ada di folder tetap
 // membawa is_selected-nya. Itu sebabnya daftarnya tidak sekadar dihapus lalu
 // disisipkan ulang.
-func (h *Handler) simpanSalinanFoto(project models.Project, files []storage.PhotoRef) error {
+func (h *Handler) storePhotoCopy(project models.Project, files []storage.PhotoRef) error {
 	return h.DB.Transaction(func(tx *gorm.DB) error {
-		var terpilih []string
+		var selected []string
 		if err := tx.Model(&models.Photo{}).
 			Where("project_id = ? AND is_selected", project.ID).
-			Pluck("file_name", &terpilih).Error; err != nil {
+			Pluck("file_name", &selected).Error; err != nil {
 			return err
 		}
-		pilihan := make(map[string]bool, len(terpilih))
-		for _, n := range terpilih {
-			pilihan[n] = true
+		picks := make(map[string]bool, len(selected))
+		for _, n := range selected {
+			picks[n] = true
 		}
 
 		if err := tx.Where("project_id = ?", project.ID).Delete(&models.Photo{}).Error; err != nil {
@@ -176,10 +176,10 @@ func (h *Handler) simpanSalinanFoto(project models.Project, files []storage.Phot
 				ProjectID:    project.ID,
 				FileName:     f.Name,
 				ThumbnailURL: f.ThumbnailLink,
-				IsSelected:   pilihan[f.Name],
+				IsSelected:   picks[f.Name],
 			})
 		}
-		if err := sisipkanFoto(tx, baru); err != nil {
+		if err := insertPhotos(tx, baru); err != nil {
 			return err
 		}
 
@@ -213,7 +213,7 @@ func (h *Handler) respondWithStoredPhotos(c *gin.Context, project models.Project
 	// salinan ini akan tampil dengan susunan berbeda dari yang dilihat klien
 	// sebelumnya, pada saat yang justru sudah membingungkan.
 	if err := h.DB.Where("project_id = ?", project.ID).Order("file_name").Find(&photos).Error; err != nil {
-		log.Printf("🔴 Gagal memuat foto tersimpan project %s: %v", project.ID, err)
+		log.Printf("[ERROR] Gagal memuat foto tersimpan project %s: %v", project.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat daftar foto"})
 		return
 	}
@@ -245,7 +245,7 @@ func (h *Handler) respondWithStoredPhotos(c *gin.Context, project models.Project
 			// Keputusannya dibuat di sini, bukan di peramban, supaya ambangnya
 			// hanya ada di satu tempat.
 			"stale": project.PhotosSyncedAt == nil ||
-				time.Since(*project.PhotosSyncedAt) >= umurSalinanMaks,
+				time.Since(*project.PhotosSyncedAt) >= maxCopyAge,
 		})
 		return
 	}
@@ -278,7 +278,7 @@ func (h *Handler) DriveStatus(c *gin.Context) {
 			// Drive mungkin sedang tidak dapat dihubungi. Itu bukan berarti
 			// izinnya tidak ada, jadi jangan laporkan sebagai "belum terhubung"
 			// — nanti fotografer diminta menghubungkan ulang tanpa alasan.
-			log.Printf("⚠️ Status Drive user %s: %v", userID, err)
+			log.Printf("[WARN] Status Drive user %s: %v", userID, err)
 			c.JSON(http.StatusOK, gin.H{"connected": false, "unknown": true})
 			return
 		}

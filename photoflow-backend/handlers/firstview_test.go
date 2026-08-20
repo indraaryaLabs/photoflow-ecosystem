@@ -41,18 +41,18 @@ func firstViewedAt(t *testing.T, db *gorm.DB, projectID string) *time.Time {
 	return p.FirstViewedAt
 }
 
-// handlerGaleri membangun Handler beserta limiter-nya.
+// galleryHandler membangun Handler beserta limiter-nya.
 //
 // GetGallery menyentuh limiter hanya pada jalur "tidak ditemukan", dan tes di
 // berkas ini tidak pernah melewatinya — tapi Handler tanpa limiter akan panic
 // kalau suatu saat ada yang melewatinya, dan panic itu akan terbaca sebagai
 // kerusakan di tempat yang salah.
-func handlerGaleri(t *testing.T, db *gorm.DB) *Handler {
+func galleryHandler(t *testing.T, db *gorm.DB) *Handler {
 	t.Helper()
 	return &Handler{DB: db, Limiter: middleware.NewLimiter(db, 0, 1_000_000)}
 }
 
-func TestGaleriBaruBelumPernahDibuka(t *testing.T) {
+func TestNewGalleryHasNeverBeenOpened(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 2)
 
@@ -63,10 +63,10 @@ func TestGaleriBaruBelumPernahDibuka(t *testing.T) {
 	}
 }
 
-func TestMembukaGaleriMenandaiWaktunya(t *testing.T) {
+func TestOpeningGalleryStampsTheTime(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 2)
-	h := handlerGaleri(t, db)
+	h := galleryHandler(t, db)
 
 	if code := openGallery(t, h, project.MagicLinkToken, ""); code != 200 {
 		t.Fatalf("kode %d, seharusnya 200", code)
@@ -77,10 +77,10 @@ func TestMembukaGaleriMenandaiWaktunya(t *testing.T) {
 	}
 }
 
-func TestKunjunganKeduaTidakMenggeserWaktuPertama(t *testing.T) {
+func TestSecondVisitDoesNotMoveTheFirstTimestamp(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 2)
-	h := handlerGaleri(t, db)
+	h := galleryHandler(t, db)
 
 	openGallery(t, h, project.MagicLinkToken, "")
 	pertama := firstViewedAt(t, db, project.ID)
@@ -101,10 +101,10 @@ func TestKunjunganKeduaTidakMenggeserWaktuPertama(t *testing.T) {
 	}
 }
 
-func TestPratinjauFotograferTidakDihitung(t *testing.T) {
+func TestPhotographerPreviewsAreNotCounted(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 2)
-	h := handlerGaleri(t, db)
+	h := galleryHandler(t, db)
 
 	// Tombol "Open client gallery" di dashboard membuka tautan yang sama
 	// persis dengan yang dipegang klien. Tanpa penanda ini, tandanya menyala
@@ -114,19 +114,19 @@ func TestPratinjauFotograferTidakDihitung(t *testing.T) {
 		t.Fatalf("kode %d, seharusnya 200", code)
 	}
 
-	if waktu := firstViewedAt(t, db, project.ID); waktu != nil {
-		t.Fatalf("pratinjau fotografer ikut tercatat: %v", waktu)
+	if at := firstViewedAt(t, db, project.ID); at != nil {
+		t.Fatalf("pratinjau fotografer ikut tercatat: %v", at)
 	}
 }
 
-func TestPratinjauTidakMenghapusTandaYangSudahAda(t *testing.T) {
+func TestPreviewsDoNotClearExistingMarks(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 2)
-	h := handlerGaleri(t, db)
+	h := galleryHandler(t, db)
 
 	openGallery(t, h, project.MagicLinkToken, "")
-	sebelum := firstViewedAt(t, db, project.ID)
-	if sebelum == nil {
+	before := firstViewedAt(t, db, project.ID)
+	if before == nil {
 		t.Fatal("persiapan gagal: kunjungan klien tidak tercatat")
 	}
 
@@ -137,7 +137,7 @@ func TestPratinjauTidakMenghapusTandaYangSudahAda(t *testing.T) {
 	}
 }
 
-func TestKunjunganBersamaanTidakSalingMenimpa(t *testing.T) {
+func TestConcurrentVisitsDoNotOverwriteEachOther(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 2)
 
@@ -157,7 +157,7 @@ func TestKunjunganBersamaanTidakSalingMenimpa(t *testing.T) {
 	mulai.Add(1)
 	selesai.Add(n)
 
-	berhasil := make([]int64, n)
+	ok := make([]int64, n)
 	for i := 0; i < n; i++ {
 		go func(i int) {
 			defer selesai.Done()
@@ -165,7 +165,7 @@ func TestKunjunganBersamaanTidakSalingMenimpa(t *testing.T) {
 			res := db.Model(&models.Project{}).
 				Where("id = ? AND first_viewed_at IS NULL", project.ID).
 				Update("first_viewed_at", time.Now())
-			berhasil[i] = res.RowsAffected
+			ok[i] = res.RowsAffected
 		}(i)
 	}
 
@@ -173,7 +173,7 @@ func TestKunjunganBersamaanTidakSalingMenimpa(t *testing.T) {
 	selesai.Wait()
 
 	var total int64
-	for _, r := range berhasil {
+	for _, r := range ok {
 		total += r
 	}
 	if total != 1 {
@@ -184,10 +184,10 @@ func TestKunjunganBersamaanTidakSalingMenimpa(t *testing.T) {
 	}
 }
 
-func TestDelapanKunjunganBersamaanTidakMenghasilkanError(t *testing.T) {
+func TestEightConcurrentVisitsProduceNoError(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 2)
-	h := handlerGaleri(t, db)
+	h := galleryHandler(t, db)
 
 	const n = 8
 	var mulai, selesai sync.WaitGroup

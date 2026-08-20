@@ -22,7 +22,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	once.Do(func() {
 		ginApp, setupErr = app.SetupRouter()
 		if setupErr != nil {
-			log.Printf("🔴 Gagal menyiapkan server: %v", setupErr)
+			log.Printf("[ERROR] Gagal menyiapkan server: %v", setupErr)
 		}
 	})
 

@@ -43,7 +43,7 @@ func siapkanSkema(t *testing.T, conn *gorm.DB) {
 	}
 }
 
-func TestPeriksaDiamSaatSkemaSudahSesuai(t *testing.T) {
+func TestCheckIsSilentWhenSchemaMatches(t *testing.T) {
 	conn := dbUji(t)
 	siapkanSkema(t, conn)
 
@@ -56,7 +56,7 @@ func TestPeriksaDiamSaatSkemaSudahSesuai(t *testing.T) {
 	}
 }
 
-func TestPeriksaMenemukanKolomYangHilang(t *testing.T) {
+func TestCheckFindsMissingColumn(t *testing.T) {
 	conn := dbUji(t)
 	siapkanSkema(t, conn)
 
@@ -76,7 +76,7 @@ func TestPeriksaMenemukanKolomYangHilang(t *testing.T) {
 	}
 }
 
-func TestPeriksaMenemukanTabelYangHilang(t *testing.T) {
+func TestCheckFindsMissingTable(t *testing.T) {
 	conn := dbUji(t)
 	siapkanSkema(t, conn)
 
@@ -93,7 +93,7 @@ func TestPeriksaMenemukanTabelYangHilang(t *testing.T) {
 	}
 }
 
-func TestPeriksaMengabaikanKolomEkstraDiDatabase(t *testing.T) {
+func TestCheckIgnoresExtraColumns(t *testing.T) {
 	conn := dbUji(t)
 	siapkanSkema(t, conn)
 

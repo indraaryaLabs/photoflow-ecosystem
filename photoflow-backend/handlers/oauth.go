@@ -57,7 +57,9 @@ const oauthSuccessPage = `
             max-width: 480px;
             box-shadow: 0 25px 60px rgba(0,0,0,0.5);
         }
-        .icon { font-size: 64px; margin-bottom: 24px; }
+        /* line-height 0 supaya tinggi baris teks tidak menambah ruang di bawah
+           SVG, yang membuat jarak ke judul tidak sama dengan yang diminta. */
+        .icon { line-height: 0; margin-bottom: 24px; }
         h1 {
             font-size: 24px;
             font-weight: 700;
@@ -74,7 +76,17 @@ const oauthSuccessPage = `
 </head>
 <body>
     <div class="card">
-        <div class="icon">✅</div>
+        <!-- SVG, bukan emoji. Emoji digambar oleh sistem operasi pembacanya,
+             jadi bentuk, warna, dan ukurannya berbeda di tiap perangkat dan
+             tidak dapat diselaraskan dengan halaman ini. -->
+        <div class="icon" aria-hidden="true">
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none"
+                 stroke="#6ee7b7" stroke-width="1.75"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="m8.5 12.5 2.5 2.5 4.5-5"></path>
+            </svg>
+        </div>
         <h1>Koneksi Google Drive Berhasil!</h1>
         <p>Akun Google Anda telah terhubung dengan <span class="highlight">PhotoFlow</span>.</p>
         <p style="margin-top: 16px;">Silakan kembali ke aplikasi PhotoFlow dan lanjutkan pekerjaan Anda.</p>
@@ -113,7 +125,7 @@ func (h *Handler) GoogleAuthURL(c *gin.Context) {
 
 	state, err := newOAuthState()
 	if err != nil {
-		log.Printf("🔴 %v", err)
+		log.Printf("[ERROR] %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memulai koneksi Google Drive"})
 		return
 	}
@@ -126,14 +138,14 @@ func (h *Handler) GoogleAuthURL(c *gin.Context) {
 		ExpiresAt: time.Now().Add(oauthStateTTL),
 	}
 	if err := h.DB.Create(&record).Error; err != nil {
-		log.Printf("🔴 Gagal menyimpan state OAuth: %v", err)
+		log.Printf("[ERROR] Gagal menyimpan state OAuth: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memulai koneksi Google Drive"})
 		return
 	}
 
 	// Buang state kedaluwarsa sekalian; tidak butuh cron untuk tabel sekecil ini.
 	if err := h.DB.Where("expires_at < ?", time.Now()).Delete(&models.OAuthState{}).Error; err != nil {
-		log.Printf("⚠️ Gagal membersihkan state OAuth kedaluwarsa: %v", err)
+		log.Printf("[WARN] Gagal membersihkan state OAuth kedaluwarsa: %v", err)
 	}
 
 	// Ke mana user dikembalikan setelah menyetujui. Aplikasi desktop tidak
@@ -150,7 +162,7 @@ func (h *Handler) GoogleAuthURL(c *gin.Context) {
 		}
 		if err := h.DB.Model(&models.OAuthState{}).
 			Where("state = ?", state).Update("return_to", returnTo).Error; err != nil {
-			log.Printf("⚠️ Gagal menyimpan return_to: %v", err)
+			log.Printf("[WARN] Gagal menyimpan return_to: %v", err)
 		}
 	}
 
@@ -184,14 +196,14 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 	if err != nil {
 		// Pesannya sengaja seragam: pemanggil tidak perlu tahu apakah state-nya
 		// tidak pernah ada, sudah terpakai, atau kedaluwarsa.
-		log.Printf("⚠️ State OAuth ditolak: %v", err)
+		log.Printf("[WARN] State OAuth ditolak: %v", err)
 		c.String(http.StatusBadRequest, "Permintaan koneksi tidak valid atau sudah kedaluwarsa. Silakan ulangi dari aplikasi.")
 		return
 	}
 
 	token, err := h.OAuth.Exchange(c.Request.Context(), code)
 	if err != nil {
-		log.Printf("🔴 OAuth Exchange Error: %v", err)
+		log.Printf("[ERROR] OAuth Exchange Error: %v", err)
 		c.String(http.StatusInternalServerError, "Gagal menukar authorization code.")
 		return
 	}
@@ -199,12 +211,12 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 	// Safety: Jika Google tidak memberikan refresh_token (edge case),
 	// biarkan token lama di database tetap utuh, jangan overwrite dengan string kosong.
 	if token.RefreshToken == "" {
-		log.Printf("⚠️ Refresh Token kosong untuk user %s. Token lama dipertahankan.", userID)
+		log.Printf("[WARN] Refresh Token kosong untuk user %s. Token lama dipertahankan.", userID)
 	} else {
 		result := h.DB.Model(&models.Profile{}).Where("id = ?", userID).
 			Update("gdrive_refresh_token", token.RefreshToken)
 		if result.Error != nil {
-			log.Printf("🔴 DB Update Error: %v", result.Error)
+			log.Printf("[ERROR] DB Update Error: %v", result.Error)
 			c.String(http.StatusInternalServerError, "Gagal menyimpan refresh token ke database.")
 			return
 		}
@@ -212,7 +224,7 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 			c.String(http.StatusNotFound, "Profile dengan user_id tersebut tidak ditemukan.")
 			return
 		}
-		log.Printf("✅ Refresh Token berhasil disimpan untuk user: %s", userID)
+		log.Printf("[INFO] Refresh Token berhasil disimpan untuk user: %s", userID)
 	}
 
 	if returnTo != "" {
