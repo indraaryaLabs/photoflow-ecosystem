@@ -72,7 +72,7 @@ func callSubmit(t *testing.T, h *Handler, magicLink string, names []string) (int
 	return rec.Code, rec.Body.String()
 }
 
-func TestSubmitTetapBerhasilWalauEmailGagal(t *testing.T) {
+func TestSubmitStillSucceedsWhenEmailFails(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 2)
 	m := &mailerPalsu{err: errors.New("penyedia email sedang mati")}
@@ -106,7 +106,7 @@ func TestSubmitTidakPanicSaatMailerBelumDisetel(t *testing.T) {
 	}
 }
 
-func TestSubmitTidakMengirimEmailSaatGaleriTerkunci(t *testing.T) {
+func TestSubmitSendsNoEmailWhenGalleryIsLocked(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 2)
 	m := &mailerPalsu{}
@@ -130,7 +130,7 @@ func TestSubmitTidakMengirimEmailSaatGaleriTerkunci(t *testing.T) {
 
 // ── Isi pemberitahuannya ────────────────────────────────────────────
 
-func TestIsiPemberitahuanMenyebutKlienDanJumlah(t *testing.T) {
+func TestNotificationNamesClientAndCount(t *testing.T) {
 	subjek, badan := notify.SelectionSubmitted("The Hartleys", "Engagement", 12, "https://x/dashboard")
 
 	if !strings.Contains(subjek, "The Hartleys") || !strings.Contains(subjek, "12") {
@@ -146,14 +146,14 @@ func TestIsiPemberitahuanMenyebutKlienDanJumlah(t *testing.T) {
 	}
 }
 
-func TestIsiPemberitahuanMemakaiBentukTunggalUntukSatuFoto(t *testing.T) {
+func TestNotificationUsesSingularForOnePhoto(t *testing.T) {
 	subjek, _ := notify.SelectionSubmitted("Dita", "Prewedding", 1, "https://x")
 	if strings.Contains(subjek, "1 photos") {
 		t.Fatalf("subjek = %q, seharusnya bentuk tunggal", subjek)
 	}
 }
 
-func TestIsiPemberitahuanMeloloskanHTMLDariNama(t *testing.T) {
+func TestNotificationEscapesHTMLInNames(t *testing.T) {
 	// Nama klien dan nama project datang dari isian orang dan masuk ke dokumen
 	// HTML. Tanpa di-escape, satu nama berisi tag ikut dijalankan di kotak
 	// masuk pembacanya.

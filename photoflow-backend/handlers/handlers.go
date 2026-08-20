@@ -57,32 +57,32 @@ func New(db *gorm.DB, oauthConfig *oauth2.Config, limiter *middleware.Limiter) *
 			// Berjenjang: API key untuk folder publik, kredensial fotografer
 			// untuk sisanya. Tidak mengembalikan error di sini — jalur mana
 			// yang dipakai baru diketahui setelah folder yang diminta jelas.
-			return storage.NewStoreBerjenjang(ctx, db, userID), nil
+			return storage.NewTieredStore(ctx, db, userID), nil
 		},
 		Mailer:     notify.FromEnv(),
 		AppBaseURL: strings.TrimRight(os.Getenv("APP_BASE_URL"), "/"),
 	}
 }
 
-// batasSisip membatasi berapa baris foto yang masuk dalam satu perintah INSERT.
+// insertBatchSize membatasi berapa baris foto yang masuk dalam satu perintah INSERT.
 //
 // Satu pemotretan berisi 2.000 foto adalah ukuran yang biasa, dan menyisipkan
 // seluruhnya dalam satu perintah punya dua akibat: perintahnya lambat disusun
 // dan dikirim, dan jumlah parameternya tumbuh lurus dengan jumlah foto —
 // Postgres berhenti di 65.535, yang pada lima kolom tercapai di sekitar 13.000
 // foto dan menggagalkan seluruh sinkronisasi sekaligus.
-const batasSisip = 500
+const insertBatchSize = 500
 
-// sisipkanFoto menyimpan daftar foto secara bertahap.
+// insertPhotos menyimpan daftar foto secara bertahap.
 //
 // Menerima *gorm.DB apa pun, termasuk transaksi, karena tiga dari empat
 // pemanggilnya berjalan di dalam transaksi yang lebih dulu menghapus daftar
 // lama.
-func sisipkanFoto(db *gorm.DB, photos []models.Photo) error {
+func insertPhotos(db *gorm.DB, photos []models.Photo) error {
 	if len(photos) == 0 {
 		return nil
 	}
-	return db.CreateInBatches(photos, batasSisip).Error
+	return db.CreateInBatches(photos, insertBatchSize).Error
 }
 
 // errGalleryLocked dikembalikan ketika galeri sudah disubmit sebelumnya.
@@ -207,25 +207,25 @@ func markSelection(tx *gorm.DB, projectID string, selected []models.Photo) error
 	// aplikasi desktop tidak akan pernah tahu foto itu dipilih. Ini terjadi
 	// ketika daftar isi folder berubah setelah project dibuat, atau ketika
 	// project dibuat saat Drive sedang tidak terbaca sehingga salinannya kosong.
-	var tersimpan []string
+	var stored []string
 	if err := tx.Model(&models.Photo{}).
 		Where("project_id = ? AND file_name IN ?", projectID, names).
-		Pluck("file_name", &tersimpan).Error; err != nil {
+		Pluck("file_name", &stored).Error; err != nil {
 		return err
 	}
-	ada := make(map[string]struct{}, len(tersimpan))
-	for _, nama := range tersimpan {
-		ada[nama] = struct{}{}
+	ada := make(map[string]struct{}, len(stored))
+	for _, name := range stored {
+		ada[name] = struct{}{}
 	}
 
 	kurang := make([]models.Photo, 0)
-	for _, nama := range names {
-		if _, ok := ada[nama]; ok {
+	for _, name := range names {
+		if _, ok := ada[name]; ok {
 			continue
 		}
 		kurang = append(kurang, models.Photo{
 			ProjectID:  projectID,
-			FileName:   nama,
+			FileName:   name,
 			IsSelected: true,
 			// Thumbnail-nya tidak diketahui di jalur ini: yang dikirim klien
 			// hanya nama berkas. Baris yang lahir dari sini memang tidak punya
@@ -233,5 +233,5 @@ func markSelection(tx *gorm.DB, projectID string, selected []models.Photo) error
 			ThumbnailURL: "",
 		})
 	}
-	return sisipkanFoto(tx, kurang)
+	return insertPhotos(tx, kurang)
 }

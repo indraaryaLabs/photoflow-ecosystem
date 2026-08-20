@@ -42,7 +42,7 @@ func NewLimiter(db *gorm.DB, window time.Duration, max int) *Limiter {
 	headers := defaultClientIPHeaders
 	if override := strings.TrimSpace(os.Getenv(clientIPHeaderEnv)); override != "" {
 		headers = []string{strings.ToLower(override)}
-		log.Printf("ℹ️ Rate limit: sumber IP klien di-override ke header %q", headers[0])
+		log.Printf("[INFO] Rate limit: sumber IP klien di-override ke header %q", headers[0])
 	}
 	return &Limiter{db: db, window: window, max: max, headers: headers}
 }
@@ -64,7 +64,7 @@ func (l *Limiter) TooManyFailures(c *gin.Context) bool {
 		// siapa pun akan mengunci galeri untuk SELURUH klien. Salah konfigurasi
 		// tidak boleh berubah jadi pemadaman, jadi di sini limiternya dilewati
 		// dan dicatat keras. Endpoint-nya masih dilindungi entropi token.
-		log.Printf("🔴 Rate limit DILEWATI: IP klien tidak dapat ditentukan. " +
+		log.Printf("[ERROR] Rate limit DILEWATI: IP klien tidak dapat ditentukan. " +
 			"Periksa GET /api/debug/client-ip lalu setel " + clientIPHeaderEnv)
 		return false
 	}
@@ -85,7 +85,7 @@ RETURNING hit_count`,
 	if err != nil {
 		// Gagal menghitung bukan alasan menolak pengunjung. Sama seperti di atas:
 		// lebih baik limiter tidak aktif daripada galeri mati.
-		log.Printf("🔴 Rate limit: gagal memperbarui penghitung: %v", err)
+		log.Printf("[ERROR] Rate limit: gagal memperbarui penghitung: %v", err)
 		return false
 	}
 
@@ -96,7 +96,7 @@ RETURNING hit_count`,
 			`DELETE FROM rate_limits WHERE window_start < now() - make_interval(secs => ?)`,
 			l.window.Seconds()*2,
 		).Error; err != nil {
-			log.Printf("⚠️ Rate limit: gagal membersihkan baris kedaluwarsa: %v", err)
+			log.Printf("[WARN] Rate limit: gagal membersihkan baris kedaluwarsa: %v", err)
 		}
 	}
 
