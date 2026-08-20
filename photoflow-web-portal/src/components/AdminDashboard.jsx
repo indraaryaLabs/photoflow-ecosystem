@@ -3,11 +3,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Copy, Check, Plus, FolderOpen, Link as LinkIcon, Clock,
   CheckCircle2, Loader2, MoreVertical, Edit, Trash2, X, AlertOctagon,
-  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks, KeyRound, Settings
+  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, Info, RefreshCw, ListChecks, KeyRound, Settings
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { API_BASE } from '../lib/api';
-import { sudahDitawari, tandaiSudahDitawari } from '../lib/driveOnboarding';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
 import SelectionListModal from './SelectionListModal';
@@ -345,7 +344,12 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
         // yang lain menuntut membetulkan izin folder. Tindakannya tidak sama.
         if (body?.code === 'drive_not_connected' || body?.code === 'drive_reconnect_required') {
           setDriveConnected(false);
-          showToast('Google Drive is not connected yet. Use the button above to connect it first.', 'error');
+          // Dua jalan keluar, dan yang pertama jauh lebih ringan. Menyebut
+          // hanya "hubungkan Google Drive" akan mengarahkan orang ke layar
+          // persetujuan Google padahal mengubah satu setelan berbagi sudah
+          // cukup — dan selama consent screen belum diverifikasi, layar itu
+          // adalah pengalaman yang paling ingin kita hindari.
+          showToast('This folder could not be read. Share it as "Anyone with the link", or connect your Google account to use private folders.', 'error');
           return;
         }
         throw new Error(body?.error || 'Could not re-sync the photos.');
@@ -376,36 +380,24 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
     supabase.auth.getSession().then(({ data }) => setUserId(data?.session?.user?.id ?? null));
   }, []);
 
-  // Bawa fotografer baru langsung ke layar persetujuan Google, tanpa ia perlu
-  // mencari tombolnya sendiri.
+  // Fotografer baru TIDAK lagi dibawa otomatis ke layar persetujuan Google.
   //
-  // Ini titik paling awal yang mungkin. Registrasi menuntut konfirmasi email
-  // lebih dulu, jadi ketika tombol "Sign up" ditekan belum ada sesi sama sekali
-  // -- tidak ada yang bisa meminta izin atas nama siapa pun. Kedatangan pertama
-  // di dashboard adalah saat pertama identitasnya benar-benar ada.
+  // Dulu di sini ada effect yang melempar setiap akun baru ke Google pada
+  // kedatangan pertamanya di dashboard, supaya ia tidak perlu mencari tombolnya
+  // sendiri. Alasannya masuk akal ketika Drive hanya dapat dibaca lewat OAuth:
+  // tanpa izin itu, project yang dibuatnya memang akan kosong.
   //
-  // Persetujuannya sendiri tidak bisa dilewati: Google mewajibkan pemilik akun
-  // melihat dan menyetujuinya sendiri. Yang dihilangkan di sini adalah langkah
-  // mencari dan menekan tombol, bukan persetujuannya.
+  // Sekarang folder yang dibagikan "Anyone with the link" dibaca lewat API key,
+  // dan itu cara yang memang dipakai fotografer membagikan foldernya. Untuk
+  // mereka OAuth tidak menambah apa pun — sementara consent screen PhotoFlow
+  // belum diverifikasi Google, sehingga yang muncul adalah layar peringatan
+  // "Google hasn't verified this app". Melemparkan orang ke sana tanpa diminta,
+  // di detik pertama ia memakai aplikasinya, untuk izin yang tidak ia butuhkan,
+  // adalah cara terburuk memulai.
   //
-  // Syaratnya sengaja sempit. Hanya akun yang belum punya project yang dibawa
-  // otomatis; yang sudah punya project sedang di tengah pekerjaan, dan melempar
-  // orang seperti itu ke Google tanpa diminta terasa seperti aplikasinya rusak.
-  // Mereka tetap mendapat spanduk dan tombolnya.
-  useEffect(() => {
-    if (isLoading) return;                 // daftar project belum selesai dimuat
-    if (driveConnected !== false) return;  // sudah terhubung, atau belum diketahui
-    if (projects.length > 0) return;       // bukan akun baru
-    if (!userId) return;                   // identitas belum diketahui
-    if (sudahDitawari(userId)) return;     // sudah pernah, jangan ulangi
-
-    // Ditandai SEBELUM berpindah. Kalau tawarannya ditolak di layar Google,
-    // yang bersangkutan tidak akan dilempar ke sana lagi setiap membuka
-    // dashboard.
-    tandaiSudahDitawari(userId);
-    handleConnectDrive();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, driveConnected, projects.length, userId]);
+  // Yang menghubungkan Drive sekarang hanya yang benar-benar perlu: pemilik
+  // folder privat. Mereka menemukan jalannya lewat spanduk di bawah, dan lewat
+  // pesan yang muncul saat foldernya ternyata tidak terbaca.
 
   // --- HANDLERS ---
   const handleDelete = async () => {
@@ -738,21 +730,26 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
         {/* CONTENT GRID */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
 
-          {/* Tanpa koneksi Google Drive, tidak ada satu pun foto yang bisa
-              ditarik — dan sampai sekarang tidak ada apa pun di layar ini yang
-              mengatakannya. Spanduk ini muncul lebih dulu daripada kegagalan,
-              bukan sesudahnya. */}
+          {/* Spanduk ini dulu berwarna peringatan dan berbunyi "every project
+              you create will be empty". Itu benar ketika Drive hanya dapat
+              dibaca lewat OAuth. Sekarang folder yang dibagikan "Anyone with
+              the link" dibaca tanpa izin apa pun, dan itu cara yang memang
+              dipakai fotografer membagikan foldernya — jadi kalimat itu berubah
+              dari peringatan yang menolong menjadi peringatan yang keliru.
+              Nadanya diturunkan jadi keterangan, dan syaratnya disebutkan
+              dengan tepat: yang perlu menghubungkan Drive hanya pemilik folder
+              privat. */}
           {driveConnected === false && (
             <div
               role="status"
-              className="mb-8 flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl border border-warning-200 bg-warning-50 px-5 py-4 dark:border-warning-400/20 dark:bg-warning-400/10"
+              className="mb-8 flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl border border-ash-200 bg-ash-50 px-5 py-4 dark:border-ash-700 dark:bg-ash-800/40"
             >
-              <AlertTriangle size={20} strokeWidth={1.75} className="shrink-0 text-warning-500 dark:text-warning-400" aria-hidden="true" />
+              <Info size={20} strokeWidth={1.75} className="shrink-0 text-ash-500 dark:text-ash-400" aria-hidden="true" />
               <div className="flex-1">
-                <p className="text-sm font-semibold text-ash-900 dark:text-ash-100">Google Drive is not connected</p>
+                <p className="text-sm font-semibold text-ash-900 dark:text-ash-100">Using a private Drive folder?</p>
                 <p className="text-sm text-ash-600 dark:text-ash-300 mt-0.5">
-                  PhotoFlow needs permission to read your Drive before it can pull in photos.
-                  Until you grant it, every project you create will be empty.
+                  Folders shared as &ldquo;Anyone with the link&rdquo; work right away — nothing to set up.
+                  Connect your Google account only if you want PhotoFlow to read folders you keep private.
                 </p>
               </div>
               <button
