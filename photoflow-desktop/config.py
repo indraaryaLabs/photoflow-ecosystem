@@ -37,7 +37,7 @@ BACKEND_URL = os.environ.get(
 # terpasang, dan satu-satunya perbaikan adalah merilis ulang installer-nya.
 WEB_APP_URL = os.environ.get(
     "PHOTOFLOW_WEB_APP_URL",
-    "https://photoflow.vercel.app",
+    "https://photoflow-ecosystem.vercel.app",
 ).rstrip("/")
 
 SUPABASE_URL = os.environ.get(
