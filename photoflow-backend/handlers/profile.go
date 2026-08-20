@@ -12,14 +12,14 @@ import (
 	"photoflow-backend/models"
 )
 
-// maksimalNamaStudio membatasi panjang nama studio.
+// maxStudioNameLength membatasi panjang nama studio.
 //
 // Batasnya ada bukan demi database — kolomnya text dan tidak peduli — melainkan
 // demi tempat namanya muncul: satu baris di kepala galeri klien, di sebelah
 // lambang, pada layar ponsel. Nama yang lebih panjang dari ini tidak akan
 // terbaca utuh di sana, jadi lebih baik ditolak saat diketik daripada dipotong
 // diam-diam saat ditampilkan.
-const maksimalNamaStudio = 60
+const maxStudioNameLength = 60
 
 type profilInput struct {
 	StudioName string `json:"studio_name"`
@@ -53,11 +53,11 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	nama := strings.TrimSpace(input.StudioName)
+	name := strings.TrimSpace(input.StudioName)
 	// Dihitung dalam rune, bukan byte. Nama yang memuat huruf beraksen atau
 	// aksara non-Latin memakai beberapa byte per huruf, dan membatasi per byte
 	// akan menolak nama yang di layar jelas-jelas pendek.
-	if utf8.RuneCountInString(nama) > maksimalNamaStudio {
+	if utf8.RuneCountInString(name) > maxStudioNameLength {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Studio name is too long. Keep it under 60 characters.",
 		})
@@ -71,12 +71,12 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	err := h.DB.Exec(`
 		INSERT INTO profiles (id, studio_name) VALUES (?, ?)
 		ON CONFLICT (id) DO UPDATE SET studio_name = EXCLUDED.studio_name`,
-		userID, nama).Error
+		userID, name).Error
 	if err != nil {
-		log.Printf("🔴 Menyimpan nama studio untuk %s: %v", userID, err)
+		log.Printf("[ERROR] Menyimpan nama studio untuk %s: %v", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan profil"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"studio_name": nama})
+	c.JSON(http.StatusOK, gin.H{"studio_name": name})
 }

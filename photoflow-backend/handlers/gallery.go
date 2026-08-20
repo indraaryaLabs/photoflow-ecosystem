@@ -136,7 +136,7 @@ func (h *Handler) SubmitSelection(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Galeri ini sudah dikunci karena pilihan telah disubmit sebelumnya."})
 			return
 		}
-		log.Printf("🔴 Submit pilihan project %s: %v", project.ID, err)
+		log.Printf("[ERROR] Submit pilihan project %s: %v", project.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan pilihan"})
 		return
 	}

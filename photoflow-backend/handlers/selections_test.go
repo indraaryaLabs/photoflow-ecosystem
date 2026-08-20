@@ -44,18 +44,18 @@ func callListSelections(t *testing.T, h *Handler, projectID, userID string) (int
 
 // namaiFoto memberi tiap foto project nama yang berbeda, lalu menandai
 // sebagian di antaranya terpilih.
-func namaiFoto(t *testing.T, h *Handler, projectID string, nama []string, terpilih map[string]bool) {
+func photoNames(t *testing.T, h *Handler, projectID string, name []string, selected map[string]bool) {
 	t.Helper()
 
 	if err := h.DB.Where("project_id = ?", projectID).Delete(&models.Photo{}).Error; err != nil {
 		t.Fatalf("gagal mengosongkan foto: %v", err)
 	}
-	for _, n := range nama {
+	for _, n := range name {
 		photo := models.Photo{
 			ProjectID:    projectID,
 			FileName:     n,
 			ThumbnailURL: "https://contoh/thumb.jpg",
-			IsSelected:   terpilih[n],
+			IsSelected:   selected[n],
 		}
 		if err := h.DB.Create(&photo).Error; err != nil {
 			t.Fatalf("gagal menyiapkan foto %q: %v", n, err)
@@ -63,12 +63,12 @@ func namaiFoto(t *testing.T, h *Handler, projectID string, nama []string, terpil
 	}
 }
 
-func TestListSelectionsHanyaMengembalikanYangTerpilih(t *testing.T) {
+func TestListSelectionsReturnsOnlySelected(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 0)
 	h := &Handler{DB: db}
 
-	namaiFoto(t, h, project.ID,
+	photoNames(t, h, project.ID,
 		[]string{"IMG_0003.jpg", "IMG_0001.jpg", "IMG_0002.jpg"},
 		map[string]bool{"IMG_0001.jpg": true, "IMG_0003.jpg": true})
 
@@ -125,7 +125,7 @@ func TestListSelectionsMenolakBukanPemilik(t *testing.T) {
 	project := seedProject(t, db, 0)
 	h := &Handler{DB: db}
 
-	namaiFoto(t, h, project.ID,
+	photoNames(t, h, project.ID,
 		[]string{"rahasia.jpg"},
 		map[string]bool{"rahasia.jpg": true})
 
@@ -147,7 +147,7 @@ func TestListSelectionsMenyertakanThumbnail(t *testing.T) {
 	project := seedProject(t, db, 0)
 	h := &Handler{DB: db}
 
-	namaiFoto(t, h, project.ID, []string{"IMG_0001.jpg"}, map[string]bool{"IMG_0001.jpg": true})
+	photoNames(t, h, project.ID, []string{"IMG_0001.jpg"}, map[string]bool{"IMG_0001.jpg": true})
 
 	rec := httptest.NewRecorder()
 	gin.SetMode(gin.TestMode)
@@ -220,12 +220,12 @@ func TestRotateMagicLinkMematikanTautanLama(t *testing.T) {
 	}
 }
 
-func TestRotateMagicLinkTidakMenghapusPilihan(t *testing.T) {
+func TestRotateMagicLinkKeepsPicks(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 0)
 	h := &Handler{DB: db}
 
-	namaiFoto(t, h, project.ID,
+	photoNames(t, h, project.ID,
 		[]string{"a.jpg", "b.jpg"}, map[string]bool{"a.jpg": true, "b.jpg": true})
 
 	if code, _ := callRotate(t, h, project.ID, project.UserID); code != 200 {
@@ -234,7 +234,7 @@ func TestRotateMagicLinkTidakMenghapusPilihan(t *testing.T) {
 
 	// Menerbitkan ulang tautan itu tindakan keamanan, bukan pembatalan kerja
 	// klien. Membuang pilihannya sebagai efek samping akan mengejutkan.
-	if got := jumlahTerpilih(t, h, project.ID); got != 2 {
+	if got := selectedCount(t, h, project.ID); got != 2 {
 		t.Fatalf("terpilih %d, seharusnya tetap 2", got)
 	}
 }
@@ -267,9 +267,9 @@ func TestSubmitMengisiSubmittedAtDanReopenMengosongkannya(t *testing.T) {
 		t.Fatalf("submit gagal: %v", err)
 	}
 
-	var sesudah models.Project
-	db.Where("id = ?", project.ID).First(&sesudah)
-	if sesudah.SubmittedAt == nil {
+	var after models.Project
+	db.Where("id = ?", project.ID).First(&after)
+	if after.SubmittedAt == nil {
 		t.Fatal("submitted_at masih kosong setelah submit")
 	}
 
