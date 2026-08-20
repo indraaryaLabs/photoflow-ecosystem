@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Copy, Check, Plus, FolderOpen, Link as LinkIcon, Clock,
   CheckCircle2, Loader2, MoreVertical, Edit, Trash2, X, AlertOctagon,
-  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, Info, RefreshCw, ListChecks, KeyRound, Settings
+  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks, KeyRound, Settings
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { API_BASE } from '../lib/api';
@@ -75,22 +75,28 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
   const [openMenuId, setOpenMenuId] = useState(null);
   const closeMenu = useCallback(() => setOpenMenuId(null), []);
 
-  // Keadaan koneksi Google Drive.
+  // Dashboard web tidak lagi menyinggung Google Drive sama sekali: tidak ada
+  // tombol menghubungkan, tidak ada spanduk, tidak ada keadaan koneksi yang
+  // perlu dilacak.
   //
-  // Sampai sekarang dashboard web tidak pernah menyinggung Google Drive sama
-  // sekali: tidak ada tombol untuk menghubungkan, dan tidak ada tanda kalau
-  // belum terhubung. Alur OAuth-nya sudah ada di backend sejak lama, tapi
-  // satu-satunya yang pernah memanggilnya adalah aplikasi desktop. Akibatnya
-  // siapa pun yang mendaftar lewat web tidak punya jalan untuk memberi izin,
-  // dan setiap project yang ia buat kosong tanpa penjelasan.
+  // Semua itu pernah ada, dan pernah perlu. Ketika folder hanya dapat dibaca
+  // lewat OAuth, fotografer yang mendaftar lewat web tidak punya jalan memberi
+  // izin, dan setiap project yang ia buat kosong tanpa penjelasan.
   //
-  // null berarti belum diketahui, bukan belum terhubung — keduanya harus
-  // dibedakan supaya spanduknya tidak berkedip muncul saat halaman dimuat.
-  const [driveConnected, setDriveConnected] = useState(null);
-  const [connectingDrive, setConnectingDrive] = useState(false);
+  // Yang menghapusnya bukan perubahan selera melainkan perubahan syarat.
+  // Alamat thumbnail yang dipakai galeri sekarang dimuat peramban klien
+  // LANGSUNG dari Google, tanpa kredensial apa pun — dan alamat itu hanya
+  // dapat dimuat kalau berkasnya publik. Folder privat karena itu tidak
+  // sekadar kurang didukung; ia tidak dapat ditampilkan kepada klien sama
+  // sekali. Tidak ada yang tersisa untuk dijaga OAuth di sisi web.
+  //
+  // Yang dibayar selama tombol itu masih ada: consent screen PhotoFlow belum
+  // diverifikasi Google, jadi setiap orang yang menekannya mendarat di layar
+  // "Google hasn't verified this app" — untuk izin yang tidak dibutuhkan
+  // siapa pun.
 
-  // Identitas pemakai, dipakai untuk menandai siapa yang sudah pernah ditawari
-  // menghubungkan Drive. null berarti belum diketahui.
+  // Identitas pemakai, dipakai sebagai kunci cache daftar project per akun.
+  // null berarti belum diketahui.
   const [userId, setUserId] = useState(null);
 
   // --- HELPERS ---
@@ -230,52 +236,6 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
     return true;
   };
 
-  const fetchDriveStatus = async () => {
-    try {
-      const token = await getAccessToken();
-      if (!token) return;
-      const res = await fetch(`${API_BASE}/api/gdrive/status`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      // `unknown` berarti Drive tidak dapat dihubungi, bukan izinnya tidak ada.
-      // Memperlakukannya sebagai "belum terhubung" akan meminta fotografer
-      // menghubungkan ulang padahal tidak ada yang salah dengan izinnya.
-      setDriveConnected(data.unknown ? null : Boolean(data.connected));
-    } catch {
-      // Diamkan: keadaan koneksi bukan alasan menggagalkan seluruh dashboard.
-    }
-  };
-
-  // Mulai alur persetujuan Google. `return_to` membawa orangnya kembali ke
-  // halaman ini setelah menyetujui, bukan mendarat di halaman backend.
-  const handleConnectDrive = async () => {
-    setConnectingDrive(true);
-    try {
-      const token = await getAccessToken();
-      if (!token) return;
-
-      const res = await fetch(`${API_BASE}/api/auth/google/url`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ return_to: `${window.location.origin}/dashboard` })
-      });
-      if (!res.ok) throw new Error('Could not start the Google Drive connection.');
-
-      const { auth_url: authUrl } = await res.json();
-      if (!authUrl) throw new Error('Could not start the Google Drive connection.');
-      // Yang satu ini memang harus navigasi sungguhan: tujuannya layar
-      // persetujuan milik Google, di luar aplikasi ini.
-      window.location.href = authUrl;
-    } catch (err) {
-      showToast(err.message || 'Could not start the Google Drive connection.', 'error');
-      setConnectingDrive(false);
-    }
-  };
 
   // Nama berkas yang dipilih klien. Dipakai layar "Filenames for Lightroom",
   // yang memuatnya sendiri saat dibuka — daftar ini bisa panjang, dan tidak ada
@@ -340,16 +300,13 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
 
       const body = await checkedRes.json().catch(() => null);
       if (!checkedRes.ok) {
-        // Kode dari backend dibedakan: yang satu menuntut menghubungkan Drive,
-        // yang lain menuntut membetulkan izin folder. Tindakannya tidak sama.
+        // Backend masih membedakan "Drive belum terhubung" dari "folder tidak
+        // terbaca", karena aplikasi desktop masih memakai OAuth. Bagi web
+        // keduanya berujung pada satu tindakan yang sama: jadikan foldernya
+        // publik. Menyebut OAuth di sini berarti menyarankan sesuatu yang tidak
+        // punya tombolnya lagi.
         if (body?.code === 'drive_not_connected' || body?.code === 'drive_reconnect_required') {
-          setDriveConnected(false);
-          // Dua jalan keluar, dan yang pertama jauh lebih ringan. Menyebut
-          // hanya "hubungkan Google Drive" akan mengarahkan orang ke layar
-          // persetujuan Google padahal mengubah satu setelan berbagi sudah
-          // cukup — dan selama consent screen belum diverifikasi, layar itu
-          // adalah pengalaman yang paling ingin kita hindari.
-          showToast('This folder could not be read. Share it as "Anyone with the link", or connect your Google account to use private folders.', 'error');
+          showToast('This folder could not be read. Open it in Google Drive, then set sharing to "Anyone with the link".', 'error');
           return;
         }
         throw new Error(body?.error || 'Could not re-sync the photos.');
@@ -370,7 +327,6 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
 
   useEffect(() => {
     fetchProjects();
-    fetchDriveStatus();
     fetchStudioName();
     // getSession, bukan getUser: yang pertama membaca sesi yang sudah tersimpan
     // di peramban, yang kedua menembak jaringan ke Supabase. Yang dibutuhkan di
@@ -605,13 +561,9 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
       // yang tidak terbaca beserta pesannya, jadi tidak ada penanganan kedua di
       // sini — yang perlu ditambahkan cuma menyegarkan daftarnya setelah selesai.
       if (dibuat?.id) {
-        handleResync(dibuat).finally(() => {
-          fetchProjects();
-          fetchDriveStatus();
-        });
+        handleResync(dibuat).finally(fetchProjects);
       } else {
         await fetchProjects();
-        await fetchDriveStatus();
       }
     } catch (err) {
       if (err.message === 'Failed to fetch') {
@@ -662,26 +614,6 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
   };
 
   // --- RENDER ---
-  // Perpindahan ke Google terjadi lewat window.location, dan di antara klik dan
-  // berpindahnya halaman ada jeda satu permintaan jaringan. Tanpa layar ini,
-  // jeda itu tampak seperti aplikasi membeku — terutama pada alur otomatis,
-  // yang tidak didahului klik apa pun sehingga tidak ada yang menjelaskan
-  // kenapa tiba-tiba pindah ke Google.
-  if (connectingDrive) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-5 bg-ash-50 dark:bg-ash-950 text-center px-6">
-        <Loader2 size={36} strokeWidth={1.75} className="text-ash-600 dark:text-ash-400 animate-spin" aria-hidden="true" />
-        <div>
-          <p className="text-lg font-semibold text-ash-900 dark:text-ash-100">Connecting Google Drive</p>
-          <p className="text-sm text-ash-600 dark:text-ash-400 mt-1 max-w-sm">
-            You will be taken to Google's consent screen. Choose the account that holds
-            your client photo folders.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen transition-colors duration-tint">
 
@@ -729,41 +661,6 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
 
         {/* CONTENT GRID */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
-
-          {/* Spanduk ini dulu berwarna peringatan dan berbunyi "every project
-              you create will be empty". Itu benar ketika Drive hanya dapat
-              dibaca lewat OAuth. Sekarang folder yang dibagikan "Anyone with
-              the link" dibaca tanpa izin apa pun, dan itu cara yang memang
-              dipakai fotografer membagikan foldernya — jadi kalimat itu berubah
-              dari peringatan yang menolong menjadi peringatan yang keliru.
-              Nadanya diturunkan jadi keterangan, dan syaratnya disebutkan
-              dengan tepat: yang perlu menghubungkan Drive hanya pemilik folder
-              privat. */}
-          {driveConnected === false && (
-            <div
-              role="status"
-              className="mb-8 flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl border border-ash-200 bg-ash-50 px-5 py-4 dark:border-ash-700 dark:bg-ash-800/40"
-            >
-              <Info size={20} strokeWidth={1.75} className="shrink-0 text-ash-500 dark:text-ash-400" aria-hidden="true" />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-ash-900 dark:text-ash-100">Using a private Drive folder?</p>
-                <p className="text-sm text-ash-600 dark:text-ash-300 mt-0.5">
-                  Folders shared as &ldquo;Anyone with the link&rdquo; work right away — nothing to set up.
-                  Connect your Google account only if you want PhotoFlow to read folders you keep private.
-                </p>
-              </div>
-              <button
-                onClick={handleConnectDrive}
-                disabled={connectingDrive}
-                className="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 text-sm font-semibold shadow-sm transition-colors disabled:opacity-50"
-              >
-                {connectingDrive
-                  ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
-                  : <LinkIcon size={16} strokeWidth={1.75} />}
-                Connect Google Drive
-              </button>
-            </div>
-          )}
 
           <div>
             <div>
