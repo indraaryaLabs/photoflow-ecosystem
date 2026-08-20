@@ -178,6 +178,19 @@ func (g *GDriveStore) ListPhotos(ctx context.Context, sourceRef string) ([]Photo
 		req := g.service.Files.List().
 			Context(ctx).
 			Q(query).
+			// Tanpa dua parameter ini, Drive hanya melihat "My Drive" dan
+			// mengabaikan seluruh isi Drive Bersama — bukan dengan error,
+			// melainkan dengan daftar kosong. Fotografer yang menaruh
+			// foldernya di Drive Bersama (lazim pada studio ber-Workspace)
+			// karena itu melihat galeri nol foto tanpa satu pun petunjuk
+			// mengapa, padahal foldernya jelas terbuka di peramban.
+			//
+			// supportsAllDrives memberi tahu Drive bahwa klien ini paham
+			// Drive Bersama; includeItemsFromAllDrives yang benar-benar
+			// memasukkan isinya ke hasil. Keduanya harus ada — yang pertama
+			// saja tidak mengubah apa pun pada Files.List.
+			SupportsAllDrives(true).
+			IncludeItemsFromAllDrives(true).
 			// Tanpa orderBy, Drive mengembalikan berkas dalam urutan yang tidak
 			// dijanjikan apa pun. Akibatnya galeri klien tampil teracak, dan
 			// fotografer tidak bisa merujuk "foto ke-12" karena nomor itu
