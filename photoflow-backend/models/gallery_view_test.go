@@ -54,30 +54,30 @@ func TestGalleryProjectHanyaMemuatKolomYangDipakaiKlien(t *testing.T) {
 		"studio_name":    "Studio Cahaya",
 	}
 
-	for kunci, nilai := range diharapkan {
-		got, ada := keluar[kunci]
+	for key, nilai := range diharapkan {
+		got, ada := keluar[key]
 		if !ada {
-			t.Errorf("kunci %q hilang; halaman galeri membutuhkannya", kunci)
+			t.Errorf("kunci %q hilang; halaman galeri membutuhkannya", key)
 			continue
 		}
 		if got != nilai {
-			t.Errorf("kunci %q = %v, ingin %v", kunci, got, nilai)
+			t.Errorf("kunci %q = %v, ingin %v", key, got, nilai)
 		}
 	}
 
-	for kunci := range keluar {
-		if _, boleh := diharapkan[kunci]; !boleh {
-			t.Errorf("kunci %q ikut terkirim ke klien padahal tidak diharapkan", kunci)
+	for key := range keluar {
+		if _, boleh := diharapkan[key]; !boleh {
+			t.Errorf("kunci %q ikut terkirim ke klien padahal tidak diharapkan", key)
 		}
 	}
 }
 
-// TestGalleryPhotoTidakMembocorkanPilihanKlien menjaga bentuk salinan foto.
+// TestGalleryPhotosDoNotLeakClientPicks menjaga bentuk salinan foto.
 //
 // `is_selected` sengaja tidak ikut. Pada galeri yang belum disubmit nilainya
 // selalu false sehingga tidak berguna, dan pada galeri yang sudah disubmit ia
 // memberi tahu siapa pun yang membuka tautannya foto mana yang dipilih klien.
-func TestGalleryPhotoTidakMembocorkanPilihanKlien(t *testing.T) {
+func TestGalleryPhotosDoNotLeakClientPicks(t *testing.T) {
 	photos := []models.Photo{
 		{
 			ID:           "33333333-3333-3333-3333-333333333333",
@@ -101,25 +101,25 @@ func TestGalleryPhotoTidakMembocorkanPilihanKlien(t *testing.T) {
 		t.Fatalf("jumlah foto = %d, ingin 1", len(keluar))
 	}
 
-	diizinkan := map[string]bool{"id": true, "file_name": true, "thumbnail_url": true}
-	for kunci := range keluar[0] {
-		if !diizinkan[kunci] {
-			t.Errorf("kunci %q ikut terkirim ke klien padahal tidak diharapkan", kunci)
+	allowed := map[string]bool{"id": true, "file_name": true, "thumbnail_url": true}
+	for key := range keluar[0] {
+		if !allowed[key] {
+			t.Errorf("kunci %q ikut terkirim ke klien padahal tidak diharapkan", key)
 		}
 	}
-	for kunci := range diizinkan {
-		if _, ada := keluar[0][kunci]; !ada {
-			t.Errorf("kunci %q hilang; galeri klien membacanya", kunci)
+	for key := range allowed {
+		if _, ada := keluar[0][key]; !ada {
+			t.Errorf("kunci %q hilang; galeri klien membacanya", key)
 		}
 	}
 }
 
-// TestGalleryPhotosDaftarKosongTetapArrayJSON memastikan galeri tanpa foto
+// TestGalleryPhotosEmptyListStaysJSONArray memastikan galeri tanpa foto
 // terkirim sebagai `[]`, bukan `null`.
 //
 // Frontend membaca `data.photos` dengan `.map()`; `null` di posisi itu
 // membuat galeri gagal dirender alih-alih menampilkan keadaan kosong.
-func TestGalleryPhotosDaftarKosongTetapArrayJSON(t *testing.T) {
+func TestGalleryPhotosEmptyListStaysJSONArray(t *testing.T) {
 	raw, err := json.Marshal(models.NewGalleryPhotos(nil))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)

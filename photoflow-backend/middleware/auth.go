@@ -151,7 +151,7 @@ func (v *Verifier) RequireAuth() gin.HandlerFunc {
 		if err != nil {
 			// Kegagalan mengambil JWKS bukan salah klien: jangan balas 401,
 			// karena token-nya mungkin sah dan klien tidak bisa memperbaiki apa pun.
-			log.Printf("🔴 Auth: %v", err)
+			log.Printf("[ERROR] Auth: %v", err)
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
 				"error": "auth_unavailable",
 			})
@@ -179,21 +179,21 @@ func (v *Verifier) RequireAuth() gin.HandlerFunc {
 			// frontend akan mengeluarkannya dari sesi. Selama gangguan itu semua
 			// admin ikut ter-logout, padahal tidak ada yang salah pada mereka.
 			if v.jwksEmpty(c.Request.Context()) {
-				log.Printf("🔴 Auth: JWKS kosong, verifikasi tidak bisa dilakukan: %v", err)
+				log.Printf("[ERROR] Auth: JWKS kosong, verifikasi tidak bisa dilakukan: %v", err)
 				c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
 					"error": "auth_unavailable",
 				})
 				return
 			}
 
-			log.Printf("⚠️ Auth: token ditolak: %v", err)
+			log.Printf("[WARN] Auth: token ditolak: %v", err)
 			abortUnauthorized(c, "")
 			return
 		}
 
 		userID, err := token.Claims.GetSubject()
 		if err != nil || userID == "" {
-			log.Printf("⚠️ Auth: klaim sub tidak terbaca: %v", err)
+			log.Printf("[WARN] Auth: klaim sub tidak terbaca: %v", err)
 			abortUnauthorized(c, "")
 			return
 		}
@@ -202,7 +202,7 @@ func (v *Verifier) RequireAuth() gin.HandlerFunc {
 		// di sini membuat token aneh berhenti sebagai 401, bukan jadi error 500
 		// dari Postgres di dalam handler.
 		if _, err := uuid.Parse(userID); err != nil {
-			log.Printf("⚠️ Auth: klaim sub bukan UUID")
+			log.Printf("[WARN] Auth: klaim sub bukan UUID")
 			abortUnauthorized(c, "")
 			return
 		}

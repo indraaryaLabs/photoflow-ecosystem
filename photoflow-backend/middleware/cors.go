@@ -41,23 +41,23 @@ var defaultOrigins = []string{
 func AllowedOrigins() map[string]bool {
 	mentah := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
 
-	daftar := defaultOrigins
+	list := defaultOrigins
 	if mentah != "" {
-		daftar = strings.Split(mentah, ",")
+		list = strings.Split(mentah, ",")
 	}
 
-	izin := make(map[string]bool, len(daftar))
-	for _, o := range daftar {
+	perm := make(map[string]bool, len(list))
+	for _, o := range list {
 		// Spasi dan garis miring di ujung dibersihkan. Header Origin yang
 		// dikirim peramban tidak pernah berakhiran garis miring, jadi satu
 		// karakter itu di variabel environment membuat pencocokannya meleset
 		// tanpa petunjuk apa pun.
 		o = strings.TrimRight(strings.TrimSpace(o), "/")
 		if o != "" {
-			izin[o] = true
+			perm[o] = true
 		}
 	}
-	return izin
+	return perm
 }
 
 // CORS mengizinkan hanya origin yang terdaftar.

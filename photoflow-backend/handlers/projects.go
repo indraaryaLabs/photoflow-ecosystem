@@ -26,13 +26,13 @@ import (
 func (h *Handler) fetchDrivePhotos(ctx context.Context, userID, folderID, projectID string) (photos []models.Photo, ok bool) {
 	store, err := h.StoreForUser(ctx, userID)
 	if err != nil {
-		log.Printf("⚠️ Drive tidak tersedia untuk user %s: %v", userID, err)
+		log.Printf("[WARN] Drive tidak tersedia untuk user %s: %v", userID, err)
 		return nil, false
 	}
 
 	files, err := store.ListPhotos(ctx, folderID)
 	if err != nil {
-		log.Printf("⚠️ Gagal membaca folder Drive %s: %v", folderID, err)
+		log.Printf("[WARN] Gagal membaca folder Drive %s: %v", folderID, err)
 		return nil, false
 	}
 
@@ -64,7 +64,7 @@ func (h *Handler) CreateProject(c *gin.Context) {
 
 	magicLink, err := generateMagicLink()
 	if err != nil {
-		log.Printf("🔴 %v", err)
+		log.Printf("[ERROR] %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat project"})
 		return
 	}
@@ -113,13 +113,13 @@ func (h *Handler) CreateProject(c *gin.Context) {
 	})
 }
 
-// tandaiTersinkron mencatat bahwa daftar foto project baru saja ditarik dari
+// markSynced mencatat bahwa daftar foto project baru saja ditarik dari
 // Drive.
 //
 // Galeri klien memakai penanda ini untuk memutuskan kapan salinannya layak
 // disegarkan. Tanpa penanda, setiap kunjungan akan menyimpulkan salinannya
 // belum pernah ada dan kembali membaca Drive — persis yang hendak dihentikan.
-func tandaiTersinkron(db *gorm.DB, projectID string) error {
+func markSynced(db *gorm.DB, projectID string) error {
 	return db.Model(&models.Project{}).
 		Where("id = ?", projectID).
 		Update("photos_synced_at", time.Now().UTC()).Error
@@ -170,30 +170,30 @@ func (h *Handler) withPhotoCounts(projects []models.Project) []projectWithCount 
 		ids = append(ids, p.ID)
 	}
 
-	type baris struct {
+	type row struct {
 		ProjectID string
 		Jumlah    int64
 	}
-	var hasil []baris
+	var rows []row
 	if err := h.DB.Model(&models.Photo{}).
 		Select("project_id, count(*) as jumlah").
 		Where("project_id IN ?", ids).
-		Group("project_id").Scan(&hasil).Error; err != nil {
+		Group("project_id").Scan(&rows).Error; err != nil {
 		// Bukan alasan menggagalkan seluruh daftar; jumlahnya saja yang hilang.
-		log.Printf("⚠️ Gagal menghitung foto: %v", err)
+		log.Printf("[WARN] Gagal menghitung foto: %v", err)
 	}
-	jumlah := make(map[string]int64, len(hasil))
-	for _, b := range hasil {
-		jumlah[b.ProjectID] = b.Jumlah
+	counts := make(map[string]int64, len(rows))
+	for _, b := range rows {
+		counts[b.ProjectID] = b.Jumlah
 	}
 
-	pratinjau := h.previewThumbnails(ids)
+	previews := h.previewThumbnails(ids)
 
 	for _, p := range projects {
 		out = append(out, projectWithCount{
 			Project:    p,
-			PhotoCount: jumlah[p.ID],
-			Previews:   pratinjau[p.ID],
+			PhotoCount: counts[p.ID],
+			Previews:   previews[p.ID],
 		})
 	}
 	return out
@@ -234,30 +234,30 @@ func (h *Handler) withPhotoCounts(projects []models.Project) []projectWithCount 
 func (h *Handler) previewThumbnails(ids []string) map[string][]string {
 	const perProject = 4
 
-	type baris struct {
+	type row struct {
 		ProjectID    string
 		ThumbnailURL string
 	}
-	var hasil []baris
+	var rows []row
 	err := h.DB.Raw(`
 		SELECT project_id, thumbnail_url FROM (
 			SELECT project_id, thumbnail_url,
 			       ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY file_name) AS urutan
 			FROM photos
 			WHERE project_id IN ? AND thumbnail_url <> ''
-		) t WHERE urutan <= ?`, ids, perProject).Scan(&hasil).Error
+		) t WHERE urutan <= ?`, ids, perProject).Scan(&rows).Error
 	if err != nil {
 		// Kartu tanpa pratinjau tetap berguna; ini bukan alasan menggagalkan
 		// seluruh daftar project.
-		log.Printf("⚠️ Gagal mengambil pratinjau: %v", err)
+		log.Printf("[WARN] Gagal mengambil pratinjau: %v", err)
 		return map[string][]string{}
 	}
 
-	peta := make(map[string][]string, len(ids))
-	for _, b := range hasil {
-		peta[b.ProjectID] = append(peta[b.ProjectID], b.ThumbnailURL)
+	byID := make(map[string][]string, len(ids))
+	for _, b := range rows {
+		byID[b.ProjectID] = append(byID[b.ProjectID], b.ThumbnailURL)
 	}
-	return peta
+	return byID
 }
 
 func (h *Handler) ResyncProject(c *gin.Context) {
@@ -276,7 +276,7 @@ func (h *Handler) ResyncProject(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": code, "code": code})
 			return
 		}
-		log.Printf("🔴 Resync %s: %v", project.ID, err)
+		log.Printf("[ERROR] Resync %s: %v", project.ID, err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "Google Drive tidak dapat dihubungi"})
 		return
 	}
@@ -287,7 +287,7 @@ func (h *Handler) ResyncProject(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": code, "code": code})
 			return
 		}
-		log.Printf("⚠️ Resync: gagal membaca folder %s: %v", project.DriveFolderID, err)
+		log.Printf("[WARN] Resync: gagal membaca folder %s: %v", project.DriveFolderID, err)
 		// Dua jalur sudah dicoba dan keduanya gagal, jadi pesannya menyebut
 		// kedua jalan keluarnya. Menyebut hanya "bagikan ke akun terhubung"
 		// akan mengarahkan orang ke langkah yang lebih rumit daripada yang
@@ -302,15 +302,15 @@ func (h *Handler) ResyncProject(c *gin.Context) {
 
 	// Nama yang sebelumnya dipilih klien, supaya pilihannya tidak hilang hanya
 	// karena daftarnya ditarik ulang.
-	var terpilih []string
+	var selected []string
 	if err := h.DB.Model(&models.Photo{}).
 		Where("project_id = ? AND is_selected", project.ID).
-		Pluck("file_name", &terpilih).Error; err != nil {
-		log.Printf("⚠️ Resync: gagal membaca pilihan lama: %v", err)
+		Pluck("file_name", &selected).Error; err != nil {
+		log.Printf("[WARN] Resync: gagal membaca pilihan lama: %v", err)
 	}
-	masihDipilih := make(map[string]bool, len(terpilih))
-	for _, nama := range terpilih {
-		masihDipilih[nama] = true
+	stillSelected := make(map[string]bool, len(selected))
+	for _, name := range selected {
+		stillSelected[name] = true
 	}
 
 	baru := make([]models.Photo, 0, len(files))
@@ -319,7 +319,7 @@ func (h *Handler) ResyncProject(c *gin.Context) {
 			ProjectID:    project.ID,
 			FileName:     file.Name,
 			ThumbnailURL: store.ThumbnailURL(file),
-			IsSelected:   masihDipilih[file.Name],
+			IsSelected:   stillSelected[file.Name],
 		})
 	}
 
@@ -327,12 +327,12 @@ func (h *Handler) ResyncProject(c *gin.Context) {
 		if err := tx.Where("project_id = ?", project.ID).Delete(&models.Photo{}).Error; err != nil {
 			return err
 		}
-		if err := sisipkanFoto(tx, baru); err != nil {
+		if err := insertPhotos(tx, baru); err != nil {
 			return err
 		}
-		return tandaiTersinkron(tx, project.ID)
+		return markSynced(tx, project.ID)
 	}); err != nil {
-		log.Printf("🔴 Resync %s: %v", project.ID, err)
+		log.Printf("[ERROR] Resync %s: %v", project.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan daftar foto"})
 		return
 	}
@@ -395,7 +395,7 @@ func (h *Handler) UpdateProject(c *gin.Context) {
 			// Foto lama SENGAJA dipertahankan. Menghapusnya tanpa punya
 			// pengganti membuat galeri kosong permanen hanya karena Drive
 			// sedang tidak bisa dihubungi.
-			log.Printf("⚠️ Gagal menarik foto dari Drive untuk folder %s, foto lama dipertahankan", newFolderID)
+			log.Printf("[WARN] Gagal menarik foto dari Drive untuk folder %s, foto lama dipertahankan", newFolderID)
 		}
 	}
 
@@ -409,12 +409,12 @@ func (h *Handler) UpdateProject(c *gin.Context) {
 		if err := tx.Where("project_id = ?", project.ID).Delete(&models.Photo{}).Error; err != nil {
 			return err
 		}
-		if err := sisipkanFoto(tx, newPhotos); err != nil {
+		if err := insertPhotos(tx, newPhotos); err != nil {
 			return err
 		}
-		return tandaiTersinkron(tx, project.ID)
+		return markSynced(tx, project.ID)
 	}); err != nil {
-		log.Printf("🔴 Update project %s: %v", project.ID, err)
+		log.Printf("[ERROR] Update project %s: %v", project.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengupdate project"})
 		return
 	}

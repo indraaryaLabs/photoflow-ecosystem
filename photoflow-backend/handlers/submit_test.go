@@ -170,7 +170,7 @@ func TestSubmitSelectionMarksSelectionAndLocks(t *testing.T) {
 // Nama yang belum punya baris tetap harus tercatat, kalau tidak aplikasi
 // desktop tidak akan pernah tahu foto itu dipilih. Ini terjadi ketika isi
 // folder berubah setelah project dibuat.
-func TestSubmitSelectionMenyisipkanNamaYangBelumTersimpan(t *testing.T) {
+func TestSubmitSelectionInsertsUnsavedNames(t *testing.T) {
 	db := newSubmitTestDB(t)
 	project := seedProject(t, db, 2)
 	renamePhotos(t, db, project.ID, "lama-satu.jpg", "lama-dua.jpg")
@@ -207,8 +207,8 @@ func TestSubmitSelectionRollsBackOnInsertFailure(t *testing.T) {
 	// berlaku lagi: markSelection membangun sendiri baris sisipannya dan
 	// mengabaikan project_id apa pun yang datang dari klien. Itu justru lebih
 	// benar, tapi berarti kegagalan harus dipicu dari sisi database.
-	tolakInsertFoto(t, db)
-	defer izinkanInsertFoto(t, db)
+	denyPhotoInsert(t, db)
+	defer allowPhotoInsert(t, db)
 
 	err := submitSelection(db, project.ID, []models.Photo{
 		{ProjectID: project.ID, FileName: "satu.jpg", IsSelected: true},
@@ -232,10 +232,10 @@ func TestSubmitSelectionRollsBackOnInsertFailure(t *testing.T) {
 	}
 }
 
-// tolakInsertFoto memasang trigger yang menggagalkan setiap INSERT ke photos.
+// denyPhotoInsert memasang trigger yang menggagalkan setiap INSERT ke photos.
 // Kegagalannya datang dari database, tempat kegagalan sungguhan akan muncul,
 // bukan dari cabang khusus tes di dalam kode produksi.
-func tolakInsertFoto(t *testing.T, db *gorm.DB) {
+func denyPhotoInsert(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	stmts := []string{
 		`CREATE OR REPLACE FUNCTION tolak_insert_foto() RETURNS trigger AS $$
@@ -250,7 +250,7 @@ func tolakInsertFoto(t *testing.T, db *gorm.DB) {
 	}
 }
 
-func izinkanInsertFoto(t *testing.T, db *gorm.DB) {
+func allowPhotoInsert(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	db.Exec(`DROP TRIGGER IF EXISTS tolak_insert_foto ON photos`)
 }

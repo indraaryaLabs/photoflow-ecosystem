@@ -69,7 +69,7 @@ func clearRefreshToken(db *gorm.DB, userID string) {
 	if err := db.Model(&models.Profile{}).
 		Where("id = ?", userID).
 		Update("gdrive_refresh_token", "").Error; err != nil {
-		log.Printf("🔴 Gagal mengosongkan refresh token user %s: %v", userID, err)
+		log.Printf("[ERROR] Gagal mengosongkan refresh token user %s: %v", userID, err)
 	}
 }
 
@@ -102,7 +102,7 @@ func (p *persistingTokenSource) Token() (*oauth2.Token, error) {
 			Update("gdrive_refresh_token", token.RefreshToken).Error; err != nil {
 			// Bukan alasan menggagalkan permintaan: access token yang baru
 			// didapat tetap sah dan bisa dipakai sekarang.
-			log.Printf("⚠️ Gagal menyimpan refresh token baru user %s: %v", p.userID, err)
+			log.Printf("[WARN] Gagal menyimpan refresh token baru user %s: %v", p.userID, err)
 		} else {
 			p.current = token.RefreshToken
 		}
@@ -143,11 +143,11 @@ func GetUserAccessToken(ctx context.Context, db *gorm.DB, userID string) (*oauth
 	return source.Token()
 }
 
-// ukuranDasarThumbnail adalah sisi terpanjang yang disimpan di database.
+// baseThumbnailSize adalah sisi terpanjang yang disimpan di database.
 //
 // Yang tersimpan adalah ukuran DASAR; frontend menyesuaikannya sendiri lewat
 // ubahUkuran() — s400/s800 untuk petak grid, s1600 untuk layar pratinjau.
-const ukuranDasarThumbnail = 400
+const baseThumbnailSize = 400
 
 // GDriveStore membaca foto dari sebuah folder Google Drive.
 //
@@ -162,7 +162,7 @@ type GDriveStore struct {
 	// publik menandai bahwa folder dibaca lewat API key, yang hanya berhasil
 	// kalau folder itu memang dibagikan ke publik. Yang bergantung padanya cuma
 	// bentuk alamat thumbnail; lihat alasannya di ListPhotos.
-	publik bool
+	public bool
 }
 
 // NewGDriveStoreForUser membangun store yang memakai kredensial user tertentu.
@@ -201,21 +201,21 @@ func NewPublicGDriveStore(ctx context.Context) (*GDriveStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gagal inisialisasi klien Drive publik: %w", err)
 	}
-	return &GDriveStore{service: service, publik: true}, nil
+	return &GDriveStore{service: service, public: true}, nil
 }
 
-// alamatThumbnail memilih bentuk alamat thumbnail yang disimpan.
+// resolveThumbnailURL memilih bentuk alamat thumbnail yang disimpan.
 //
 // Kosong tetap kosong. Alamat susunan sendiri di bawah bisa dibuat untuk
 // berkas apa pun, tapi membuatnya untuk berkas yang Drive sendiri tidak punya
 // thumbnail-nya berarti menukar tanda "tidak ada thumbnail" yang sudah
 // dipahami frontend dengan gambar rusak.
-func alamatThumbnail(publik bool, fileID, thumbnailLink string) string {
+func resolveThumbnailURL(public bool, fileID, thumbnailLink string) string {
 	if thumbnailLink == "" {
 		return ""
 	}
 
-	if publik {
+	if public {
 		// Untuk folder publik alamatnya DISUSUN dari file ID, bukan diambil
 		// dari thumbnailLink. Google mendokumentasikan thumbnailLink sebagai
 		// alamat berumur pendek — hitungan jam — sedangkan galeri dilayani dari
@@ -227,7 +227,7 @@ func alamatThumbnail(publik bool, fileID, thumbnailLink string) string {
 		// hal itu justru selalu benar.
 		return fmt.Sprintf(
 			"https://drive.google.com/thumbnail?id=%s&sz=w%d",
-			fileID, ukuranDasarThumbnail,
+			fileID, baseThumbnailSize,
 		)
 	}
 
@@ -243,7 +243,7 @@ func alamatThumbnail(publik bool, fileID, thumbnailLink string) string {
 	// sehingga menggulir jauh lalu kembali ke atas berarti mengunduh ulang
 	// semuanya.
 	return strings.Replace(
-		thumbnailLink, "=s220", fmt.Sprintf("=s%d", ukuranDasarThumbnail), -1,
+		thumbnailLink, "=s220", fmt.Sprintf("=s%d", baseThumbnailSize), -1,
 	)
 }
 
@@ -313,7 +313,7 @@ func (g *GDriveStore) ListPhotos(ctx context.Context, sourceRef string) ([]Photo
 			if !isImage(file.Name, file.MimeType) {
 				continue
 			}
-			thumbnail := alamatThumbnail(g.publik, file.Id, file.ThumbnailLink)
+			thumbnail := resolveThumbnailURL(g.public, file.Id, file.ThumbnailLink)
 
 			ref := PhotoRef{
 				ID:            file.Id,
