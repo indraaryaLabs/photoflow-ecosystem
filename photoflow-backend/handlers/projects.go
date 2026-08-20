@@ -288,8 +288,13 @@ func (h *Handler) ResyncProject(c *gin.Context) {
 			return
 		}
 		log.Printf("⚠️ Resync: gagal membaca folder %s: %v", project.DriveFolderID, err)
+		// Dua jalur sudah dicoba dan keduanya gagal, jadi pesannya menyebut
+		// kedua jalan keluarnya. Menyebut hanya "bagikan ke akun terhubung"
+		// akan mengarahkan orang ke langkah yang lebih rumit daripada yang
+		// diperlukan: menjadikan folder publik sudah cukup, dan itu memang yang
+		// biasanya dilakukan fotografer sebelum mengirimkannya ke klien.
 		c.JSON(http.StatusBadGateway, gin.H{
-			"error": "Folder Drive tidak dapat dibaca. Pastikan folder dibagikan ke akun Google yang terhubung.",
+			"error": "Folder Drive tidak dapat dibaca. Bagikan folder sebagai 'Anyone with the link', atau bagikan ke akun Google yang terhubung.",
 			"code":  "folder_unreadable",
 		})
 		return

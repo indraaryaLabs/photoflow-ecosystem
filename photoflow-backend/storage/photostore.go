@@ -13,11 +13,10 @@ import (
 // tidak perlu tahu apakah datanya baru saja ditarik dari Drive atau diambil
 // dari salinan yang tersimpan di database.
 type PhotoRef struct {
-	ID             string `json:"id"`
-	Name           string `json:"name"`
-	MimeType       string `json:"mimeType"`
-	ThumbnailLink  string `json:"thumbnailLink"`
-	WebContentLink string `json:"webContentLink"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	MimeType      string `json:"mimeType"`
+	ThumbnailLink string `json:"thumbnailLink"`
 
 	// Ukuran asli berkasnya, kalau Drive mengetahuinya. Nol berarti tidak
 	// diketahui, dan galeri mengukurnya sendiri setelah gambarnya termuat.
@@ -50,6 +49,11 @@ type PhotoStore interface {
 var (
 	ErrDriveNotConnected      = errors.New("user belum menghubungkan Google Drive")
 	ErrDriveReconnectRequired = errors.New("koneksi Google Drive perlu diperbarui")
+
+	// ErrAPIKeyNotConfigured berarti GOOGLE_API_KEY belum diisi, sehingga jalur
+	// folder publik tidak tersedia. Bukan kesalahan yang perlu dilihat user:
+	// pemanggil tinggal memakai kredensial OAuth fotografer seperti sebelumnya.
+	ErrAPIKeyNotConfigured = errors.New("GOOGLE_API_KEY belum dikonfigurasi")
 )
 
 // imageExtensions adalah ekstensi yang dianggap foto walaupun MIME type-nya

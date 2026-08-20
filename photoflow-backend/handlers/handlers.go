@@ -54,7 +54,10 @@ func New(db *gorm.DB, oauthConfig *oauth2.Config, limiter *middleware.Limiter) *
 		OAuth:   oauthConfig,
 		Limiter: limiter,
 		StoreForUser: func(ctx context.Context, userID string) (storage.PhotoStore, error) {
-			return storage.NewGDriveStoreForUser(ctx, db, userID)
+			// Berjenjang: API key untuk folder publik, kredensial fotografer
+			// untuk sisanya. Tidak mengembalikan error di sini — jalur mana
+			// yang dipakai baru diketahui setelah folder yang diminta jelas.
+			return storage.NewStoreBerjenjang(ctx, db, userID), nil
 		},
 		Mailer:     notify.FromEnv(),
 		AppBaseURL: strings.TrimRight(os.Getenv("APP_BASE_URL"), "/"),
