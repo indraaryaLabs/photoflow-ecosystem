@@ -155,5 +155,58 @@ class BatchResultTest(unittest.TestCase):
         self.assertEqual(result["failed"], [])
 
 
+class SharedDriveTest(unittest.TestCase):
+    """Setiap operasi Drive harus menyertakan supportsAllDrives.
+
+    Tanpa parameter itu Google berpura-pura Drive Bersama tidak ada, dan
+    caranya berpura-pura yang membuat bug ini mahal: listing mengembalikan
+    daftar KOSONG, bukan error. Tidak ada yang gagal, tidak ada yang tercatat
+    di log — foldernya sekadar tampak tidak berisi apa-apa. Studio ber-Workspace
+    yang arsipnya memang tinggal di Drive Bersama akan melihat aplikasi ini
+    seolah rusak tanpa satu pun petunjuk.
+
+    Karena kegagalannya sunyi, tidak ada tes lain yang akan menangkapnya kalau
+    parameter ini hilang lagi di kemudian hari.
+    """
+
+    def setUp(self):
+        self.service = mock.MagicMock()
+        patcher = mock.patch("gdrive.get_drive_service", return_value=self.service)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def kwargs_terakhir(self, metode):
+        return getattr(self.service.files.return_value, metode).call_args.kwargs
+
+    def test_listing_memasukkan_isi_drive_bersama(self):
+        self.service.files.return_value.list.return_value.execute.return_value = {}
+
+        for panggil in (gdrive.list_files, gdrive.list_folders_only):
+            with self.subTest(fungsi=panggil.__name__):
+                panggil("folder-1")
+                kwargs = self.kwargs_terakhir("list")
+                self.assertTrue(kwargs.get("supportsAllDrives"))
+                # supportsAllDrives sendirian tidak mengubah apa pun pada
+                # Files.List; yang benar-benar memasukkan isinya yang ini.
+                self.assertTrue(kwargs.get("includeItemsFromAllDrives"))
+
+    def test_operasi_per_berkas_mengenali_drive_bersama(self):
+        gdrive.rename_drive_item("berkas-1", "nama baru")
+        self.assertTrue(self.kwargs_terakhir("update").get("supportsAllDrives"))
+
+        gdrive.create_drive_folder("Pilihan Klien", "induk-1")
+        self.assertTrue(self.kwargs_terakhir("create").get("supportsAllDrives"))
+
+        gdrive.move_drive_files(["berkas-1"], "asal", "tujuan")
+        self.assertTrue(self.kwargs_terakhir("update").get("supportsAllDrives"))
+
+        gdrive.copy_drive_files(["berkas-1"], "tujuan")
+        self.assertTrue(self.kwargs_terakhir("copy").get("supportsAllDrives"))
+        self.assertTrue(self.kwargs_terakhir("get").get("supportsAllDrives"))
+
+        gdrive.trash_drive_files(["berkas-1"])
+        self.assertTrue(self.kwargs_terakhir("update").get("supportsAllDrives"))
+
+
 if __name__ == "__main__":
     unittest.main()
