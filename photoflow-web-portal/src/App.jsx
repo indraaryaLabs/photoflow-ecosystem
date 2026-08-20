@@ -6,6 +6,7 @@ import Header from './components/Header';
 import PhotoGrid, { DensityPicker } from './components/PhotoGrid';
 import { useDensity } from './lib/useDensity';
 import FloatingBar from './components/FloatingBar';
+import SubmitConfirmModal from './components/SubmitConfirmModal';
 import { PRIVACY_PATH, TERMS_PATH } from './lib/legal';
 
 import { API_BASE } from './lib/api';
@@ -124,6 +125,10 @@ export default function App() {
   const [density, setDensity] = useDensity();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmittedState, setIsSubmittedState] = useState(false);
+
+  // Dialog yang berdiri di antara tombol kirim dan penguncian galeri. Lihat
+  // SubmitConfirmModal untuk alasannya.
+  const [konfirmasiKirim, setKonfirmasiKirim] = useState(false);
 
   // ─── 4. Hooks / Effects ──────────────────────────────────────
 
@@ -502,12 +507,16 @@ export default function App() {
       hapusDraf(token);
       addToast('Your selection has been sent to your photographer.');
       setIsSubmittedState(true);
+      // Ditutup hanya setelah berhasil. Kalau pengirimannya gagal, dialognya
+      // tetap terbuka bersama tombolnya — orang yang baru saja menekan "Yes,
+      // send" tidak perlu mencari lagi dari awal untuk mencoba ulang.
+      setKonfirmasiKirim(false);
     } catch (err) {
       addToast(err.message || 'Something went wrong while submitting your selection.');
     } finally {
       setIsSubmitting(false);
     }
-  }, [selectedIds, addToast, isSubmitting, token]);
+  }, [selectedIds, photos, addToast, isSubmitting, token]);
 
   // Membuka dan menutup pratinjau dibungkus View Transition, sehingga fotonya
   // benar-benar bergerak dan membesar dari petaknya di grid alih-alih hilang
@@ -727,9 +736,20 @@ export default function App() {
         project={project}
         selectedCount={selectedIds.size}
         maxSelections={project.max_selections}
-        onSubmit={handleSubmit}
+        // Tombolnya membuka dialog, bukan mengirim. Pengirimannya sendiri
+        // dijalankan dari sana.
+        onSubmit={() => setKonfirmasiKirim(true)}
         isSubmitting={isSubmitting}
         isSubmitted={isSubmittedState}
+      />
+
+      <SubmitConfirmModal
+        open={konfirmasiKirim}
+        selectedCount={selectedIds.size}
+        maxSelections={project.max_selections}
+        isSubmitting={isSubmitting}
+        onConfirm={handleSubmit}
+        onCancel={() => setKonfirmasiKirim(false)}
       />
     </div>
   );
