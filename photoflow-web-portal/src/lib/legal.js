@@ -9,7 +9,7 @@ export const TERMS_PATH = '/terms';
 
 // Tanggal berlaku. Ditulis satu kali dan dipakai kedua dokumen supaya keduanya
 // tidak pernah mengaku berlaku sejak tanggal yang berbeda.
-export const EFFECTIVE_DATE = '17 August 2026';
+export const EFFECTIVE_DATE = '20 August 2026';
 
 // Alamat kontak.
 //
