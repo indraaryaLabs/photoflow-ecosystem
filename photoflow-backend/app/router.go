@@ -8,6 +8,7 @@ package app
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -48,7 +49,7 @@ func SetupRouter() (*gin.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("🚀 Database Terkoneksi!")
+	log.Println("[INFO] database connected")
 
 	// Verifier JWT Supabase. Konfigurasi yang salah dihentikan di sini supaya
 	// server tidak pernah menyala dengan rute admin yang tidak terlindungi.
@@ -75,8 +76,11 @@ func SetupRouter() (*gin.Engine, error) {
 	r.Use(middleware.CORS())
 	r.Use(middleware.MaxBodySize(maxRequestBodyBytes))
 
+	// Health check. Bentuknya sengaja mesin-terbaca: rute ini yang dipanggil
+	// pemantau uptime dan yang dibuka orang pertama kali untuk memastikan API-nya
+	// hidup, jadi kalimat pemasaran tidak punya tempat di sini.
 	r.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "PhotoFlow API is running perfectly! 🚀"})
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "photoflow-api"})
 	})
 
 	// Diagnostik untuk membuktikan header sumber IP di lingkungan nyata.

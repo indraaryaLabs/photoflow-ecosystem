@@ -121,7 +121,11 @@ Thank you.`;
                   ) : isFull ? (
                     <>
                       <span>Ready to submit</span>
-                      <span className="text-lg leading-none">🚀</span>
+                      {/* Ikon dari set yang sama, bukan emoji. Emoji digambar
+                          sistem operasi pembacanya, jadi bentuk dan beratnya
+                          berbeda di tiap perangkat dan tidak pernah cocok
+                          dengan ikon lain di bilah yang sama. */}
+                      <CheckCircle2 size={16} strokeWidth={1.75} />
                     </>
                   ) : (
                     <>

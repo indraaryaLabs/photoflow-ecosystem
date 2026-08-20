@@ -46,27 +46,27 @@ func dikelola() []any {
 }
 
 func main() {
-	hanyaPeriksa := flag.Bool("check", false,
+	checkOnly := flag.Bool("check", false,
 		"periksa apakah skema database tertinggal dari model, tanpa mengubah apa pun")
 	flag.Parse()
 
-	if *hanyaPeriksa {
-		if err := periksa(); err != nil {
-			log.Fatalf("🔴 %v", err)
+	if *checkOnly {
+		if err := checkSchema(); err != nil {
+			log.Fatalf("[ERROR] %v", err)
 		}
-		fmt.Println("✅ Skema database sudah sesuai dengan model.")
+		fmt.Println("[INFO] Skema database sudah sesuai dengan model.")
 		return
 	}
 
 	if err := run(); err != nil {
-		log.Fatalf("🔴 Migrasi gagal: %v", err)
+		log.Fatalf("[ERROR] Migrasi gagal: %v", err)
 	}
-	fmt.Println("✅ Migrasi selesai.")
+	fmt.Println("[INFO] Migrasi selesai.")
 }
 
-// periksa melaporkan kolom atau tabel yang ada di model tapi belum ada di
+// checkSchema melaporkan kolom atau tabel yang ada di model tapi belum ada di
 // database. Tidak menulis apa pun.
-func periksa() error {
+func checkSchema() error {
 	godotenv.Load()
 
 	conn, err := db.Open(os.Getenv("DATABASE_URL"))

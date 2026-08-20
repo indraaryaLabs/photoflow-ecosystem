@@ -58,7 +58,7 @@ func callProfile(t *testing.T, h *Handler, method, userID, body string) (int, ma
 	return rec.Code, keluar
 }
 
-func TestNamaStudioTersimpanWalauProfilBelumAda(t *testing.T) {
+func TestStudioNameSavesEvenWithoutExistingProfile(t *testing.T) {
 	db := newSubmitTestDB(t)
 	siapkanProfiles(t, db)
 	h := &Handler{DB: db}
@@ -76,13 +76,13 @@ func TestNamaStudioTersimpanWalauProfilBelumAda(t *testing.T) {
 		t.Fatalf("balasan = %v", body)
 	}
 
-	_, dibaca := callProfile(t, h, "GET", user, "")
-	if dibaca["studio_name"] != "Cahaya Studio" {
-		t.Fatalf("dibaca kembali = %v, seharusnya tersimpan", dibaca)
+	_, wasRead := callProfile(t, h, "GET", user, "")
+	if wasRead["studio_name"] != "Cahaya Studio" {
+		t.Fatalf("dibaca kembali = %v, seharusnya tersimpan", wasRead)
 	}
 }
 
-func TestNamaStudioDapatDiubahDanDikosongkan(t *testing.T) {
+func TestStudioNameCanBeChangedAndCleared(t *testing.T) {
 	db := newSubmitTestDB(t)
 	siapkanProfiles(t, db)
 	h := &Handler{DB: db}
@@ -105,20 +105,20 @@ func TestNamaStudioDapatDiubahDanDikosongkan(t *testing.T) {
 	}
 }
 
-func TestNamaStudioTerlaluPanjangDitolak(t *testing.T) {
+func TestOverlongStudioNameIsRejected(t *testing.T) {
 	db := newSubmitTestDB(t)
 	siapkanProfiles(t, db)
 	h := &Handler{DB: db}
 	user := uuid.NewString()
 
 	code, _ := callProfile(t, h, "PUT", user,
-		`{"studio_name":"`+strings.Repeat("a", maksimalNamaStudio+1)+`"}`)
+		`{"studio_name":"`+strings.Repeat("a", maxStudioNameLength+1)+`"}`)
 	if code != 400 {
 		t.Fatalf("kode %d, seharusnya 400", code)
 	}
 }
 
-func TestNamaStudioDihitungPerHurufBukanPerByte(t *testing.T) {
+func TestStudioNameCountsRunesNotBytes(t *testing.T) {
 	db := newSubmitTestDB(t)
 	siapkanProfiles(t, db)
 	h := &Handler{DB: db}
@@ -126,10 +126,10 @@ func TestNamaStudioDihitungPerHurufBukanPerByte(t *testing.T) {
 
 	// Tiga byte per huruf. Dibatasi per byte, nama sepanjang 20 huruf ini
 	// ditolak padahal di layar jelas-jelas pendek.
-	nama := strings.Repeat("写", 20)
-	if code, _ := callProfile(t, h, "PUT", user, `{"studio_name":"`+nama+`"}`); code != 200 {
+	name := strings.Repeat("写", 20)
+	if code, _ := callProfile(t, h, "PUT", user, `{"studio_name":"`+name+`"}`); code != 200 {
 		t.Fatalf("kode %d, seharusnya 200 — %d huruf, %d byte",
-			code, len([]rune(nama)), len(nama))
+			code, len([]rune(name)), len(name))
 	}
 }
 
@@ -150,11 +150,11 @@ func TestProfilKosongDijawabBukanError(t *testing.T) {
 	}
 }
 
-func TestGaleriMembawaNamaStudioPemiliknya(t *testing.T) {
+func TestGalleryCarriesOwnerStudioName(t *testing.T) {
 	db := newSubmitTestDB(t)
 	siapkanProfiles(t, db)
 	project := seedProject(t, db, 2)
-	h := handlerGaleri(t, db)
+	h := galleryHandler(t, db)
 
 	callProfile(t, h, "PUT", project.UserID, `{"studio_name":"Cahaya Studio"}`)
 
@@ -176,7 +176,7 @@ func TestGaleriMembawaNamaStudioPemiliknya(t *testing.T) {
 	}
 }
 
-func TestGaleriTetapHidupTanpaTabelProfiles(t *testing.T) {
+func TestGallerySurvivesMissingProfilesTable(t *testing.T) {
 	db := newSubmitTestDB(t)
 	// Tabelnya sengaja tidak dibuat sama sekali — keadaan terburuk yang bisa
 	// dihadapi pembacaan nama studio. Galeri klien tidak boleh mati karena
@@ -184,7 +184,7 @@ func TestGaleriTetapHidupTanpaTabelProfiles(t *testing.T) {
 	db.Exec("DROP TABLE IF EXISTS profiles")
 
 	project := seedProject(t, db, 2)
-	h := handlerGaleri(t, db)
+	h := galleryHandler(t, db)
 
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()

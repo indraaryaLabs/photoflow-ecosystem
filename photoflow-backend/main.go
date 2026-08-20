@@ -11,7 +11,7 @@ import (
 func main() {
 	r, err := app.SetupRouter()
 	if err != nil {
-		log.Fatalf("🔴 Gagal menyiapkan server: %v", err)
+		log.Fatalf("[ERROR] Gagal menyiapkan server: %v", err)
 	}
 
 	port := os.Getenv("PORT")
@@ -20,6 +20,6 @@ func main() {
 	}
 	fmt.Println("🔥 Server berjalan di http://localhost:" + port)
 	if err := r.Run(":" + port); err != nil {
-		log.Fatalf("🔴 Server berhenti: %v", err)
+		log.Fatalf("[ERROR] Server berhenti: %v", err)
 	}
 }
