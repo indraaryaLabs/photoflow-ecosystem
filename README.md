@@ -20,33 +20,6 @@ fotografer memanen berkas aslinya lewat aplikasi desktop.
 Ditujukan untuk fotografer lepas yang menangani sedikit klien sekaligus, bukan
 untuk studio besar.
 
-## Tampilan
-
-Yang dilihat klien. Tanpa akun, tanpa aplikasi — satu tautan, lalu memilih.
-Barisnya dihitung agar tinggi tiap baris sama sementara rasio asli tiap foto
-dipertahankan; foto potret dan lanskap boleh berdampingan tanpa dipotong.
-
-![Galeri klien](docs/images/gallery-light.jpg)
-
-Mengirim mengunci galeri, jadi tombolnya tidak langsung mengirim. Sisa kuota
-disebut dengan angka, karena kesalahan yang lebih sering terjadi bukan salah
-tekan melainkan mengirim terlalu dini.
-
-![Konfirmasi sebelum mengirim](docs/images/submit-confirm.jpg)
-
-Yang dilihat fotografer. Empat petak ringkasan menjawab satu pertanyaan yang
-diulang setiap hari: mana yang menunggu saya, dan mana yang menunggu klien.
-
-![Dashboard fotografer](docs/images/dashboard-light.png)
-
-Tema gelap mengikuti setelan sistem, dan dapat ditimpa manual.
-
-![Galeri klien pada mode gelap](docs/images/gallery-dark.jpg)
-
-> Foto pada tangkapan layar di atas adalah gambar contoh yang dibangkitkan
-> program, bukan karya fotografer sungguhan. Antarmukanya sendiri asli — semua
-> gambar ini diambil dari aplikasi yang berjalan, bukan dari mockup.
-
 ## Arsitektur
 
 ```mermaid
