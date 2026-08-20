@@ -196,11 +196,24 @@ export default function SelectionListModal({ project, onClose, onFetch, onToast 
             </div>
 
             {mode === MODE_REPLACE && (
+              /* Warna latarnya WAJIB pekat, dan itu bukan soal selera.
+                 Sebelumnya "dark:bg-black/20", dan Chrome mewarnai daftar
+                 pilihan bawaan memakai background-color milik select itu
+                 sendiri. Hitam 20% yang dikomposit di atas dasar terang
+                 menghasilkan abu-abu pucat, sehingga daftar ekstensinya tampil
+                 sebagai kotak terang berisi teks gelap di tengah antarmuka
+                 gelap -- satu-satunya bagian aplikasi yang tidak mengikuti
+                 temanya.
+
+                 Warna option ikut disebut eksplisit. Ia tidak mewarisi warna
+                 dari select di semua peramban, dan daftar itu digambar di luar
+                 dokumen sehingga tidak tersentuh gaya apa pun yang berlaku di
+                 dalamnya. */
               <select
                 value={extension}
                 onChange={(e) => setExtension(e.target.value)}
                 aria-label="RAW extension"
-                className="mt-3 bg-ash-50 dark:bg-black/20 border border-ash-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-ash-500 dark:focus:border-ash-400"
+                className="mt-3 bg-ash-50 dark:bg-ash-800 text-ash-900 dark:text-ash-100 border border-ash-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-ash-500 dark:focus:border-ash-400 [&>option]:bg-white dark:[&>option]:bg-ash-800 [&>option]:text-ash-900 dark:[&>option]:text-ash-100"
               >
                 {RAW_EXTENSIONS.map((ext) => (
                   <option key={ext} value={ext}>.{ext}</option>
