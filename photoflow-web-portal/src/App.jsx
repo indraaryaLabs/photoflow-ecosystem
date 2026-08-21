@@ -723,7 +723,7 @@ export default function App() {
             dibutuhkan orangnya adalah melihat foto sebanyak mungkin. */}
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-xl sm:text-2xl font-semibold text-ash-900 dark:text-white tracking-tight">
+            <h2 className="font-display text-2xl font-normal tracking-tight text-ash-900 sm:text-3xl dark:text-white">
               Choose your favourites
             </h2>
             <p className="text-ash-600 dark:text-ash-400 text-sm mt-1">

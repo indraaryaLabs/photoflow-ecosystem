@@ -66,7 +66,7 @@ export default function LegalPage({ doc, themeChoice, cycleTheme }) {
           {kembali === '/' ? 'Back to PhotoFlow' : 'Back to your gallery'}
         </a>
 
-        <h1 className="mt-6 text-3xl font-semibold tracking-tight text-ash-900 dark:text-white">
+        <h1 className="mt-6 font-display text-4xl font-normal tracking-tight text-ash-900 dark:text-white">
           {title}
         </h1>
         <p className="mt-2 text-sm text-ash-500 dark:text-ash-500">
@@ -98,7 +98,7 @@ export default function LegalPage({ doc, themeChoice, cycleTheme }) {
 function Section({ heading, children }) {
   return (
     <section className="mb-9">
-      <h2 className="mb-3 text-lg font-semibold tracking-tight text-ash-900 dark:text-white">
+      <h2 className="mb-3 font-display text-xl font-normal tracking-tight text-ash-900 dark:text-white">
         {heading}
       </h2>
       <div className="space-y-3 text-[15px] leading-relaxed text-ash-700 dark:text-ash-300">

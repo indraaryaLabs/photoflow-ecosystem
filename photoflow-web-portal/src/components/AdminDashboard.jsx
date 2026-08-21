@@ -16,6 +16,7 @@ import { bacaCache, tulisCache, hapusCache } from '../lib/projectCache';
 import { PRIVACY_PATH, TERMS_PATH } from '../lib/legal';
 import { ambilLangganan, tebusKode } from '../lib/subscription';
 import { cekAdmin } from '../lib/admin';
+import { PRICING_PATH } from '../lib/pricing';
 import { sudahLihatPanduan, tandaiLihatPanduan } from '../lib/onboarding';
 import GuideChat from './GuideChat';
 import QuotaBadge from './QuotaBadge';
@@ -303,10 +304,18 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
     }
 
     setStudioName(body?.studio_name ?? nama);
+
+    // Namanya memang tersimpan pada paket apa pun — yang berbeda hanya apakah
+    // klien melihatnya. Toast lama mengatakan "klien akan melihat nama ini"
+    // kepada semua orang, termasuk yang galerinya tetap bermerek PhotoFlow.
+    // Pesan yang benar tapi menyesatkan tetap menyesatkan.
+    const tampilKeKlien = langganan?.own_branding === true;
     showToast(
-      body?.studio_name
-        ? 'Your clients will see this name on their gallery.'
-        : 'Studio name cleared. Galleries show "PhotoFlow" again.',
+      !body?.studio_name
+        ? 'Studio name cleared. Galleries show "PhotoFlow" again.'
+        : tampilKeKlien
+          ? 'Your clients will see this name on their gallery.'
+          : 'Saved. It appears on client galleries once you are on a paid plan.',
     );
     return true;
   };
@@ -753,7 +762,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
                 <BrandMark size={20} />
               </div>
               <div>
-                <h1 className="text-lg font-semibold tracking-tight leading-tight">PhotoFlow Workspace</h1>
+                <h1 className="font-display text-xl font-normal leading-tight tracking-tight">PhotoFlow Workspace</h1>
                 <p className="text-xs text-ash-600 dark:text-ash-400 font-medium tracking-wide">PROJECT DASHBOARD</p>
               </div>
             </div>
@@ -812,7 +821,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
                   ke daftar project -- yang justru dibuka setiap hari. */}
               <div className="mb-6 flex items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-semibold tracking-tight">Client Projects</h2>
+                  <h2 className="font-display text-2xl font-normal tracking-tight sm:text-3xl">Client Projects</h2>
                   <p className="text-sm text-ash-600 dark:text-ash-400 mt-1">
                     {projects.length === 0
                       ? 'Nothing here yet.'
@@ -884,7 +893,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
                   <div className="w-16 h-16 bg-ash-100 dark:bg-white/5 rounded-full flex items-center justify-center mb-4">
                     <FolderOpen size={32} strokeWidth={1.75} className="text-ash-500" />
                   </div>
-                  <h3 className="text-lg font-medium text-ash-900 dark:text-white">No projects yet</h3>
+                  <h3 className="font-display text-xl font-normal tracking-tight text-ash-900 dark:text-white">No projects yet</h3>
                   <p className="text-sm text-ash-600 dark:text-ash-400 mt-2 max-w-sm">
                     Point a project at a Google Drive folder and PhotoFlow turns it into a
                     link your client can pick from.
@@ -977,7 +986,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
               >
                 <div className="mb-6 flex items-start justify-between">
                   <div>
-                    <h2 className="text-xl font-semibold tracking-tight">New project</h2>
+                    <h2 className="font-display text-2xl font-normal tracking-tight">New project</h2>
                     <p className="mt-1 text-sm text-ash-600 dark:text-ash-400">
                       Create a gallery for your client to pick from.
                     </p>
@@ -1137,6 +1146,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
         {studioOpen && (
           <StudioNameModal
             initial={studioName}
+            bolehMerek={langganan?.own_branding === true}
             onClose={() => setStudioOpen(false)}
             onSave={saveStudioName}
           />
@@ -1149,7 +1159,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
               <button type="button" onClick={() => setEditingProject(null)} className="absolute top-4 right-4 p-2 text-ash-500 hover:text-ash-600 dark:hover:text-ash-200 transition-colors">
                 <X size={20} strokeWidth={1.75} />
               </button>
-              <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">Edit Project</h2>
+              <h2 className="mb-6 flex items-center gap-2 font-display text-2xl font-normal tracking-tight">Edit project</h2>
               <form onSubmit={handleEdit} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-ash-600 dark:text-ash-300 uppercase tracking-wider">Project Name</label>
@@ -1207,7 +1217,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
               <div className="mx-auto w-12 h-12 rounded-full bg-danger-100 dark:bg-danger-500/10 border border-danger-200 dark:border-danger-500/20 flex items-center justify-center mb-4 text-danger-500">
                 <AlertOctagon size={24} strokeWidth={1.75} />
               </div>
-              <h2 className="text-xl font-semibold text-ash-900 dark:text-ash-100 mb-2">Delete Project?</h2>
+              <h2 className="mb-2 font-display text-2xl font-normal tracking-tight text-ash-900 dark:text-ash-100">Delete project?</h2>
               <p className="text-sm text-ash-600 dark:text-ash-400 mb-6">Are you sure you want to delete <strong className="text-ash-800 dark:text-ash-300">{deletingProject.client_name}</strong>? This action cannot be undone and will remove all associated photos.</p>
               <div className="flex gap-3">
                 <button onClick={() => setDeletingProject(null)} className="flex-1 px-4 py-3 rounded-xl border border-ash-200 dark:border-ash-700 font-medium text-sm hover:bg-ash-100 dark:hover:bg-ash-800 transition-colors">Cancel</button>
@@ -1226,7 +1236,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
               <div className="mx-auto w-12 h-12 rounded-full bg-ash-100 dark:bg-white/5 border border-ash-200 dark:border-white/10 flex items-center justify-center mb-4 text-ash-700 dark:text-ash-200">
                 <RotateCcw size={24} strokeWidth={1.75} />
               </div>
-              <h2 className="text-xl font-semibold text-ash-900 dark:text-ash-100 mb-2">Reopen selection?</h2>
+              <h2 className="mb-2 font-display text-2xl font-normal tracking-tight text-ash-900 dark:text-ash-100">Reopen selection?</h2>
               <p className="text-sm text-ash-600 dark:text-ash-400 mb-6">
                 The gallery for <strong className="text-ash-800 dark:text-ash-300">{reopeningProject.client_name}</strong> becomes selectable again, and the saved picks are cleared. Use this when a client submitted by mistake.
               </p>
@@ -1247,7 +1257,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
               <div className="mx-auto w-12 h-12 rounded-full bg-ash-100 dark:bg-white/5 border border-ash-200 dark:border-white/10 flex items-center justify-center mb-4 text-ash-700 dark:text-ash-200">
                 <KeyRound size={24} strokeWidth={1.75} />
               </div>
-              <h2 className="text-xl font-semibold text-ash-900 dark:text-ash-100 mb-2">Issue a new link?</h2>
+              <h2 className="mb-2 font-display text-2xl font-normal tracking-tight text-ash-900 dark:text-ash-100">Issue a new link?</h2>
               <p className="text-sm text-ash-600 dark:text-ash-400 mb-6">
                 The link you already sent to <strong className="text-ash-800 dark:text-ash-300">{rotatingProject.client_name}</strong> stops
                 working immediately, and you will need to send the new one. Photos already selected are kept.
@@ -1314,7 +1324,23 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
  * state dashboard: mengetik lalu menutup tanpa menyimpan harus membuang
  * ketikannya, bukan diam-diam mengubah tampilan tombol di kepala halaman.
  */
-function StudioNameModal({ initial, onClose, onSave }) {
+/**
+ * Penyunting nama studio.
+ *
+ * Nama studio adalah pembeda paket berbayar: galeri paket gratis selalu
+ * bermerek PhotoFlow, apa pun yang tersimpan di sini. Sebelumnya layar ini
+ * tidak menyebut itu sama sekali — ia menulis "Shown at the top of every
+ * gallery your clients open", memperlihatkan pratinjau berisi nama yang baru
+ * diketik, lalu menjawab tersimpan. Ketiganya benar secara harfiah dan salah
+ * secara keseluruhan: yang membuka galerinya tetap melihat PhotoFlow, tanpa
+ * satu pun tanda mengapa.
+ *
+ * Yang diperbaiki di sini bentuk penyampaiannya, bukan aturannya. Menyimpan
+ * tetap diizinkan pada paket gratis — namanya siap dipakai begitu paketnya
+ * aktif — tapi pratinjaunya sekarang menunjukkan apa yang BENAR-BENAR dilihat
+ * klien hari ini.
+ */
+function StudioNameModal({ initial, bolehMerek, onClose, onSave }) {
   const [nilai, setNilai] = useState(initial);
   const [menyimpan, setMenyimpan] = useState(false);
 
@@ -1338,10 +1364,11 @@ function StudioNameModal({ initial, onClose, onSave }) {
           <X size={20} strokeWidth={1.75} />
         </button>
 
-        <h2 className="mb-1 text-xl font-semibold tracking-tight">Studio name</h2>
+        <h2 className="mb-1 font-display text-2xl font-normal tracking-tight">Studio name</h2>
         <p className="mb-5 text-sm text-ash-600 dark:text-ash-400">
-          Shown at the top of every gallery your clients open, in place of
-          &ldquo;PhotoFlow&rdquo;. Leave it empty to keep the default.
+          {bolehMerek
+            ? 'Shown at the top of every gallery your clients open, in place of "PhotoFlow". Leave it empty to keep the default.'
+            : 'On a paid plan this replaces "PhotoFlow" at the top of every gallery your clients open. You can set it now — it starts showing the moment your plan is active.'}
         </p>
 
         <form onSubmit={kirim} className="space-y-4">
@@ -1361,21 +1388,37 @@ function StudioNameModal({ initial, onClose, onSave }) {
               sendiri. */}
           <div className="rounded-xl border border-ash-200 bg-ash-50 p-3 dark:border-white/10 dark:bg-white/[0.03]">
             <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-ash-500">
-              Your client sees
+              {bolehMerek ? 'Your client sees' : 'Your client sees today'}
             </p>
             <div className="flex items-center gap-3">
               <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-ash-200 bg-ash-100 text-ash-700 dark:border-white/10 dark:bg-white/5 dark:text-ash-200">
                 <BrandMark size={18} />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold tracking-tight text-ash-900 dark:text-white">
-                  {nilai.trim() || 'PhotoFlow'}
+                <p className="truncate font-display text-base font-normal tracking-tight text-ash-900 dark:text-white">
+                  {(bolehMerek && nilai.trim()) || 'PhotoFlow'}
                 </p>
                 <p className="truncate text-xs font-medium text-ash-600 dark:text-ash-400">
                   Their name
                 </p>
               </div>
             </div>
+
+            {/* Diletakkan DI DALAM kotak pratinjau, tepat di bawah nama yang
+                sedang dibantahnya. Keterangan yang benar tapi berada jauh dari
+                hal yang dijelaskannya sama saja tidak ada. */}
+            {!bolehMerek && (
+              <p className="mt-3 border-t border-ash-200 pt-3 text-xs text-ash-600 dark:border-white/10 dark:text-ash-400">
+                Free galleries always carry PhotoFlow branding.{' '}
+                <a
+                  href={PRICING_PATH}
+                  className="underline underline-offset-4 hover:text-ash-900 dark:hover:text-ash-100"
+                >
+                  See plans
+                </a>
+                .
+              </p>
+            )}
           </div>
 
           <button

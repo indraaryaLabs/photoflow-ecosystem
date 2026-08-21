@@ -295,7 +295,7 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
                     transition={{ duration: 0.3 }}
                     className="absolute flex flex-col items-center w-full"
                   >
-                    <h1 className="text-2xl font-semibold tracking-tight text-ash-900 dark:text-white mb-1.5 transition-colors duration-tint">
+                    <h1 className="mb-1.5 font-display text-3xl font-normal tracking-tight text-ash-900 transition-colors duration-tint dark:text-white">
                       {isRecovery
                         ? t({ en: 'Set a new password', id: 'Setel kata sandi baru' })
                         : session

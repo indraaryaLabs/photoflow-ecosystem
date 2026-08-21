@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
-// Inter dilayani dari domain aplikasi sendiri, bukan dari Google Fonts.
+// Hurufnya dilayani dari domain aplikasi sendiri, bukan dari Google Fonts.
 //
 // Sebelumnya index.html memuat <link> ke fonts.googleapis.com. Tautan itu
 // MENGHALANGI PENGGAMBARAN: peramban menolak melukis satu piksel pun sebelum
@@ -17,9 +17,17 @@ import { createRoot } from 'react-dom/client'
 //
 // Varian `wght` memuat seluruh rentang tebal 100-900 dalam satu berkas, dan
 // dipecah per subset dengan `unicode-range` — peramban hanya mengunduh subset
-// latin, 48 KB. `font-display: swap` sudah disetel di dalamnya, jadi teks
-// tampil seketika memakai huruf sistem lalu berganti setibanya Inter.
-import '@fontsource-variable/inter/wght.css'
+// latin, 29 KB. `font-display: swap` sudah disetel di dalamnya, jadi teks
+// tampil seketika memakai huruf sistem lalu berganti setibanya Geist.
+import '@fontsource-variable/geist/wght.css'
+
+// Instrument Serif hanya dipakai pada judul, dan hanya satu tebal, jadi yang
+// diimpor cuma 400 — bukan berkas variabel. 21 KB untuk subset latin.
+//
+// Miringnya sengaja TIDAK diimpor: tidak ada satu pun judul di aplikasi ini
+// yang dimiringkan, dan memuat berkas kedua untuk gaya yang tidak dipakai
+// adalah unduhan yang dibayar setiap pengunjung tanpa menerima apa pun.
+import '@fontsource/instrument-serif/400.css'
 
 import './index.css'
 import App from './App.jsx'

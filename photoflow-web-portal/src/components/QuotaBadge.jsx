@@ -45,7 +45,10 @@ export default function QuotaBadge({ sub, onOpen }) {
         <InfinityIcon size={14} strokeWidth={2} aria-hidden="true" />
       ) : null}
 
-      <span>
+      {/* tabular-nums supaya lebar penandanya tidak berubah saat angkanya
+          naik. Tanpa itu "1 of 3" dan "2 of 3" punya lebar berbeda, dan
+          tombol di sebelahnya bergeser setiap kali galeri dibuat. */}
+      <span className="tabular-nums">
         {namaPaket(sub.plan)} &middot; {ringkasKuota(sub)}
       </span>
     </button>
