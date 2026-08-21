@@ -158,6 +158,7 @@ export default function PricingPage({ themeChoice, cycleTheme }) {
       cycleTheme={cycleTheme}
       lang={lang}
       onSelectLang={setLang}
+      t={t}
       lebar="max-w-5xl"
     >
       <div className="mx-auto max-w-2xl text-center">

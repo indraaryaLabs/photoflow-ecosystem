@@ -60,7 +60,7 @@ const STEPS = {
           </p>
           <p>
             Copy the link. It looks like{' '}
-            <code className="rounded bg-ash-100 px-1.5 py-0.5 text-[13px] dark:bg-white/10">
+            <code className="break-all rounded bg-ash-100 px-1.5 py-0.5 text-[13px] dark:bg-white/10">
               drive.google.com/drive/folders/1AbC...
             </code>
           </p>
@@ -152,7 +152,7 @@ const STEPS = {
           </p>
           <p>
             Salin tautannya. Bentuknya seperti{' '}
-            <code className="rounded bg-ash-100 px-1.5 py-0.5 text-[13px] dark:bg-white/10">
+            <code className="break-all rounded bg-ash-100 px-1.5 py-0.5 text-[13px] dark:bg-white/10">
               drive.google.com/drive/folders/1AbC...
             </code>
           </p>
@@ -283,6 +283,7 @@ export default function GuidePage({ themeChoice, cycleTheme }) {
       cycleTheme={cycleTheme}
       lang={lang}
       onSelectLang={setLang}
+      t={t}
     >
       <h1 className="text-3xl font-semibold tracking-tight text-ash-900 dark:text-white">
         {t(COPY.title)}

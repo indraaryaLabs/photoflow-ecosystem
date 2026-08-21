@@ -4,10 +4,8 @@ import { Mail, Lock, Eye, EyeOff, User, ArrowRight, Loader2, Phone, LogOut, Layo
 import { supabase } from '../lib/supabase';
 import { openedFromRecoveryLink, clearUrlFragment } from '../lib/recovery';
 import BrandMark from './BrandMark';
-import ThemeToggle from './ThemeToggle';
-import LangToggle from './LangToggle';
+import PublicNav from './PublicNav';
 import { PRIVACY_PATH, TERMS_PATH } from '../lib/legal';
-import { GUIDE_PATH, PRICING_PATH } from '../lib/pricing';
 import { useLang } from '../lib/lang';
 
 /**
@@ -229,40 +227,20 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
       <div className="relative min-h-screen w-full flex items-center justify-center bg-ash-50 dark:bg-ash-950 text-ash-900 dark:text-ash-100 overflow-hidden font-sans transition-colors duration-tint">
 
         {/* --- HEADER ---
-            Harga dan panduan pindah ke sini dari kaki halaman. Di bawah kartu
-            masuk keduanya adalah teks abu-abu kecil yang tidak pernah terbaca:
-            mata berhenti di kartunya, tidak turun melewatinya. Padahal justru
-            orang yang BELUM punya akun — yang datang dari iklan — yang paling
-            membutuhkan keduanya.
-
-            Bentuknya juga menyamakan ketiga halaman publik: /pricing dan
-            /guide sudah punya header seperti ini lewat PageShell, dan layar
-            masuk satu-satunya yang berbeda sendiri. */}
-        <header className="absolute inset-x-0 top-0 z-50 flex items-center gap-3 px-5 py-5 sm:px-8">
-          <a href="/" className="inline-flex items-center gap-2 text-ash-900 dark:text-white">
-            <BrandMark size={22} title="PhotoFlow" />
-            <span className="text-sm font-semibold tracking-tight">PhotoFlow</span>
-          </a>
-
-          <nav className="ml-4 hidden items-center gap-4 text-sm sm:flex">
-            <a
-              href={PRICING_PATH}
-              className="font-medium text-ash-600 transition-colors hover:text-ash-900 dark:text-ash-400 dark:hover:text-ash-100"
-            >
-              {t({ en: 'Pricing', id: 'Harga' })}
-            </a>
-            <a
-              href={GUIDE_PATH}
-              className="font-medium text-ash-600 transition-colors hover:text-ash-900 dark:text-ash-400 dark:hover:text-ash-100"
-            >
-              {t({ en: 'Guide', id: 'Panduan' })}
-            </a>
-          </nav>
-
-          <div className="ml-auto flex items-center gap-1.5">
-            <LangToggle lang={lang} onSelect={setLang} />
-            <ThemeToggle choice={themeChoice} onCycle={cycleTheme} />
-          </div>
+            Navigasinya sama persis dengan /pricing dan /guide karena memang
+            komponen yang sama. Sebelumnya layar ini punya salinannya sendiri,
+            dan salinan itu menyembunyikan tautannya di bawah breakpoint sm —
+            sehingga di ponsel Harga dan Panduan kembali terkubur di kaki
+            halaman, tempat yang justru sedang diperbaiki. */}
+        <header className="absolute inset-x-0 top-0 z-50 px-5 py-5 sm:px-8">
+          <PublicNav
+            themeChoice={themeChoice}
+            cycleTheme={cycleTheme}
+            lang={lang}
+            onSelectLang={setLang}
+            t={t}
+            showSignIn={false}
+          />
         </header>
 
         {/* --- BACKGROUND EFFECTS --- */}
@@ -579,26 +557,7 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
               verifikasi OAuth Google menuntut tautan kebijakan privasi terlihat
               dari halaman depan aplikasi, dan bagi orang yang belum masuk,
               inilah halaman depannya. */}
-          {/* Di layar sempit nav header disembunyikan supaya tidak berdesakan
-              dengan sakelar bahasa dan tema, jadi di sanalah baris ini masih
-              dibutuhkan. Di layar lebar keduanya sudah ada di header. */}
-          <p className="mt-6 text-center text-xs text-ash-600 sm:hidden dark:text-ash-400">
-            <a
-              href={PRICING_PATH}
-              className="hover:text-ash-900 dark:hover:text-ash-100 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"
-            >
-              {t({ en: 'Pricing', id: 'Harga' })}
-            </a>
-            <span className="mx-2 opacity-50">·</span>
-            <a
-              href={GUIDE_PATH}
-              className="hover:text-ash-900 dark:hover:text-ash-100 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"
-            >
-              {t({ en: 'Guide', id: 'Panduan' })}
-            </a>
-          </p>
-
-          <p className="mt-4 text-center text-xs text-ash-500 sm:mt-6 dark:text-ash-500">
+          <p className="mt-6 text-center text-xs text-ash-500 dark:text-ash-500">
             <a
               href={PRIVACY_PATH}
               className="hover:text-ash-700 dark:hover:text-ash-300 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"
