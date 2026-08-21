@@ -82,7 +82,7 @@ export default function PlanModal({ sub, blocked, onClose, onRedeem }) {
           <X size={20} strokeWidth={1.75} />
         </button>
 
-        <h2 className="mb-1 text-xl font-semibold tracking-tight">
+        <h2 className="mb-1 font-display text-2xl font-normal tracking-tight">
           {blocked ? 'Out of galleries this month' : 'Your plan'}
         </h2>
 

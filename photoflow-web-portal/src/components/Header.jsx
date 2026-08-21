@@ -35,7 +35,7 @@ const Header = ({ project, themeChoice, cycleTheme }) => {
             <BrandMark size={18} />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-sm font-semibold text-ash-900 dark:text-white tracking-tight">
+            <h1 className="truncate font-display text-lg font-normal tracking-tight text-ash-900 dark:text-white">
               {studio || 'PhotoFlow'}
             </h1>
             <p className="truncate text-xs text-ash-600 dark:text-ash-400 font-medium">
