@@ -61,7 +61,7 @@ export default function AdminPanel({ themeChoice, cycleTheme, onNavigate }) {
     return (
       <Rangka themeChoice={themeChoice} cycleTheme={cycleTheme} onNavigate={onNavigate}>
         <div className="py-20 text-center">
-          <h1 className="font-display text-3xl font-normal tracking-tight text-ash-900 dark:text-white">
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-ash-900 dark:text-white">
             Not found
           </h1>
           <p className="mt-2 text-sm text-ash-600 dark:text-ash-400">
@@ -74,7 +74,7 @@ export default function AdminPanel({ themeChoice, cycleTheme, onNavigate }) {
 
   return (
     <Rangka themeChoice={themeChoice} cycleTheme={cycleTheme} onNavigate={onNavigate}>
-      <h1 className="font-display text-3xl font-normal tracking-tight text-ash-900 dark:text-white">
+      <h1 className="font-display text-3xl font-semibold tracking-tight text-ash-900 dark:text-white">
         Operator
       </h1>
       <p className="mt-2 text-sm text-ash-600 dark:text-ash-400">
@@ -123,7 +123,7 @@ function Rangka({ themeChoice, cycleTheme, onNavigate, children }) {
 function Kartu({ judul, keterangan, children }) {
   return (
     <section className="mt-8 rounded-2xl border border-ash-200 bg-white p-6 dark:border-white/10 dark:bg-white/[0.03]">
-      <h2 className="font-display text-lg font-normal tracking-tight text-ash-900 dark:text-white">
+      <h2 className="font-display text-lg font-semibold tracking-tight text-ash-900 dark:text-white">
         {judul}
       </h2>
       {keterangan && (

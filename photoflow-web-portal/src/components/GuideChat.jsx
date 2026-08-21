@@ -82,7 +82,7 @@ export default function GuideChat({ onClose, onDismiss }) {
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-ash-200 bg-ash-100 text-ash-700 dark:border-white/10 dark:bg-white/5 dark:text-ash-200">
             <BrandMark size={16} />
           </div>
-          <p className="font-display text-base font-normal tracking-tight text-ash-900 dark:text-white">
+          <p className="font-display text-base font-semibold tracking-tight text-ash-900 dark:text-white">
             Getting started
           </p>
           <button

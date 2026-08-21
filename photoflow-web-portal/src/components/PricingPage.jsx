@@ -162,7 +162,7 @@ export default function PricingPage({ themeChoice, cycleTheme }) {
       lebar="max-w-5xl"
     >
       <div className="mx-auto max-w-2xl text-center">
-        <h1 className="font-display text-4xl font-normal tracking-tight text-ash-900 sm:text-5xl dark:text-white">
+        <h1 className="font-display text-4xl font-semibold tracking-tight text-ash-900 sm:text-5xl dark:text-white">
           {t(COPY.title)}
         </h1>
         <p className="mt-3 text-[15px] leading-relaxed text-ash-600 dark:text-ash-400">
@@ -255,7 +255,7 @@ function KartuPaket({ plan, lang, t }) {
         </span>
       )}
 
-      <h2 className="font-display text-xl font-normal tracking-tight text-ash-900 dark:text-white">
+      <h2 className="font-display text-xl font-semibold tracking-tight text-ash-900 dark:text-white">
         {plan.name}
       </h2>
       <p className="mt-1 text-sm text-ash-600 dark:text-ash-400">{t(plan.tagline)}</p>
@@ -333,7 +333,7 @@ function KartuPaket({ plan, lang, t }) {
 function CaraBerlangganan({ lang, t }) {
   return (
     <section className="mt-14">
-      <h2 className="font-display text-2xl font-normal tracking-tight text-ash-900 dark:text-white">
+      <h2 className="font-display text-2xl font-semibold tracking-tight text-ash-900 dark:text-white">
         {t(COPY.howTitle)}
       </h2>
       <p className="mt-2 text-sm text-ash-600 dark:text-ash-400">{t(COPY.howIntro)}</p>
@@ -358,7 +358,7 @@ function CaraBerlangganan({ lang, t }) {
 function Pertanyaan({ lang, t }) {
   return (
     <section className="mt-14">
-      <h2 className="font-display text-2xl font-normal tracking-tight text-ash-900 dark:text-white">
+      <h2 className="font-display text-2xl font-semibold tracking-tight text-ash-900 dark:text-white">
         {t(COPY.faqTitle)}
       </h2>
 

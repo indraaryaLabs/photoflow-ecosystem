@@ -285,7 +285,7 @@ export default function GuidePage({ themeChoice, cycleTheme }) {
       onSelectLang={setLang}
       t={t}
     >
-      <h1 className="font-display text-4xl font-normal tracking-tight text-ash-900 dark:text-white">
+      <h1 className="font-display text-4xl font-semibold tracking-tight text-ash-900 dark:text-white">
         {t(COPY.title)}
       </h1>
       <p className="mt-3 text-[15px] leading-relaxed text-ash-600 dark:text-ash-400">
@@ -301,7 +301,7 @@ export default function GuidePage({ themeChoice, cycleTheme }) {
       ))}
 
       <section className="mt-12 border-t border-ash-200 pt-8 dark:border-white/10">
-        <h2 className="font-display text-2xl font-normal tracking-tight text-ash-900 dark:text-white">
+        <h2 className="font-display text-2xl font-semibold tracking-tight text-ash-900 dark:text-white">
           {t(COPY.troubleTitle)}
         </h2>
         <dl className="mt-5 space-y-4">
@@ -347,7 +347,7 @@ function Langkah({ nomor, judul, children }) {
         {nomor}
       </span>
       <div className="min-w-0">
-        <h2 className="font-display text-xl font-normal tracking-tight text-ash-900 dark:text-white">
+        <h2 className="font-display text-xl font-semibold tracking-tight text-ash-900 dark:text-white">
           {judul}
         </h2>
         <div className="mt-2 space-y-2 text-[15px] leading-relaxed text-ash-700 dark:text-ash-300">
