@@ -8,25 +8,27 @@
   /* Dua keluarga, dan pembagiannya tegas: serif HANYA untuk judul, sans untuk
    * segala yang dibaca berbaris-baris.
    *
-   * Sebelumnya seluruh aplikasi memakai Inter saja. Inter bukan huruf yang
-   * buruk — ia dipakai Vercel, Figma, dan setengah isi internet — dan justru
-   * itu persoalannya: mata membacanya sebagai "aplikasi bawaan". Yang membuat
-   * sebuah antarmuka terasa dikerjakan orang, bukan dirakit dari templat,
-   * adalah adanya wajah yang berkarakter di tempat yang tepat.
+   * Satu keluarga untuk segalanya membuat antarmuka terbaca datar — tidak ada
+   * yang menandai mana judul selain ukurannya. Wajah display yang berkarakter
+   * di tempat yang tepat adalah pembeda antara antarmuka yang dirakit dari
+   * templat dan yang dikerjakan orang.
    *
-   * Instrument Serif dipilih karena pasar aplikasi ini adalah fotografer, dan
-   * serif display adalah bahasa galeri dan majalah. Ia dipakai pada judul saja;
-   * dipakai untuk teks panjang, huruf sekurus ini justru melelahkan dibaca.
+   * Fraunces dipilih karena pasar aplikasi ini fotografer, dan serif display
+   * adalah bahasa galeri dan majalah. Ia variabel pada sumbu tebal 100-900,
+   * jadi judul memakai tebal sungguhan, bukan tebal palsu bikinan peramban.
    *
-   * Geist menggantikan Inter di badan teks. Sama netralnya, sedikit lebih
-   * tajam, dan angkanya lebih mudah dibedakan — hal kecil yang berarti pada
-   * dashboard yang penuh hitungan kuota dan jumlah foto. */
-  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+   * Yang diimpor hanya sumbu `wght`, bukan `standard` atau `opsz` yang juga
+   * membawa sumbu optical size: 36 KB berbanding 66 KB, dan pada rentang
+   * ukuran judul di aplikasi ini selisih rupanya tidak terlihat.
+   *
+   * Inter untuk badan teks. Netral, sudah teruji pada teks kecil, dan tidak
+   * menuntut perhatian dari hal yang seharusnya diperhatikan — foto. */
+  --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 
   /* Fallback-nya serif sistem, bukan sans. Kalau berkasnya gagal dimuat, judul
    * tetap harus terbaca sebagai judul — berganti ke sans akan menghapus satu-
    * satunya pembeda antara judul dan isi. */
-  --font-display: 'Instrument Serif', ui-serif, Georgia, 'Times New Roman', serif;
+  --font-display: 'Fraunces Variable', ui-serif, Georgia, 'Times New Roman', serif;
 
   /* Palet netral.
    *

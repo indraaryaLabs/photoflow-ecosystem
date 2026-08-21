@@ -17,17 +17,19 @@ import { createRoot } from 'react-dom/client'
 //
 // Varian `wght` memuat seluruh rentang tebal 100-900 dalam satu berkas, dan
 // dipecah per subset dengan `unicode-range` — peramban hanya mengunduh subset
-// latin, 29 KB. `font-display: swap` sudah disetel di dalamnya, jadi teks
-// tampil seketika memakai huruf sistem lalu berganti setibanya Geist.
-import '@fontsource-variable/geist/wght.css'
+// latin, 48 KB. `font-display: swap` sudah disetel di dalamnya, jadi teks
+// tampil seketika memakai huruf sistem lalu berganti setibanya Inter.
+import '@fontsource-variable/inter/wght.css'
 
-// Instrument Serif hanya dipakai pada judul, dan hanya satu tebal, jadi yang
-// diimpor cuma 400 — bukan berkas variabel. 21 KB untuk subset latin.
+// Fraunces hanya dipakai pada judul. Yang diimpor sumbu `wght` saja: berkas
+// `standard` dan `opsz` membawa sumbu optical size dan hampir dua kali lebih
+// besar, untuk perbedaan yang tidak terlihat pada rentang ukuran judul di
+// aplikasi ini. 36 KB untuk subset latin.
 //
 // Miringnya sengaja TIDAK diimpor: tidak ada satu pun judul di aplikasi ini
 // yang dimiringkan, dan memuat berkas kedua untuk gaya yang tidak dipakai
 // adalah unduhan yang dibayar setiap pengunjung tanpa menerima apa pun.
-import '@fontsource/instrument-serif/400.css'
+import '@fontsource-variable/fraunces/wght.css'
 
 import './index.css'
 import App from './App.jsx'

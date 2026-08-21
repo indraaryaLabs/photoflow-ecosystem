@@ -95,7 +95,7 @@ export default function SelectionListModal({ project, onClose, onFetch, onToast 
           <X size={20} strokeWidth={1.75} />
         </button>
 
-        <h2 className="font-display text-2xl font-normal tracking-tight text-ash-900 dark:text-ash-100">
+        <h2 className="font-display text-2xl font-semibold tracking-tight text-ash-900 dark:text-ash-100">
           {tampilan === 'grid' ? "Your client's picks" : 'Filenames for Lightroom'}
         </h2>
         <p className="text-sm text-ash-600 dark:text-ash-400 mt-1">
