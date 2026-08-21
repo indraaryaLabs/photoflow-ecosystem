@@ -1,0 +1,115 @@
+name: Backup database
+
+# Supabase paket gratis TIDAK punya backup sama sekali. Bukan "backup jarang" —
+# nol titik pulih. Satu perintah DELETE yang salah, atau satu insiden di sisi
+# Supabase, dan tidak ada yang bisa dikembalikan.
+#
+# Yang hilang bukan foto. Foto ada di Google Drive milik fotografer, dan
+# PhotoFlow tidak pernah menyalinnya. Yang hilang justru yang tidak ada di mana
+# pun selain di sini:
+#
+#   - magic_link_token — setiap tautan yang sudah dikirim ke klien mati
+#     serentak, dan fotografer harus menghubungi ulang satu per satu.
+#   - photos.is_selected — foto mana yang dipilih klien. Drive tidak tahu.
+#   - subscriptions — siapa yang sudah membayar dan sampai kapan. Ini tidak
+#     dapat direkonstruksi dari mana pun, dan kehilangannya adalah masalah uang,
+#     bukan masalah data.
+#
+# Basis datanya kecil — metadata saja, bukan berkas — jadi ongkosnya nol dan
+# tidak ada alasan untuk tidak melakukannya.
+
+on:
+  schedule:
+    # 19:00 UTC = 02:00 WIB. Jam paling sepi untuk pengguna Indonesia, jadi
+    # dump berjalan saat tidak ada galeri yang sedang dibuka klien.
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+
+jobs:
+  dump:
+    name: Dump dan simpan terenkripsi
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Pasang klien PostgreSQL 17
+        # Ubuntu runner membawa pg_dump 16, sedangkan Supabase menjalankan
+        # PostgreSQL 17. pg_dump menolak server yang versinya lebih baru
+        # daripada dirinya, jadi tanpa langkah ini seluruh workflow gagal
+        # dengan "server version mismatch" — dan gagalnya baru ketahuan saat
+        # backup benar-benar dibutuhkan.
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          pg_dump --version
+
+      - name: Ambil dump
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        # --no-owner dan --no-privileges: peran di Supabase dikelola platform,
+        # dan menyertakannya membuat restore ke instance lain gagal pada baris
+        # pertama.
+        #
+        # Connection string tidak pernah dicetak. Log Actions repo publik dapat
+        # dibaca siapa pun.
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Secret DATABASE_URL belum disetel."
+            exit 1
+          fi
+          pg_dump "$DATABASE_URL" \
+            --no-owner --no-privileges --clean --if-exists \
+            --file=photoflow.sql
+          echo "baris: $(wc -l < photoflow.sql)"
+
+      - name: Enkripsi
+        env:
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        # WAJIB, dan bukan formalitas: artifact pada repositori PUBLIK dapat
+        # diunduh siapa saja. Dump ini memuat email fotografer, nama dan nomor
+        # WhatsApp klien mereka, serta setiap magic_link_token yang masih
+        # berlaku — siapa pun yang memegang token itu dapat membuka galeri.
+        #
+        # Mengunggahnya mentah sama dengan menerbitkan seluruh basis data
+        # pelanggan.
+        run: |
+          if [ -z "$PASSPHRASE" ]; then
+            echo "::error::Secret BACKUP_PASSPHRASE belum disetel."
+            echo "Backup dibatalkan. Dump mentah TIDAK akan diunggah."
+            exit 1
+          fi
+          gzip -9 photoflow.sql
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+            --passphrase "$PASSPHRASE" \
+            --output photoflow.sql.gz.gpg \
+            photoflow.sql.gz
+          rm -f photoflow.sql.gz
+          ls -lh photoflow.sql.gz.gpg
+
+      - name: Unggah
+        uses: actions/upload-artifact@v4
+        with:
+          name: photoflow-db-${{ github.run_id }}
+          path: photoflow.sql.gz.gpg
+          # 90 hari adalah batas paket gratis. Untuk basis data sekecil ini,
+          # menyimpan tiga bulan riwayat harian tidak berbiaya apa pun.
+          retention-days: 90
+          if-no-files-found: error
+
+# ── Cara memulihkan ───────────────────────────────────────────────────────
+#
+# Unduh artifact dari tab Actions, lalu:
+#
+#   gpg --batch --decrypt --passphrase "$BACKUP_PASSPHRASE" \
+#     --output photoflow.sql.gz photoflow.sql.gz.gpg
+#   gunzip photoflow.sql
+#   psql "$DATABASE_URL_TUJUAN" -f photoflow.sql
+#
+# Simpan BACKUP_PASSPHRASE di tempat yang TERPISAH dari GitHub. Kalau akun
+# GitHub yang hilang, secret-nya ikut hilang, dan seluruh backup jadi berkas
+# acak yang tidak dapat dibuka siapa pun — termasuk Anda.
