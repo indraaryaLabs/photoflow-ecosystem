@@ -228,11 +228,42 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
     <div>
       <div className="relative min-h-screen w-full flex items-center justify-center bg-ash-50 dark:bg-ash-950 text-ash-900 dark:text-ash-100 overflow-hidden font-sans transition-colors duration-tint">
 
-        {/* --- SAKELAR BAHASA & TEMA --- */}
-        <div className="absolute top-6 right-6 z-50 flex items-center gap-1.5">
-          <LangToggle lang={lang} onSelect={setLang} />
-          <ThemeToggle choice={themeChoice} onCycle={cycleTheme} />
-        </div>
+        {/* --- HEADER ---
+            Harga dan panduan pindah ke sini dari kaki halaman. Di bawah kartu
+            masuk keduanya adalah teks abu-abu kecil yang tidak pernah terbaca:
+            mata berhenti di kartunya, tidak turun melewatinya. Padahal justru
+            orang yang BELUM punya akun — yang datang dari iklan — yang paling
+            membutuhkan keduanya.
+
+            Bentuknya juga menyamakan ketiga halaman publik: /pricing dan
+            /guide sudah punya header seperti ini lewat PageShell, dan layar
+            masuk satu-satunya yang berbeda sendiri. */}
+        <header className="absolute inset-x-0 top-0 z-50 flex items-center gap-3 px-5 py-5 sm:px-8">
+          <a href="/" className="inline-flex items-center gap-2 text-ash-900 dark:text-white">
+            <BrandMark size={22} title="PhotoFlow" />
+            <span className="text-sm font-semibold tracking-tight">PhotoFlow</span>
+          </a>
+
+          <nav className="ml-4 hidden items-center gap-4 text-sm sm:flex">
+            <a
+              href={PRICING_PATH}
+              className="font-medium text-ash-600 transition-colors hover:text-ash-900 dark:text-ash-400 dark:hover:text-ash-100"
+            >
+              {t({ en: 'Pricing', id: 'Harga' })}
+            </a>
+            <a
+              href={GUIDE_PATH}
+              className="font-medium text-ash-600 transition-colors hover:text-ash-900 dark:text-ash-400 dark:hover:text-ash-100"
+            >
+              {t({ en: 'Guide', id: 'Panduan' })}
+            </a>
+          </nav>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            <LangToggle lang={lang} onSelect={setLang} />
+            <ThemeToggle choice={themeChoice} onCycle={cycleTheme} />
+          </div>
+        </header>
 
         {/* --- BACKGROUND EFFECTS --- */}
         <div className="absolute inset-0 z-0 bg-[linear-gradient(to_right,#0000000a_1px,transparent_1px),linear-gradient(to_bottom,#0000000a_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] transition-colors duration-tint"></div>
@@ -548,11 +579,10 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
               verifikasi OAuth Google menuntut tautan kebijakan privasi terlihat
               dari halaman depan aplikasi, dan bagi orang yang belum masuk,
               inilah halaman depannya. */}
-          {/* Harga dan panduan ditaruh DI ATAS baris hukum, bukan bersamanya.
-              Yang mendarat di sini dari iklan belum memutuskan apa pun, dan
-              satu-satunya yang ditawarkan layar ini kepadanya adalah formulir
-              masuk untuk akun yang belum ia punya. */}
-          <p className="mt-6 text-center text-xs text-ash-600 dark:text-ash-400">
+          {/* Di layar sempit nav header disembunyikan supaya tidak berdesakan
+              dengan sakelar bahasa dan tema, jadi di sanalah baris ini masih
+              dibutuhkan. Di layar lebar keduanya sudah ada di header. */}
+          <p className="mt-6 text-center text-xs text-ash-600 sm:hidden dark:text-ash-400">
             <a
               href={PRICING_PATH}
               className="hover:text-ash-900 dark:hover:text-ash-100 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"
@@ -568,7 +598,7 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
             </a>
           </p>
 
-          <p className="mt-2 text-center text-xs text-ash-500 dark:text-ash-500">
+          <p className="mt-4 text-center text-xs text-ash-500 sm:mt-6 dark:text-ash-500">
             <a
               href={PRIVACY_PATH}
               className="hover:text-ash-700 dark:hover:text-ash-300 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"

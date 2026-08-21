@@ -15,6 +15,7 @@ import {
   ringkasKuota,
   tanggalBerakhir,
 } from '../lib/subscription';
+import { PRICING_PATH } from '../lib/pricing';
 
 /**
  * Kalimat penolakan, disusun di sini alih-alih memakai `error` dari backend.
@@ -171,8 +172,19 @@ export default function PlanModal({ sub, blocked, onClose, onRedeem }) {
               <p className="text-sm text-danger-600 dark:text-danger-400">{galat}</p>
             )}
 
+            {/* Harga ditautkan dari sini, bukan dari header dashboard. Orang
+                yang sedang memikirkan uang sudah berada di dialog ini —
+                menaruh tautannya di tempat lain berarti ia harus mencarinya
+                setelah menutup yang sedang dibacanya. */}
             <p className="text-xs text-ash-500 dark:text-ash-500">
-              Codes are issued after payment. Message us to buy one.
+              Codes are issued after payment.{' '}
+              <a
+                href={PRICING_PATH}
+                className="underline underline-offset-4 hover:text-ash-700 dark:hover:text-ash-300"
+              >
+                See all plans and prices
+              </a>
+              .
             </p>
           </form>
         )}

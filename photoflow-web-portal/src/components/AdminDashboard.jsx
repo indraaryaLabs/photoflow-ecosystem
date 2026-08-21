@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Copy, Check, Plus, FolderOpen, Link as LinkIcon, Clock,
   CheckCircle2, Loader2, MoreVertical, Edit, Trash2, X, AlertOctagon,
-  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks, KeyRound, Settings, ShieldCheck
+  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks, KeyRound, Settings, ShieldCheck, HelpCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { API_BASE } from '../lib/api';
@@ -16,6 +16,8 @@ import { bacaCache, tulisCache, hapusCache } from '../lib/projectCache';
 import { PRIVACY_PATH, TERMS_PATH } from '../lib/legal';
 import { ambilLangganan, tebusKode } from '../lib/subscription';
 import { cekAdmin } from '../lib/admin';
+import { sudahLihatPanduan, tandaiLihatPanduan } from '../lib/onboarding';
+import GuideChat from './GuideChat';
 import QuotaBadge from './QuotaBadge';
 import PlanModal from './PlanModal';
 
@@ -113,6 +115,11 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
   // penjaganya di backend, yang membalas 404 — melainkan supaya fotografer
   // biasa tidak melihat tombol yang membawanya ke halaman kosong.
   const [bolehOperator, setBolehOperator] = useState(false);
+
+  // Sambutan percakapan. Muncul sendiri hanya untuk akun yang belum punya satu
+  // pun project dan belum pernah menutupnya; tombol tanda tanya memanggilnya
+  // kembali kapan saja.
+  const [chatOpen, setChatOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [tertahan, setTertahan] = useState(null);
 
@@ -418,6 +425,26 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
       batal = true;
     };
   }, []);
+
+  // Sambutan dibuka HANYA setelah daftar project selesai dibaca dan ternyata
+  // kosong. Memakai isLoading sebagai syarat penting: tanpa itu, sambutan
+  // muncul pada render pertama — saat projects masih array kosong karena
+  // belum dimuat — dan menyapa fotografer yang sudah punya dua puluh galeri.
+  useEffect(() => {
+    if (isLoading || !userId) return;
+    if (projects.length > 0) return;
+    if (sudahLihatPanduan(userId)) return;
+
+    const timer = setTimeout(() => setChatOpen(true), 1200);
+    return () => clearTimeout(timer);
+  }, [isLoading, userId, projects.length]);
+
+  // Menutup untuk selamanya. Dipisahkan dari sekadar menyembunyikan, karena
+  // tombol tanda tanya membuka lagi tanpa menghapus penandanya.
+  const tutupPanduanSelamanya = useCallback(() => {
+    setChatOpen(false);
+    tandaiLihatPanduan(userId);
+  }, [userId]);
 
   // Fotografer baru TIDAK lagi dibawa otomatis ke layar persetujuan Google.
   //
@@ -732,6 +759,15 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setChatOpen(true)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ash-600 transition-colors hover:bg-ash-100 hover:text-ash-900 dark:text-ash-400 dark:hover:bg-white/5 dark:hover:text-ash-100"
+                title="Getting started"
+                aria-label="Getting started"
+              >
+                <HelpCircle size={18} strokeWidth={1.75} />
+              </button>
+
               {bolehOperator && (
                 <button
                   onClick={() => onNavigate('/operator')}
@@ -1075,6 +1111,14 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
             </>
           )}
         </AnimatePresence>
+
+        {/* SAMBUTAN */}
+        {chatOpen && (
+          <GuideChat
+            onClose={() => setChatOpen(false)}
+            onDismiss={tutupPanduanSelamanya}
+          />
+        )}
 
         {/* PAKET DAN KUOTA */}
         {planOpen && (
