@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Copy, Check, Plus, FolderOpen, Link as LinkIcon, Clock,
   CheckCircle2, Loader2, MoreVertical, Edit, Trash2, X, AlertOctagon,
-  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks, KeyRound, Settings
+  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks, KeyRound, Settings, ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { API_BASE } from '../lib/api';
@@ -15,6 +15,7 @@ import { ringkasProject } from '../lib/dashboardSummary';
 import { bacaCache, tulisCache, hapusCache } from '../lib/projectCache';
 import { PRIVACY_PATH, TERMS_PATH } from '../lib/legal';
 import { ambilLangganan, tebusKode } from '../lib/subscription';
+import { cekAdmin } from '../lib/admin';
 import QuotaBadge from './QuotaBadge';
 import PlanModal from './PlanModal';
 
@@ -108,6 +109,10 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
   // MANA yang ditolak, karena "ganti folder terhitung galeri baru" adalah
   // keterangan yang tidak dapat ditebak sendiri oleh siapa pun.
   const [langganan, setLangganan] = useState(null);
+  // Pintu ke /operator hanya digambar untuk yang memang admin. Bukan penjaga —
+  // penjaganya di backend, yang membalas 404 — melainkan supaya fotografer
+  // biasa tidak melihat tombol yang membawanya ke halaman kosong.
+  const [bolehOperator, setBolehOperator] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [tertahan, setTertahan] = useState(null);
 
@@ -398,6 +403,20 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
     // perjalanan jaringan untuk mendapatkannya hanya menunda langkah pertama
     // fotografer baru, dan gagal sama sekali kalau jaringannya sedang buruk.
     supabase.auth.getSession().then(({ data }) => setUserId(data?.session?.user?.id ?? null));
+  }, []);
+
+  useEffect(() => {
+    let batal = false;
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      const t = data?.session?.access_token;
+      if (!t) return;
+      const boleh = await cekAdmin(t);
+      if (!batal) setBolehOperator(boleh);
+    })();
+    return () => {
+      batal = true;
+    };
   }, []);
 
   // Fotografer baru TIDAK lagi dibawa otomatis ke layar persetujuan Google.
@@ -713,6 +732,17 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
             </div>
 
             <div className="flex items-center gap-2">
+              {bolehOperator && (
+                <button
+                  onClick={() => onNavigate('/operator')}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ash-600 transition-colors hover:bg-ash-100 hover:text-ash-900 dark:text-ash-400 dark:hover:bg-white/5 dark:hover:text-ash-100"
+                  title="Operator"
+                  aria-label="Operator"
+                >
+                  <ShieldCheck size={18} strokeWidth={1.75} />
+                </button>
+              )}
+
               <button
                 onClick={() => setStudioOpen(true)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ash-600 transition-colors hover:bg-ash-100 hover:text-ash-900 dark:text-ash-400 dark:hover:bg-white/5 dark:hover:text-ash-100"

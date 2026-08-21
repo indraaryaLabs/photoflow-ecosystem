@@ -37,6 +37,7 @@ const AdminLogin = lazy(() => import('./components/AdminLogin'));
 const LegalPage = lazy(() => import('./components/LegalPage'));
 const PricingPage = lazy(() => import('./components/PricingPage'));
 const GuidePage = lazy(() => import('./components/GuidePage'));
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
 const PreviewModal = lazy(() => import('./components/PreviewModal'));
 
 
@@ -61,6 +62,7 @@ export default function App() {
   // sudah beredar — termasuk tombol "Buka Dashboard" di aplikasi desktop —
   // tidak mati.
   const DASHBOARD_PATH = '/dashboard';
+  const OPERATOR_PATH = '/operator';
   const LEGACY_DASHBOARD_PATH = '/admin';
 
   const { pathname, search, navigasi } = useRoute();
@@ -627,6 +629,25 @@ export default function App() {
     return <Suspense fallback={<Memuat />}><AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} onNavigate={navigasi} /></Suspense>;
   }
 
+
+  // Panel operator. Dijaga DUA lapis: harus sudah masuk untuk sampai ke sini,
+  // dan halamannya sendiri memanggil /api/admin/ping sebelum menggambar apa
+  // pun. Lapis kedua yang menentukan — penjaga sesungguhnya ada di backend,
+  // dan yang di sini hanya menentukan apa yang digambar.
+  if (pathname === OPERATOR_PATH) {
+    if (!isAdminAuthenticated) {
+      return (
+        <Suspense fallback={<Memuat />}>
+          <AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} onNavigate={navigasi} />
+        </Suspense>
+      );
+    }
+    return (
+      <Suspense fallback={<Memuat />}>
+        <AdminPanel themeChoice={themeChoice} cycleTheme={cycleTheme} onNavigate={navigasi} />
+      </Suspense>
+    );
+  }
 
   // Strict Auth Guard Routing
   if (isDashboardRoute || isLegacyDashboardRoute) {

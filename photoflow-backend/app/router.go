@@ -114,6 +114,8 @@ func SetupRouter() (*gin.Engine, error) {
 	// rute tanpa penjaga.
 	admin := r.Group("/api/admin", requireAuth, handlers.RequireAdmin())
 	{
+		admin.GET("/ping", h.AdminPing)
+		admin.GET("/codes", h.AdminListCodes)
 		admin.POST("/subscriptions", h.AdminSetSubscription)
 		admin.POST("/codes", h.AdminCreateCodes)
 	}

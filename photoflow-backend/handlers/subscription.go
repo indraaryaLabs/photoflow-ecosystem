@@ -180,6 +180,34 @@ func RequireAdmin() gin.HandlerFunc {
 	}
 }
 
+// AdminPing menjawab 200 hanya untuk administrator.
+//
+// Tidak melakukan apa-apa selain lolos RequireAdmin. Gunanya satu: memberi
+// dashboard cara memastikan pemanggilnya admin TANPA menjalankan tindakan yang
+// mengubah apa pun. Tanpa ini, satu-satunya cara frontend tahu adalah dengan
+// mencoba membuat kode dan melihat apakah ditolak — mengubah keadaan hanya
+// untuk memeriksa izin.
+func (h *Handler) AdminPing(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// AdminListCodes mengembalikan kode tebus terbaru beserta status pemakaiannya.
+//
+// Ada supaya kode yang dibangkitkan tidak hilang begitu tab ditutup: daftar ini
+// yang membuat admin dapat menemukan kembali kode yang belum terpakai, dan
+// melihat mana yang sudah ditebus tanpa membuka database.
+func (h *Handler) AdminListCodes(c *gin.Context) {
+	var kode []models.RedeemCode
+	// Dibatasi: daftar ini untuk melihat sekilas, bukan ekspor. Yang terbaru
+	// yang paling mungkin dicari — kode yang baru saja dibagikan.
+	if err := h.DB.Order("created_at DESC").Limit(100).Find(&kode).Error; err != nil {
+		log.Printf("[ERROR] Membaca daftar kode: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not read the codes"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"codes": kode})
+}
+
 // AdminSetSubscription menyetel paket seorang user secara langsung.
 //
 // Jalur aktivasi paling sederhana: pembeli mentransfer, mengirim bukti, lalu

@@ -677,3 +677,51 @@ func TestPaketTanpaBatasMengirimSisaKosong(t *testing.T) {
 		t.Errorf("own_branding = %v, mau true pada paket berbayar", body["own_branding"])
 	}
 }
+
+// AdminListCodes memberi admin jalan menemukan kembali kode yang sudah
+// dibangkitkan. Yang diuji: kode yang belum dan sudah terpakai sama-sama
+// terbaca, beserta penanda pemakaiannya — tanpa itu daftarnya tidak berguna
+// untuk melihat mana yang masih bisa dibagikan.
+func TestAdminListCodesMengembalikanStatusPemakaian(t *testing.T) {
+	db := newSubmitTestDB(t)
+	siapkanBilling(t, db)
+	h := &Handler{DB: db}
+
+	dipakaiOleh := uuid.NewString()
+	sekarang := time.Now().UTC()
+	db.Create(&models.RedeemCode{Code: "PF-AAAA-BBBB", Plan: models.PlanFreelance, Months: 3})
+	db.Create(&models.RedeemCode{
+		Code: "PF-CCCC-DDDD", Plan: models.PlanStudio, Months: 6,
+		UsedBy: &dipakaiOleh, UsedAt: &sekarang,
+	})
+
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest("GET", "/api/admin/codes", nil)
+	h.AdminListCodes(c)
+
+	if rec.Code != 200 {
+		t.Fatalf("dibalas %d, mau 200", rec.Code)
+	}
+	var keluar struct {
+		Codes []models.RedeemCode `json:"codes"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &keluar); err != nil {
+		t.Fatalf("balasan tidak terbaca: %v", err)
+	}
+	if len(keluar.Codes) != 2 {
+		t.Fatalf("terbaca %d kode, mau 2", len(keluar.Codes))
+	}
+
+	status := map[string]bool{}
+	for _, k := range keluar.Codes {
+		status[k.Code] = k.Terpakai()
+	}
+	if status["PF-AAAA-BBBB"] {
+		t.Error("PF-AAAA-BBBB dilaporkan terpakai, mau belum")
+	}
+	if !status["PF-CCCC-DDDD"] {
+		t.Error("PF-CCCC-DDDD dilaporkan belum terpakai, mau sudah")
+	}
+}
