@@ -564,3 +564,116 @@ func TestTerbitkanTautanBaruTidakMemakaiKuota(t *testing.T) {
 			hitung.Galleries)
 	}
 }
+
+// ── Bentuk balasan yang dibaca dashboard ──────────────────────────────
+//
+// Dashboard menggambar penanda kuota dari nama-nama field di bawah ini, dan
+// membacanya dengan `sub.remaining` — bukan lewat tipe apa pun yang akan
+// mengeluh saat namanya berubah. Mengganti satu nama di sisi Go akan
+// menghasilkan undefined di sisi peramban, yang tidak menjatuhkan apa pun dan
+// karena itu tidak akan terlihat: penanda kuotanya hanya diam-diam salah.
+// Tes ini yang membuat perubahan seperti itu gagal di sini lebih dulu.
+
+func statusJSON(t *testing.T, h *Handler, userID string) map[string]any {
+	t.Helper()
+
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest("GET", "/api/subscription", nil)
+	c.Set(middleware.ContextUserIDKey, userID)
+
+	h.GetSubscription(c)
+
+	if rec.Code != 200 {
+		t.Fatalf("GET /api/subscription dibalas %d", rec.Code)
+	}
+	var keluar map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &keluar); err != nil {
+		t.Fatalf("balasan tidak terbaca: %v", err)
+	}
+	return keluar
+}
+
+func TestBalasanLanggananMemuatFieldYangDipakaiDashboard(t *testing.T) {
+	db := newSubmitTestDB(t)
+	siapkanBilling(t, db)
+	h := handlerBilling(db)
+	user := uuid.NewString()
+
+	buatProject(t, h, user, "Project 1")
+
+	body := statusJSON(t, h, user)
+	for _, field := range []string{
+		"plan", "active", "expires_at", "period", "used", "quota", "remaining", "own_branding",
+	} {
+		if _, ada := body[field]; !ada {
+			t.Errorf("field %q hilang dari balasan — dashboard membacanya", field)
+		}
+	}
+
+	if body["plan"] != models.PlanFree {
+		t.Errorf("plan = %v, mau %v", body["plan"], models.PlanFree)
+	}
+	if body["used"] != float64(1) {
+		t.Errorf("used = %v, mau 1", body["used"])
+	}
+	if body["quota"] != float64(3) {
+		t.Errorf("quota = %v, mau 3", body["quota"])
+	}
+	if body["remaining"] != float64(2) {
+		t.Errorf("remaining = %v, mau 2", body["remaining"])
+	}
+	if body["own_branding"] != false {
+		t.Errorf("own_branding = %v, mau false pada paket gratis", body["own_branding"])
+	}
+}
+
+// Sisa tidak boleh negatif. Kuota dapat turun di bawah pemakaian ketika
+// langganan berbayar habis di tengah bulan: 12 galeri terpakai, kuota kembali
+// jadi 3. "-9 galleries remaining" adalah kalimat yang tidak berarti apa-apa.
+func TestSisaKuotaTidakPernahNegatif(t *testing.T) {
+	db := newSubmitTestDB(t)
+	siapkanBilling(t, db)
+	h := handlerBilling(db)
+	user := uuid.NewString()
+
+	beriLangganan(t, db, user, models.PlanStudio, time.Now().UTC().AddDate(0, 3, 0))
+	for i := 1; i <= 5; i++ {
+		buatProject(t, h, user, fmt.Sprintf("Project %d", i))
+	}
+
+	// Langganannya kedaluwarsa sekarang juga, dengan pemakaian bulan berjalan
+	// sudah melewati kuota gratis.
+	beriLangganan(t, db, user, models.PlanStudio, time.Now().UTC().AddDate(0, 0, -1))
+
+	body := statusJSON(t, h, user)
+	if body["remaining"] != float64(0) {
+		t.Errorf("remaining = %v, mau 0", body["remaining"])
+	}
+	if body["used"] != float64(5) {
+		t.Errorf("used = %v, mau tetap 5", body["used"])
+	}
+}
+
+// Paket tanpa batas mengirim remaining: null, dan itu disengaja. Nol berarti
+// "habis"; tidak ada angka yang benar untuk "tidak ada batasnya", jadi
+// dashboard perlu dapat membedakan keduanya.
+func TestPaketTanpaBatasMengirimSisaKosong(t *testing.T) {
+	db := newSubmitTestDB(t)
+	siapkanBilling(t, db)
+	h := handlerBilling(db)
+	user := uuid.NewString()
+	beriLangganan(t, db, user, models.PlanStudio, time.Now().UTC().AddDate(0, 3, 0))
+
+	body := statusJSON(t, h, user)
+	if body["quota"] != float64(models.KuotaTakTerbatas) {
+		t.Errorf("quota = %v, mau %d", body["quota"], models.KuotaTakTerbatas)
+	}
+	if body["remaining"] != nil {
+		t.Errorf("remaining = %v, mau null", body["remaining"])
+	}
+	if body["own_branding"] != true {
+		t.Errorf("own_branding = %v, mau true pada paket berbayar", body["own_branding"])
+	}
+}
