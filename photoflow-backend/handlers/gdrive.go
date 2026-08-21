@@ -29,7 +29,7 @@ func (h *Handler) DriveToken(c *gin.Context) {
 			return
 		}
 		log.Printf("[ERROR] GDrive access token untuk user %s: %v", userID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghasilkan access token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not obtain an access token"})
 		return
 	}
 
@@ -71,10 +71,10 @@ func (h *Handler) GalleryPhotos(c *gin.Context) {
 	var project models.Project
 	if err := h.DB.Where("magic_link_token = ?", magicLink).First(&project).Error; err != nil {
 		if h.Limiter.TooManyFailures(c) {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Terlalu banyak percobaan. Coba lagi nanti."})
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many attempts. Please try again later."})
 			return
 		}
-		c.JSON(http.StatusNotFound, gin.H{"error": "Galeri tidak ditemukan atau link tidak valid"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Gallery not found, or the link is not valid"})
 		return
 	}
 
@@ -214,7 +214,7 @@ func (h *Handler) respondWithStoredPhotos(c *gin.Context, project models.Project
 	// sebelumnya, pada saat yang justru sudah membingungkan.
 	if err := h.DB.Where("project_id = ?", project.ID).Order("file_name").Find(&photos).Error; err != nil {
 		log.Printf("[ERROR] Gagal memuat foto tersimpan project %s: %v", project.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat daftar foto"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not load the photo list"})
 		return
 	}
 

@@ -126,7 +126,7 @@ func (h *Handler) GoogleAuthURL(c *gin.Context) {
 	state, err := newOAuthState()
 	if err != nil {
 		log.Printf("[ERROR] %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memulai koneksi Google Drive"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not start the Google Drive connection"})
 		return
 	}
 
@@ -139,7 +139,7 @@ func (h *Handler) GoogleAuthURL(c *gin.Context) {
 	}
 	if err := h.DB.Create(&record).Error; err != nil {
 		log.Printf("[ERROR] Gagal menyimpan state OAuth: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memulai koneksi Google Drive"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not start the Google Drive connection"})
 		return
 	}
 
@@ -157,7 +157,7 @@ func (h *Handler) GoogleAuthURL(c *gin.Context) {
 	// sembarang akan menjadikan endpoint ini pengalih terbuka.
 	if returnTo := strings.TrimSpace(input.ReturnTo); returnTo != "" {
 		if !sameOrigin(returnTo, c.GetHeader("Origin")) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "return_to tidak diizinkan"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "that return_to is not allowed"})
 			return
 		}
 		if err := h.DB.Model(&models.OAuthState{}).

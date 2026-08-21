@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -52,20 +54,20 @@ func (h *Handler) CreateProject(c *gin.Context) {
 
 	var input models.CreateProjectInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Input tidak valid"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "That input is not valid"})
 		return
 	}
 
 	folderID := extractDriveFolderID(input.DriveFolderURL)
 	if folderID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Link Google Drive tidak valid"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "That Google Drive link is not valid"})
 		return
 	}
 
 	magicLink, err := generateMagicLink()
 	if err != nil {
 		log.Printf("[ERROR] %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat project"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create the project"})
 		return
 	}
 
@@ -84,8 +86,45 @@ func (h *Handler) CreateProject(c *gin.Context) {
 		newProject.MaxSelections = 50
 	}
 
-	if err := h.DB.Create(&newProject).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan project"})
+	// Kuota diperiksa dan dipakai DI DALAM transaksi yang menyimpan project.
+	//
+	// Memeriksa dulu di luar transaksi lalu menyimpan kemudian akan menyisakan
+	// celah: dua permintaan bersamaan sama-sama membaca "masih ada sisa satu"
+	// sebelum salah satunya sempat menaikkan penghitung, dan keduanya lolos.
+	// Di sini penghitungnya dinaikkan lebih dulu secara atomik, dan kalau nilai
+	// barunya melewati kuota seluruh transaksi dibatalkan — project tidak
+	// tersimpan, dan jatah yang tadi naik ikut kembali.
+	sekarang := time.Now().UTC()
+	sub, err := langganan(h.DB, userID)
+	if err != nil {
+		log.Printf("[ERROR] Membaca langganan user %s: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save the project"})
+		return
+	}
+
+	err = h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := pakaiKuotaGaleri(tx, userID, sub.KuotaBulanan(sekarang), sekarang); err != nil {
+			return err
+		}
+		return tx.Create(&newProject).Error
+	})
+	switch {
+	case errors.Is(err, ErrKuotaHabis):
+		// 402, bukan 403. Yang menghalangi bukan izin melainkan pembayaran, dan
+		// kodenya membuat frontend dapat membedakan "Anda tidak boleh" dari
+		// "jatah bulan ini habis, ini caranya menambah".
+		kuota := sub.KuotaBulanan(sekarang)
+		c.JSON(http.StatusPaymentRequired, gin.H{
+			"error": fmt.Sprintf(
+				"Jatah %d galeri bulan ini sudah terpakai. Perpanjang paket untuk membuat lagi.", kuota),
+			"code":  "quota_exceeded",
+			"plan":  sub.PlanEfektif(sekarang),
+			"quota": kuota,
+		})
+		return
+	case err != nil:
+		log.Printf("[ERROR] Menyimpan project untuk user %s: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save the project"})
 		return
 	}
 
@@ -105,7 +144,7 @@ func (h *Handler) CreateProject(c *gin.Context) {
 	// tombolnya tidak pernah menggantung, dan project yang folder-nya belum
 	// siap tetap tersimpan alih-alih hilang bersama kegagalannya.
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "Project berhasil dibuat.",
+		"message": "Project created.",
 		"data":    newProject,
 		// Frontend memakainya sebagai tanda bahwa daftar foto masih harus
 		// ditarik, dan menampilkan "Syncing photos..." sampai selesai.
@@ -137,7 +176,7 @@ func (h *Handler) ListProjects(c *gin.Context) {
 	var projects []models.Project
 	// Ambil semua project dari database, urutkan dari yang paling baru dibuat
 	if err := h.DB.Where("user_id = ?", userID).Order("created_at desc").Find(&projects).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data project"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not load your projects"})
 		return
 	}
 
@@ -266,7 +305,7 @@ func (h *Handler) ResyncProject(c *gin.Context) {
 
 	var project models.Project
 	if err := h.DB.Where("id = ? AND user_id = ?", projectID, userID).First(&project).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Project tidak ditemukan atau akses ditolak"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Project not found, or you do not have access to it"})
 		return
 	}
 
@@ -277,7 +316,7 @@ func (h *Handler) ResyncProject(c *gin.Context) {
 			return
 		}
 		log.Printf("[ERROR] Resync %s: %v", project.ID, err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Google Drive tidak dapat dihubungi"})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Google Drive could not be reached"})
 		return
 	}
 
@@ -294,7 +333,7 @@ func (h *Handler) ResyncProject(c *gin.Context) {
 		// diperlukan: menjadikan folder publik sudah cukup, dan itu memang yang
 		// biasanya dilakukan fotografer sebelum mengirimkannya ke klien.
 		c.JSON(http.StatusBadGateway, gin.H{
-			"error": "Folder Drive tidak dapat dibaca. Bagikan folder sebagai 'Anyone with the link', atau bagikan ke akun Google yang terhubung.",
+			"error": "That Drive folder could not be read. Share it as 'Anyone with the link', or share it with the connected Google account.",
 			"code":  "folder_unreadable",
 		})
 		return
@@ -333,12 +372,12 @@ func (h *Handler) ResyncProject(c *gin.Context) {
 		return markSynced(tx, project.ID)
 	}); err != nil {
 		log.Printf("[ERROR] Resync %s: %v", project.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan daftar foto"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save the photo list"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":      "Daftar foto diperbarui dari Google Drive",
+		"message":      "Photo list refreshed from Google Drive",
 		"photos_found": len(baru),
 	})
 }
@@ -351,19 +390,19 @@ func (h *Handler) UpdateProject(c *gin.Context) {
 	projectID := c.Param("id")
 	var input models.CreateProjectInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Input tidak valid"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "That input is not valid"})
 		return
 	}
 
 	var project models.Project
 	if err := h.DB.Where("id = ? AND user_id = ?", projectID, userID).First(&project).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Project tidak ditemukan atau akses ditolak"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Project not found, or you do not have access to it"})
 		return
 	}
 
 	newFolderID := extractDriveFolderID(input.DriveFolderURL)
 	if newFolderID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Link Google Drive tidak valid"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "That Google Drive link is not valid"})
 		return
 	}
 
@@ -384,6 +423,40 @@ func (h *Handler) UpdateProject(c *gin.Context) {
 		project.ClientWhatsApp = input.ClientWhatsApp
 	}
 
+	// Mengganti folder pada galeri yang SUDAH pernah dibuka klien terhitung
+	// sebagai galeri baru, dan memakai kuota.
+	//
+	// Tanpa aturan ini seluruh batas kuota dapat dilewati dengan satu project:
+	// kirim ke klien A, ganti folder, kirim ke klien B, dan seterusnya tanpa
+	// pernah membuat project kedua.
+	//
+	// Yang belum pernah dibuka TIDAK ditagih. Itu keadaan "saya menempel tautan
+	// yang salah" — kesalahan yang wajar dan tidak boleh berbiaya.
+	galeriBaru := driveChanged && project.FirstViewedAt != nil
+	sekarang := time.Now().UTC()
+	sub, err := langganan(h.DB, userID)
+	if err != nil {
+		log.Printf("[ERROR] Membaca langganan user %s: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not update the project"})
+		return
+	}
+
+	// Ditolak di sini, sebelum Drive disentuh. Penjaga yang sebenarnya ada di
+	// dalam transaksi di bawah; yang ini hanya mencegah pembacaan folder yang
+	// sudah pasti dibuang. Lihat kuotaHabis.
+	if galeriBaru {
+		habis, err := kuotaHabis(h.DB, userID, sub.KuotaBulanan(sekarang), sekarang)
+		if err != nil {
+			log.Printf("[ERROR] Membaca pemakaian user %s: %v", userID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not update the project"})
+			return
+		}
+		if habis {
+			tolakKuotaHabis(c, sub, sekarang, "mengganti folder galeri yang sudah dibuka klien")
+			return
+		}
+	}
+
 	// Daftar foto baru ditarik dari Drive SEBELUM transaksi dibuka. Panggilan
 	// jaringan di dalam transaksi akan menahan lock baris selama permintaan
 	// HTTP berlangsung, dan lamanya ditentukan pihak lain.
@@ -400,6 +473,11 @@ func (h *Handler) UpdateProject(c *gin.Context) {
 	}
 
 	if err := h.DB.Transaction(func(tx *gorm.DB) error {
+		if galeriBaru {
+			if err := pakaiKuotaGaleri(tx, userID, sub.KuotaBulanan(sekarang), sekarang); err != nil {
+				return err
+			}
+		}
 		if err := tx.Save(&project).Error; err != nil {
 			return err
 		}
@@ -414,13 +492,17 @@ func (h *Handler) UpdateProject(c *gin.Context) {
 		}
 		return markSynced(tx, project.ID)
 	}); err != nil {
+		if errors.Is(err, ErrKuotaHabis) {
+			tolakKuotaHabis(c, sub, sekarang, "mengganti folder galeri yang sudah dibuka klien")
+			return
+		}
 		log.Printf("[ERROR] Update project %s: %v", project.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengupdate project"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not update the project"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":          "Project berhasil diupdate",
+		"message":          "Project updated",
 		"data":             project,
 		"photos_refreshed": !driveChanged || photosRefreshed,
 	})
@@ -434,7 +516,7 @@ func (h *Handler) DeleteProject(c *gin.Context) {
 
 	var project models.Project
 	if err := h.DB.Where("id = ? AND user_id = ?", projectID, userID).First(&project).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Project tidak ditemukan atau akses ditolak"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Project not found, or you do not have access to it"})
 		return
 	}
 
@@ -442,28 +524,13 @@ func (h *Handler) DeleteProject(c *gin.Context) {
 	h.DB.Where("project_id = ?", projectID).Delete(&models.Photo{})
 
 	if err := h.DB.Delete(&project).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghapus project"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not delete the project"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Project berhasil dihapus"})
+	c.JSON(http.StatusOK, gin.H{"message": "Project deleted"})
 }
 
-// ReopenSelection mengembalikan project yang sudah dikirim ke keadaan pending.
-//
-// Mengirim pilihan sengaja dibuat satu arah: SubmitSelection mengunci status
-// lewat `WHERE status <> 'submitted'` supaya dua klien yang menekan kirim pada
-// saat bersamaan tidak saling menimpa. Yang belum ada sampai sekarang adalah
-// jalan pulangnya. Akibatnya satu klik keliru dari klien membuat galerinya mati
-// permanen, dan satu-satunya perbaikan adalah membuka database langsung.
-//
-// Hanya pemilik project yang boleh melakukannya — sama seperti UpdateProject
-// dan DeleteProject, kepemilikan diperiksa lewat `user_id` yang diambil dari
-// klaim `sub` pada JWT, bukan dari apa pun yang dikirim browser.
-//
-// Pilihan foto ikut dikosongkan. Membuka status tanpa mengosongkan pilihan akan
-// menaruh klien kembali di galeri dengan semua foto sudah tercentang, sehingga
-// pemilihan ulang justru lebih menyulitkan daripada memulai dari nol.
 // ListSelections mengembalikan nama berkas yang dipilih klien pada satu proyek.
 //
 // Sampai sekarang daftar ini hanya bisa diambil aplikasi desktop, yang membaca
@@ -566,13 +633,28 @@ func (h *Handler) RotateMagicLink(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"magic_link_token": token})
 }
 
+// ReopenSelection mengembalikan project yang sudah dikirim ke keadaan pending.
+//
+// Mengirim pilihan sengaja dibuat satu arah: SubmitSelection mengunci status
+// lewat `WHERE status <> 'submitted'` supaya dua klien yang menekan kirim pada
+// saat bersamaan tidak saling menimpa. Yang belum ada sampai sekarang adalah
+// jalan pulangnya. Akibatnya satu klik keliru dari klien membuat galerinya mati
+// permanen, dan satu-satunya perbaikan adalah membuka database langsung.
+//
+// Hanya pemilik project yang boleh melakukannya — sama seperti UpdateProject
+// dan DeleteProject, kepemilikan diperiksa lewat `user_id` yang diambil dari
+// klaim `sub` pada JWT, bukan dari apa pun yang dikirim browser.
+//
+// Pilihan foto ikut dikosongkan. Membuka status tanpa mengosongkan pilihan akan
+// menaruh klien kembali di galeri dengan semua foto sudah tercentang, sehingga
+// pemilihan ulang justru lebih menyulitkan daripada memulai dari nol.
 func (h *Handler) ReopenSelection(c *gin.Context) {
 	userID := c.GetString(middleware.ContextUserIDKey)
 	projectID := c.Param("id")
 
 	var project models.Project
 	if err := h.DB.Where("id = ? AND user_id = ?", projectID, userID).First(&project).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Project tidak ditemukan atau akses ditolak"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Project not found, or you do not have access to it"})
 		return
 	}
 
@@ -580,14 +662,41 @@ func (h *Handler) ReopenSelection(c *gin.Context) {
 		// Bukan kegagalan: hasil yang diminta sudah tercapai. Membalasnya
 		// sebagai error akan memaksa frontend membedakan dua keadaan yang
 		// bagi pemakainya sama saja.
-		c.JSON(http.StatusOK, gin.H{"message": "Pemilihan memang masih terbuka"})
+		c.JSON(http.StatusOK, gin.H{"message": "The selection was already open"})
+		return
+	}
+
+	// Membuka kembali JAUH sesudah kiriman terhitung sebagai galeri baru.
+	//
+	// Fiturnya ada untuk satu keadaan: klien menekan kirim sebelum selesai
+	// memilih. Kesalahan itu disadari dalam hitungan jam. Membukanya kembali
+	// berminggu-minggu kemudian berarti project lama dipakai ulang untuk klien
+	// berikutnya — dan tanpa aturan ini, satu project dapat melayani klien tanpa
+	// batas sehingga seluruh kuota kehilangan artinya.
+	//
+	// Yang di dalam tenggang tidak ditagih: menghukum fotografer karena
+	// kliennya salah tekan adalah cara tercepat membuat fitur ini tidak dipakai,
+	// dan galeri yang terkunci selamanya jauh lebih merugikan.
+	sekarang := time.Now().UTC()
+	galeriBaru := project.SubmittedAt != nil &&
+		sekarang.Sub(*project.SubmittedAt) > jedaSalahKirim
+
+	sub, err := langganan(h.DB, userID)
+	if err != nil {
+		log.Printf("[ERROR] Membaca langganan user %s: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not reopen the selection"})
 		return
 	}
 
 	// Keduanya dalam satu transaksi. Kalau pengosongan pilihan gagal setelah
 	// status terlanjur dibuka, klien akan masuk ke galeri terbuka yang seluruh
 	// fotonya tercentang — persis keadaan yang ingin dihindari.
-	err := h.DB.Transaction(func(tx *gorm.DB) error {
+	err = h.DB.Transaction(func(tx *gorm.DB) error {
+		if galeriBaru {
+			if err := pakaiKuotaGaleri(tx, userID, sub.KuotaBulanan(sekarang), sekarang); err != nil {
+				return err
+			}
+		}
 		if err := tx.Model(&models.Photo{}).
 			Where("project_id = ?", project.ID).
 			Update("is_selected", false).Error; err != nil {
@@ -604,10 +713,14 @@ func (h *Handler) ReopenSelection(c *gin.Context) {
 			}).Error
 	})
 	if err != nil {
-		log.Printf("reopen selection %s: %v", project.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuka kembali pemilihan"})
+		if errors.Is(err, ErrKuotaHabis) {
+			tolakKuotaHabis(c, sub, sekarang, "membuka kembali pemilihan lama")
+			return
+		}
+		log.Printf("[ERROR] Reopen selection %s: %v", project.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not reopen the selection"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Pemilihan dibuka kembali"})
+	c.JSON(http.StatusOK, gin.H{"message": "Selection reopened"})
 }

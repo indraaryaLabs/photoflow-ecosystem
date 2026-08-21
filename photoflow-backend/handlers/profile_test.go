@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -153,8 +154,14 @@ func TestProfilKosongDijawabBukanError(t *testing.T) {
 func TestGalleryCarriesOwnerStudioName(t *testing.T) {
 	db := newSubmitTestDB(t)
 	siapkanProfiles(t, db)
+	siapkanBilling(t, db)
 	project := seedProject(t, db, 2)
 	h := galleryHandler(t, db)
+
+	// Langganan berbayar diperlukan sejak nama studio jadi pembeda paket:
+	// galeri gratis selalu bermerek PhotoFlow. Lihat
+	// TestGaleriGratisSelaluBermerekPhotoFlow untuk sisi sebaliknya.
+	beriLangganan(t, db, project.UserID, models.PlanFreelance, time.Now().UTC().AddDate(0, 3, 0))
 
 	callProfile(t, h, "PUT", project.UserID, `{"studio_name":"Cahaya Studio"}`)
 

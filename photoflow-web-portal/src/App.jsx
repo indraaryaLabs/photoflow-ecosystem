@@ -7,7 +7,8 @@ import PhotoGrid, { DensityPicker } from './components/PhotoGrid';
 import { useDensity } from './lib/useDensity';
 import FloatingBar from './components/FloatingBar';
 import SubmitConfirmModal from './components/SubmitConfirmModal';
-import { PRIVACY_PATH, TERMS_PATH } from './lib/legal';
+import { ingatGaleri, lupakanGaleri, PRIVACY_PATH, TERMS_PATH } from './lib/legal';
+import { GUIDE_PATH, PRICING_PATH } from './lib/pricing';
 
 import { API_BASE } from './lib/api';
 import { openedFromRecoveryLink } from './lib/recovery';
@@ -34,6 +35,9 @@ import { useRoute } from './lib/router';
 const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
 const AdminLogin = lazy(() => import('./components/AdminLogin'));
 const LegalPage = lazy(() => import('./components/LegalPage'));
+const PricingPage = lazy(() => import('./components/PricingPage'));
+const GuidePage = lazy(() => import('./components/GuidePage'));
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
 const PreviewModal = lazy(() => import('./components/PreviewModal'));
 
 
@@ -58,6 +62,7 @@ export default function App() {
   // sudah beredar — termasuk tombol "Buka Dashboard" di aplikasi desktop —
   // tidak mati.
   const DASHBOARD_PATH = '/dashboard';
+  const OPERATOR_PATH = '/operator';
   const LEGACY_DASHBOARD_PATH = '/admin';
 
   const { pathname, search, navigasi } = useRoute();
@@ -83,6 +88,26 @@ export default function App() {
   // yang berhenti lebih awal, jadi tidak perlu disebut lagi di sini.
   const galeriKlien = isHome && Boolean(token);
   const perluAuth = !galeriKlien;
+
+  // Dicatat SELAMA render, bukan di dalam effect.
+  //
+  // Kaki galeri menautkan ke /privacy lewat <a href> biasa, yang memuat ulang
+  // dokumen. Sebuah effect belum tentu sempat berjalan sebelum peramban
+  // meninggalkan halaman kalau tautannya diketuk cepat, dan yang hilang bukan
+  // kenyamanan: klien mendarat di halaman hukum tanpa jalan pulang ke
+  // galerinya.
+  //
+  // Menuliskannya di sini aman karena sasarannya sessionStorage, bukan state
+  // React — tidak ada render yang dipicu, jadi tidak ada putaran yang bisa
+  // terjadi.
+  if (galeriKlien) {
+    ingatGaleri(token, isPreview);
+  } else if (isDashboardRoute || isLegacyDashboardRoute) {
+    // Fotografer yang berpindah ke dashboardnya sendiri tidak sedang menuju ke
+    // mana pun lewat galeri. Membiarkan catatan lama berarti tombol kembali di
+    // halaman hukum melemparnya ke galeri klien yang sudah lama ia tinggalkan.
+    lupakanGaleri();
+  }
 
   // ─── 1. Auth State ───────────────────────────────────────────
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
@@ -568,6 +593,28 @@ export default function App() {
     );
   }
 
+  // Harga dan panduan mendahului pemeriksaan sesi, sama seperti dokumen hukum.
+  //
+  // Keduanya adalah halaman pendaratan iklan: yang membukanya belum punya akun,
+  // dan menunggu pemeriksaan sesi selesai hanya menampilkan pemuat berputar
+  // kepada orang yang baru saja mengklik iklan — bagian termahal dari seluruh
+  // perjalanan, dihabiskan untuk memeriksa sesi yang jelas tidak ada.
+  if (pathname === PRICING_PATH) {
+    return (
+      <Suspense fallback={<Memuat />}>
+        <PricingPage themeChoice={themeChoice} cycleTheme={cycleTheme} />
+      </Suspense>
+    );
+  }
+
+  if (pathname === GUIDE_PATH) {
+    return (
+      <Suspense fallback={<Memuat />}>
+        <GuidePage themeChoice={themeChoice} cycleTheme={cycleTheme} />
+      </Suspense>
+    );
+  }
+
   if (isAuthChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-ash-50 dark:bg-ash-950">
@@ -582,6 +629,25 @@ export default function App() {
     return <Suspense fallback={<Memuat />}><AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} onNavigate={navigasi} /></Suspense>;
   }
 
+
+  // Panel operator. Dijaga DUA lapis: harus sudah masuk untuk sampai ke sini,
+  // dan halamannya sendiri memanggil /api/admin/ping sebelum menggambar apa
+  // pun. Lapis kedua yang menentukan — penjaga sesungguhnya ada di backend,
+  // dan yang di sini hanya menentukan apa yang digambar.
+  if (pathname === OPERATOR_PATH) {
+    if (!isAdminAuthenticated) {
+      return (
+        <Suspense fallback={<Memuat />}>
+          <AdminLogin themeChoice={themeChoice} cycleTheme={cycleTheme} onNavigate={navigasi} />
+        </Suspense>
+      );
+    }
+    return (
+      <Suspense fallback={<Memuat />}>
+        <AdminPanel themeChoice={themeChoice} cycleTheme={cycleTheme} onNavigate={navigasi} />
+      </Suspense>
+    );
+  }
 
   // Strict Auth Guard Routing
   if (isDashboardRoute || isLegacyDashboardRoute) {

@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Copy, Check, Plus, FolderOpen, Link as LinkIcon, Clock,
   CheckCircle2, Loader2, MoreVertical, Edit, Trash2, X, AlertOctagon,
-  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks, KeyRound, Settings
+  LogOut, MessageCircle, ExternalLink, RotateCcw, AlertTriangle, RefreshCw, ListChecks, KeyRound, Settings, ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { API_BASE } from '../lib/api';
@@ -14,6 +14,10 @@ import { sudahDilihat, tandaiDilihat, waktuRelatif } from '../lib/submissions';
 import { ringkasProject } from '../lib/dashboardSummary';
 import { bacaCache, tulisCache, hapusCache } from '../lib/projectCache';
 import { PRIVACY_PATH, TERMS_PATH } from '../lib/legal';
+import { ambilLangganan, tebusKode } from '../lib/subscription';
+import { cekAdmin } from '../lib/admin';
+import QuotaBadge from './QuotaBadge';
+import PlanModal from './PlanModal';
 
 
 /**
@@ -98,6 +102,19 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
   // Identitas pemakai, dipakai sebagai kunci cache daftar project per akun.
   // null berarti belum diketahui.
   const [userId, setUserId] = useState(null);
+
+  // Keadaan langganan, dan tindakan yang sedang tertahan olehnya.
+  //
+  // `tertahan` bukan sekadar penanda benar/salah: dialognya perlu tahu tindakan
+  // MANA yang ditolak, karena "ganti folder terhitung galeri baru" adalah
+  // keterangan yang tidak dapat ditebak sendiri oleh siapa pun.
+  const [langganan, setLangganan] = useState(null);
+  // Pintu ke /operator hanya digambar untuk yang memang admin. Bukan penjaga —
+  // penjaganya di backend, yang membalas 404 — melainkan supaya fotografer
+  // biasa tidak melihat tombol yang membawanya ke halaman kosong.
+  const [bolehOperator, setBolehOperator] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [tertahan, setTertahan] = useState(null);
 
   // --- HELPERS ---
   const showToast = (message, type = 'success') => {
@@ -209,6 +226,57 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
       // Diamkan. Nama studio adalah hiasan pada galeri klien; tidak
       // terbacanya bukan alasan menampilkan galat di dashboard.
     }
+  };
+
+  // Kuota dibaca saat dashboard dimuat dan setiap kali sesuatu memakainya.
+  //
+  // Angkanya tidak dihitung dari daftar project di layar. Menghapus project
+  // tidak mengembalikan jatah, jadi jumlah kartu yang terlihat dan jumlah
+  // galeri yang terpakai memang boleh berbeda — hanya backend yang tahu yang
+  // kedua.
+  const fetchLangganan = async () => {
+    const token = await getAccessToken();
+    if (!token) return;
+    const status = await ambilLangganan(token);
+    if (status) setLangganan(status);
+  };
+
+  /**
+   * Menangani balasan 402 dari tindakan apa pun.
+   *
+   * Dijawab dengan dialog, bukan toast. Toast menghilang setelah tiga detik dan
+   * membawa serta satu-satunya keterangan tentang mengapa tindakan tadi gagal —
+   * pada penolakan yang menuntut keputusan (membayar, atau menunggu bulan
+   * depan) itu tidak cukup.
+   *
+   * Mengembalikan true kalau balasannya memang penolakan kuota, sehingga
+   * pemanggil tahu untuk berhenti tanpa melempar galat kedua.
+   */
+  const tanganiKuotaHabis = async (res, action) => {
+    if (res.status !== 402) return false;
+    const body = await res.clone().json().catch(() => null);
+    if (body?.code !== 'quota_exceeded') return false;
+
+    setTertahan({ action, quota: body.quota, plan: body.plan });
+    setPlanOpen(true);
+    fetchLangganan();
+    return true;
+  };
+
+  const handleRedeem = async (kode) => {
+    const token = await getAccessToken();
+    if (!token) return { ok: false, error: 'Your session has expired.' };
+
+    const hasil = await tebusKode(token, kode);
+    if (hasil.ok && hasil.status) {
+      setLangganan(hasil.status);
+      // Penghalangnya hilang begitu paketnya aktif. Membiarkan pesan "out of
+      // galleries" tetap terbaca di atas kabar bahwa paketnya baru saja aktif
+      // adalah dua kalimat yang saling membantah.
+      setTertahan(null);
+      fetchStudioName();
+    }
+    return hasil;
   };
 
   const saveStudioName = async (nama) => {
@@ -328,12 +396,27 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
   useEffect(() => {
     fetchProjects();
     fetchStudioName();
+    fetchLangganan();
     // getSession, bukan getUser: yang pertama membaca sesi yang sudah tersimpan
     // di peramban, yang kedua menembak jaringan ke Supabase. Yang dibutuhkan di
     // sini hanya id-nya, dan id itu sudah ada di tangan — menunggu satu
     // perjalanan jaringan untuk mendapatkannya hanya menunda langkah pertama
     // fotografer baru, dan gagal sama sekali kalau jaringannya sedang buruk.
     supabase.auth.getSession().then(({ data }) => setUserId(data?.session?.user?.id ?? null));
+  }, []);
+
+  useEffect(() => {
+    let batal = false;
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      const t = data?.session?.access_token;
+      if (!t) return;
+      const boleh = await cekAdmin(t);
+      if (!batal) setBolehOperator(boleh);
+    })();
+    return () => {
+      batal = true;
+    };
   }, []);
 
   // Fotografer baru TIDAK lagi dibawa otomatis ke layar persetujuan Google.
@@ -423,11 +506,17 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
 
       const checkedRes = await handleApiResponse(await sendRequest(token), sendRequest);
       if (!checkedRes) return;
+
+      if (await tanganiKuotaHabis(checkedRes, 'reopen')) {
+        setReopeningProject(null);
+        return;
+      }
       if (!checkedRes.ok) throw new Error('Could not reopen the selection.');
 
       showToast('Selection reopened.');
       setReopeningProject(null);
       fetchProjects();
+      fetchLangganan();
     } catch (err) {
       if (err.message === 'Failed to fetch') {
         showToast('The server did not respond. Please try again later.', 'error');
@@ -476,6 +565,8 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
       const checkedRes = await handleApiResponse(await sendRequest(token), sendRequest);
       if (!checkedRes) return;
 
+      if (await tanganiKuotaHabis(checkedRes, 'edit')) return;
+
       if (!checkedRes.ok) {
         const errorData = await checkedRes.json().catch(() => null);
         throw new Error(errorData?.error || 'Could not update the project.');
@@ -483,6 +574,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
       showToast('Project updated.');
       setEditingProject(null);
       fetchProjects();
+      fetchLangganan();
     } catch (err) {
       if (err.message === 'Failed to fetch') {
         showToast('The server did not respond. Please try again later.', 'error');
@@ -532,6 +624,8 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
       const checkedRes = await handleApiResponse(await sendRequest(token), sendRequest);
       if (!checkedRes) return;
 
+      if (await tanganiKuotaHabis(checkedRes, 'create')) return;
+
       if (!checkedRes.ok) {
         const errorData = await checkedRes.json().catch(() => null);
         throw new Error(errorData?.error || errorData?.message || 'Could not create the project.');
@@ -549,6 +643,7 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
       setFormData({ projectName: '', clientName: '', maxSelection: 50, driveLink: '', clientWa: '' });
       setFormOpen(false);
       showToast('Project created. Pulling photos from Drive...');
+      fetchLangganan();
 
       // Kartunya muncul seketika, dengan jumlah foto nol. Baris keterangannya
       // sudah menuliskan "No photos yet" untuk keadaan itu, jadi tidak ada yang
@@ -637,6 +732,17 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
             </div>
 
             <div className="flex items-center gap-2">
+              {bolehOperator && (
+                <button
+                  onClick={() => onNavigate('/operator')}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ash-600 transition-colors hover:bg-ash-100 hover:text-ash-900 dark:text-ash-400 dark:hover:bg-white/5 dark:hover:text-ash-100"
+                  title="Operator"
+                  aria-label="Operator"
+                >
+                  <ShieldCheck size={18} strokeWidth={1.75} />
+                </button>
+              )}
+
               <button
                 onClick={() => setStudioOpen(true)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ash-600 transition-colors hover:bg-ash-100 hover:text-ash-900 dark:text-ash-400 dark:hover:bg-white/5 dark:hover:text-ash-100"
@@ -678,13 +784,26 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
                   </p>
                 </div>
 
-                <button
-                  onClick={() => setFormOpen(true)}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-ash-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors duration-tint hover:bg-ash-900 dark:bg-ash-100 dark:text-ash-950 dark:hover:bg-white"
-                >
-                  <Plus size={16} strokeWidth={2} aria-hidden="true" />
-                  New project
-                </button>
+                <div className="flex shrink-0 items-center gap-3">
+                  {/* Penanda kuota berdiri tepat di sebelah tombol yang
+                      memakainya. Diletakkan di tempat lain, ia jadi angka yang
+                      dibaca terpisah dari keputusan yang dipengaruhinya. */}
+                  <QuotaBadge
+                    sub={langganan}
+                    onOpen={() => {
+                      setTertahan(null);
+                      setPlanOpen(true);
+                    }}
+                  />
+
+                  <button
+                    onClick={() => setFormOpen(true)}
+                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-ash-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors duration-tint hover:bg-ash-900 dark:bg-ash-100 dark:text-ash-950 dark:hover:bg-white"
+                  >
+                    <Plus size={16} strokeWidth={2} aria-hidden="true" />
+                    New project
+                  </button>
+                </div>
               </div>
 
               {/* Baris ringkasan. Ada karena dashboard ini menjawab satu
@@ -956,6 +1075,19 @@ export default function AdminDashboard({ themeChoice, cycleTheme, onNavigate }) 
             </>
           )}
         </AnimatePresence>
+
+        {/* PAKET DAN KUOTA */}
+        {planOpen && (
+          <PlanModal
+            sub={langganan}
+            blocked={tertahan}
+            onClose={() => {
+              setPlanOpen(false);
+              setTertahan(null);
+            }}
+            onRedeem={handleRedeem}
+          />
+        )}
 
         {/* NAMA STUDIO */}
         {studioOpen && (

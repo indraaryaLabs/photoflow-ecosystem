@@ -5,6 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
+    <!-- Alamat galeri klien MEMUAT kuncinya: /?token=<magic link>. Halaman itu
+         memuat setiap thumbnail langsung dari Google, dan tiap permintaan
+         gambar membawa header Referer.
+
+         Peramban modern sudah memakai strict-origin-when-cross-origin sebagai
+         bawaan, yang hanya mengirim origin ke tujuan lintas-situs. Peramban
+         lama memakai no-referrer-when-downgrade, yang mengirim URL LENGKAP —
+         dan itu berarti menyerahkan magic link milik klien ke Google pada
+         setiap foto yang tampil.
+
+         Disebut eksplisit di sini supaya perlindungannya tidak bergantung pada
+         versi peramban yang kebetulan dipakai. -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="description" content="PhotoFlow — choose your favourite photos and send them to your photographer." />
     <title>PhotoFlow</title>
     <script>
