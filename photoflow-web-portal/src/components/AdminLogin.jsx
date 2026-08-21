@@ -5,8 +5,10 @@ import { supabase } from '../lib/supabase';
 import { openedFromRecoveryLink, clearUrlFragment } from '../lib/recovery';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
+import LangToggle from './LangToggle';
 import { PRIVACY_PATH, TERMS_PATH } from '../lib/legal';
 import { GUIDE_PATH, PRICING_PATH } from '../lib/pricing';
+import { useLang } from '../lib/lang';
 
 /**
  * Terjemahkan error Supabase Auth jadi kalimat yang benar untuk user.
@@ -42,6 +44,7 @@ function describeAuthError(error) {
 }
 
 export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
+  const { lang, setLang, t } = useLang();
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -225,12 +228,11 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
     <div>
       <div className="relative min-h-screen w-full flex items-center justify-center bg-ash-50 dark:bg-ash-950 text-ash-900 dark:text-ash-100 overflow-hidden font-sans transition-colors duration-tint">
 
-        {/* --- THEME TOGGLE BUTTON --- */}
-        <ThemeToggle
-          choice={themeChoice}
-          onCycle={cycleTheme}
-          className="absolute top-6 right-6 z-50"
-        />
+        {/* --- SAKELAR BAHASA & TEMA --- */}
+        <div className="absolute top-6 right-6 z-50 flex items-center gap-1.5">
+          <LangToggle lang={lang} onSelect={setLang} />
+          <ThemeToggle choice={themeChoice} onCycle={cycleTheme} />
+        </div>
 
         {/* --- BACKGROUND EFFECTS --- */}
         <div className="absolute inset-0 z-0 bg-[linear-gradient(to_right,#0000000a_1px,transparent_1px),linear-gradient(to_bottom,#0000000a_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] transition-colors duration-tint"></div>
@@ -286,22 +288,34 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
                   >
                     <h1 className="text-2xl font-semibold tracking-tight text-ash-900 dark:text-white mb-1.5 transition-colors duration-tint">
                       {isRecovery
-                        ? "Set a new password"
-                        : (session ? "You're signed in" : (isLoginMode ? "Welcome back" : "Create an account"))}
+                        ? t({ en: 'Set a new password', id: 'Setel kata sandi baru' })
+                        : session
+                          ? t({ en: "You're signed in", id: 'Anda sudah masuk' })
+                          : isLoginMode
+                            ? t({ en: 'Welcome back', id: 'Selamat datang kembali' })
+                            : t({ en: 'Create an account', id: 'Buat akun' })}
                     </h1>
                     <p className="text-sm text-ash-600 dark:text-ash-400 font-medium transition-colors duration-tint">
                       {isRecovery
-                        ? "Choose a new password for your account."
-                        : (session
+                        ? t({
+                            en: 'Choose a new password for your account.',
+                            id: 'Pilih kata sandi baru untuk akun Anda.',
+                          })
+                        : session
                           ? session.user.email
-                          : (isLoginMode
+                          : isLoginMode
                             // Bukan "PhotoFlow Admin": tidak ada peran
                             // administrator di sini, dan jalurnya pun sudah
-                            // bukan /admin lagi. Kalimatnya sekarang menyebut
-                            // pekerjaan yang sebenarnya dilakukan di balik
-                            // layar ini.
-                            ? "Sign in to manage your client galleries."
-                            : "Create an account to start sharing galleries with your clients."))}
+                            // bukan /admin lagi. Kalimatnya menyebut pekerjaan
+                            // yang sebenarnya dilakukan di balik layar ini.
+                            ? t({
+                                en: 'Sign in to manage your client galleries.',
+                                id: 'Masuk untuk mengelola galeri klien Anda.',
+                              })
+                            : t({
+                                en: 'Create an account to start sharing galleries with your clients.',
+                                id: 'Buat akun untuk mulai membagikan galeri ke klien Anda.',
+                              })}
                     </p>
                   </motion.div>
                 </AnimatePresence>
@@ -344,7 +358,7 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
                   <InputField
                     icon={KeyRound}
                     type={showPassword ? "text" : "password"}
-                    placeholder="New password (at least 6 characters)"
+                    placeholder={t({ en: 'New password (at least 6 characters)', id: 'Kata sandi baru (minimal 6 karakter)' })}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     autoComplete="new-password"
@@ -367,7 +381,7 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
                   className="relative w-full py-3.5 rounded-xl bg-ash-800 hover:bg-ash-900 text-white dark:bg-ash-100 dark:hover:bg-white dark:text-ash-950 font-medium text-sm shadow-sm transition-all duration-feedback disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   <div className="flex items-center justify-center gap-2">
-                    {isLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : <span>Save new password</span>}
+                    {isLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : <span>{t({ en: 'Save new password', id: 'Simpan kata sandi baru' })}</span>}
                   </div>
                 </motion.button>
               </form>
@@ -382,7 +396,7 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
                 >
                   <div className="flex items-center justify-center gap-2">
                     <LayoutDashboard className="w-4 h-4" />
-                    <span>Go to Dashboard</span>
+                    <span>{t({ en: 'Go to Dashboard', id: 'Ke Dashboard' })}</span>
                   </div>
                 </motion.button>
 
@@ -395,7 +409,7 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
                 >
                   <div className="flex items-center justify-center gap-2">
                     {isLoading ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : <LogOut size={16} strokeWidth={1.75} />}
-                    <span>Sign Out</span>
+                    <span>{t({ en: 'Sign Out', id: 'Keluar' })}</span>
                   </div>
                 </motion.button>
               </div>
@@ -415,7 +429,7 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
                         <InputField
                           icon={User}
                           type="text"
-                          placeholder="Full Name"
+                          placeholder={t({ en: 'Full Name', id: 'Nama lengkap' })}
                           value={formData.name}
                           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                           required={!isLoginMode}
@@ -424,7 +438,7 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
                         <InputField
                           icon={Phone}
                           type="tel"
-                          placeholder="WhatsApp number (e.g. 62812...)"
+                          placeholder={t({ en: 'WhatsApp number (e.g. 62812...)', id: 'Nomor WhatsApp (mis. 62812...)' })}
                           value={formData.whatsapp}
                           onChange={(e) => {
                             let val = e.target.value;
@@ -445,7 +459,7 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
                   <InputField
                     icon={Mail}
                     type="email"
-                    placeholder="Email address"
+                    placeholder={t({ en: 'Email address', id: 'Alamat email' })}
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     required
@@ -455,7 +469,7 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
                     <InputField
                       icon={Lock}
                       type={showPassword ? "text" : "password"}
-                      placeholder="Password"
+                      placeholder={t({ en: 'Password', id: 'Kata sandi' })}
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       required
@@ -480,7 +494,7 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
                         disabled={isLoading}
                         className="text-xs font-medium text-ash-600 dark:text-ash-400 hover:text-ash-900 dark:hover:text-white transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-ash-400 dark:focus:ring-ash-500 rounded-sm"
                       >
-                        Forgot password?
+                        {t({ en: 'Forgot password?', id: 'Lupa kata sandi?' })}
                       </button>
                     </div>
                   )}
@@ -498,7 +512,7 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
                         <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
                       ) : (
                         <>
-                          <span>{isLoginMode ? "Sign In" : "Get Started"}</span>
+                          <span>{isLoginMode ? t({ en: 'Sign In', id: 'Masuk' }) : t({ en: 'Get Started', id: 'Mulai' })}</span>
                           <ArrowRight size={16} strokeWidth={1.75} className="opacity-70 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                         </>
                       )}
@@ -508,12 +522,14 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
 
                 <div className="mt-8 text-center">
                   <p className="text-sm text-ash-600 dark:text-ash-400 transition-colors duration-tint">
-                    {isLoginMode ? "Don't have an account? " : "Already have an account? "}
+                    {isLoginMode
+                      ? t({ en: "Don't have an account? ", id: 'Belum punya akun? ' })
+                      : t({ en: 'Already have an account? ', id: 'Sudah punya akun? ' })}
                     <button
                       onClick={toggleMode}
                       className="text-ash-900 dark:text-white font-medium hover:text-ash-900 dark:hover:text-white hover:underline underline-offset-4 decoration-ash-400 transition-all focus:outline-none focus:ring-2 focus:ring-ash-400 dark:focus:ring-ash-500 rounded-sm"
                     >
-                      {isLoginMode ? "Sign up" : "Sign in"}
+                      {isLoginMode ? t({ en: 'Sign up', id: 'Daftar' }) : t({ en: 'Sign in', id: 'Masuk' })}
                     </button>
                   </p>
                 </div>
@@ -541,14 +557,14 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
               href={PRICING_PATH}
               className="hover:text-ash-900 dark:hover:text-ash-100 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"
             >
-              Pricing
+              {t({ en: 'Pricing', id: 'Harga' })}
             </a>
             <span className="mx-2 opacity-50">·</span>
             <a
               href={GUIDE_PATH}
               className="hover:text-ash-900 dark:hover:text-ash-100 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"
             >
-              Guide
+              {t({ en: 'Guide', id: 'Panduan' })}
             </a>
           </p>
 

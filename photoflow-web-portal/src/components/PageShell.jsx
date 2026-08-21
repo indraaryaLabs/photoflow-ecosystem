@@ -10,8 +10,16 @@
 
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
+import LangToggle from './LangToggle';
 
-export default function PageShell({ themeChoice, cycleTheme, lebar = 'max-w-3xl', children }) {
+export default function PageShell({
+  themeChoice,
+  cycleTheme,
+  lang,
+  onSelectLang,
+  lebar = 'max-w-3xl',
+  children,
+}) {
   return (
     <div className="min-h-screen bg-ash-50 font-sans transition-colors duration-tint dark:bg-ash-950">
       <header className="sticky top-0 z-10 border-b border-ash-200/70 bg-ash-50/85 backdrop-blur dark:border-white/5 dark:bg-ash-950/85">
@@ -21,13 +29,14 @@ export default function PageShell({ themeChoice, cycleTheme, lebar = 'max-w-3xl'
             <span className="text-sm font-semibold tracking-tight">PhotoFlow</span>
           </a>
 
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-1.5">
+            {onSelectLang && <LangToggle lang={lang} onSelect={onSelectLang} />}
             <ThemeToggle choice={themeChoice} onCycle={cycleTheme} />
             <a
               href="/"
               className="ml-1 rounded-xl bg-ash-800 px-3.5 py-2 text-sm font-semibold text-white transition-colors duration-tint hover:bg-ash-900 dark:bg-ash-100 dark:text-ash-950 dark:hover:bg-white"
             >
-              Sign in
+              {lang === 'id' ? 'Masuk' : 'Sign in'}
             </a>
           </div>
         </div>

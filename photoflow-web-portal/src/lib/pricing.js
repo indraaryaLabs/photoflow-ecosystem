@@ -60,6 +60,10 @@ export function perBulan(harga, bulan) {
   return rupiah(Math.round(harga / bulan / 1000) * 1000);
 }
 
+// Teks yang tampil ke pengunjung disimpan sebagai { en, id } dan dipilih di
+// komponen lewat useLang().t(). Yang netral bahasa — id, name, angka — ditulis
+// sekali tanpa cabang. Nama paket tidak diterjemahkan: Solo/Pro/Studio adalah
+// nama, bukan kata.
 export const PLANS = [
   {
     // id TIDAK sama dengan name. Yang tersimpan di database dan diterima API
@@ -67,52 +71,86 @@ export const PLANS = [
     // yang sudah terjual.
     id: 'free',
     name: 'Solo',
-    tagline: 'For trying it out, and for a shoot or two a month.',
+    tagline: {
+      en: 'For trying it out, and for a shoot or two a month.',
+      id: 'Untuk mencoba, dan untuk yang sebulan sekali dua kali.',
+    },
     galleries: 3,
     prices: null,
-    features: [
-      '3 galleries per month',
-      'Photos stay in your own Google Drive',
-      'Clients pick without an account',
-      'Selection list ready to paste into Lightroom',
-    ],
+    features: {
+      en: [
+        '3 galleries per month',
+        'Photos stay in your own Google Drive',
+        'Clients pick without an account',
+        'Selection list ready to paste into Lightroom',
+      ],
+      id: [
+        '3 galeri per bulan',
+        'Foto tetap di Google Drive Anda',
+        'Klien memilih tanpa perlu akun',
+        'Daftar pilihan siap tempel ke Lightroom',
+      ],
+    },
     // Disebut sebagai batasan, bukan disembunyikan. Orang yang baru tahu
     // setelah kliennya melihat merek orang lain di galerinya akan marah, dan
     // ia benar.
-    limits: ['Galleries carry PhotoFlow branding, not your studio name'],
+    limits: {
+      en: ['Galleries carry PhotoFlow branding, not your studio name'],
+      id: ['Galeri memakai merek PhotoFlow, bukan nama studio Anda'],
+    },
   },
   {
     id: 'freelance',
     name: 'Pro',
-    tagline: 'For 2-3 clients a week.',
+    tagline: {
+      en: 'For 2-3 clients a week.',
+      id: 'Untuk yang jalan 2-3 klien seminggu.',
+    },
     galleries: 20,
     popular: true,
     prices: [
       { months: 3, amount: 99000 },
       { months: 6, amount: 179000 },
     ],
-    features: [
-      '20 galleries per month',
-      'Your studio name on client galleries, not PhotoFlow',
-      'Everything in Solo',
-    ],
-    limits: [],
+    features: {
+      en: [
+        '20 galleries per month',
+        'Your studio name on client galleries, not PhotoFlow',
+        'Everything in Solo',
+      ],
+      id: [
+        '20 galeri per bulan',
+        'Nama studio Anda di galeri klien, bukan PhotoFlow',
+        'Semua yang ada di paket Solo',
+      ],
+    },
+    limits: { en: [], id: [] },
   },
   {
     id: 'studio',
     name: 'Studio',
-    tagline: 'For vendors and agencies running several events at once.',
+    tagline: {
+      en: 'For vendors and agencies running several events at once.',
+      id: 'Untuk vendor dan agensi yang menggarap banyak acara sekaligus.',
+    },
     galleries: -1,
     prices: [
       { months: 3, amount: 249000 },
       { months: 6, amount: 449000 },
     ],
-    features: [
-      'Unlimited galleries',
-      'Your studio name on client galleries',
-      'Everything in Pro',
-    ],
-    limits: [],
+    features: {
+      en: [
+        'Unlimited galleries',
+        'Your studio name on client galleries',
+        'Everything in Pro',
+      ],
+      id: [
+        'Galeri tanpa batas',
+        'Nama studio Anda di galeri klien',
+        'Semua yang ada di paket Pro',
+      ],
+    },
+    limits: { en: [], id: [] },
   },
 ];
 
