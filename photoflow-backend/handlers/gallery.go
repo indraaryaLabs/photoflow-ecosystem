@@ -23,16 +23,16 @@ func (h *Handler) GetGallery(c *gin.Context) {
 		// Hanya pencarian yang GAGAL yang dihitung, sehingga klien sah yang
 		// membuka galerinya berulang kali tidak pernah tersentuh limiter.
 		if h.Limiter.TooManyFailures(c) {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Terlalu banyak percobaan. Coba lagi nanti."})
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many attempts. Please try again later."})
 			return
 		}
-		c.JSON(http.StatusNotFound, gin.H{"error": "Galeri tidak ditemukan atau link tidak valid"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Gallery not found, or the link is not valid"})
 		return
 	}
 
 	var photos []models.Photo
 	if err := h.DB.Where("project_id = ?", project.ID).Find(&photos).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat daftar foto"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not load the photo list"})
 		return
 	}
 
@@ -115,7 +115,7 @@ func (h *Handler) SubmitSelection(c *gin.Context) {
 
 	var input models.SubmitSelectionInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Data pilihan tidak valid"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The selection data is not valid"})
 		return
 	}
 
@@ -125,13 +125,13 @@ func (h *Handler) SubmitSelection(c *gin.Context) {
 	// dan tidak bisa diulang. Antarmuka klien sendiri tidak pernah mengirim
 	// keadaan ini — tombol kirimnya baru muncul setelah ada foto terpilih.
 	if len(input.SelectedPhotos) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Pilih minimal satu foto sebelum mengirim."})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Pick at least one photo before submitting."})
 		return
 	}
 
 	var project models.Project
 	if err := h.DB.Where("magic_link_token = ?", magicLink).First(&project).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Project tidak valid"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "That project is not valid"})
 		return
 	}
 
@@ -150,18 +150,18 @@ func (h *Handler) SubmitSelection(c *gin.Context) {
 	// penentu ada di dalam submitSelection.
 	if err := submitSelection(h.DB, project.ID, photosToInsert); err != nil {
 		if errors.Is(err, errGalleryLocked) {
-			c.JSON(http.StatusConflict, gin.H{"error": "Galeri ini sudah dikunci karena pilihan telah disubmit sebelumnya."})
+			c.JSON(http.StatusConflict, gin.H{"error": "This gallery is locked because a selection was already submitted."})
 			return
 		}
 		log.Printf("[ERROR] Submit pilihan project %s: %v", project.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan pilihan"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save the selection"})
 		return
 	}
 
 	h.notifySubmission(c, project, len(input.SelectedPhotos))
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":      "Pilihan berhasil disimpan!",
+		"message":      "Your selection has been saved.",
 		"photos_saved": len(input.SelectedPhotos),
 	})
 }

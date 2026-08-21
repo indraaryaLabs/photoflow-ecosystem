@@ -541,14 +541,14 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
               href={PRICING_PATH}
               className="hover:text-ash-900 dark:hover:text-ash-100 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"
             >
-              Harga
+              Pricing
             </a>
             <span className="mx-2 opacity-50">·</span>
             <a
               href={GUIDE_PATH}
               className="hover:text-ash-900 dark:hover:text-ash-100 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"
             >
-              Panduan
+              Guide
             </a>
           </p>
 

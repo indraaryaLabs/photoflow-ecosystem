@@ -29,7 +29,7 @@ func (h *Handler) GetSubscription(c *gin.Context) {
 	status, err := statusLangganan(h.DB, userID, time.Now().UTC())
 	if err != nil {
 		log.Printf("[ERROR] Membaca langganan user %s: %v", userID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membaca langganan"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not read your subscription"})
 		return
 	}
 	c.JSON(http.StatusOK, status)
@@ -46,7 +46,7 @@ func (h *Handler) RedeemCode(c *gin.Context) {
 		Code string `json:"code"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Input tidak valid"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "That input is not valid"})
 		return
 	}
 
@@ -55,7 +55,7 @@ func (h *Handler) RedeemCode(c *gin.Context) {
 	// hanya membuat orang mengira kodenya salah.
 	kode := strings.ToUpper(strings.TrimSpace(input.Code))
 	if kode == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Kode tidak boleh kosong"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The code cannot be empty"})
 		return
 	}
 
@@ -109,14 +109,14 @@ func (h *Handler) RedeemCode(c *gin.Context) {
 
 	switch {
 	case errors.Is(err, errKodeTidakDikenal):
-		c.JSON(http.StatusNotFound, gin.H{"error": "Kode tidak dikenal.", "code": "code_unknown"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "That code is not recognised.", "code": "code_unknown"})
 		return
 	case errors.Is(err, errKodeSudahDipakai):
-		c.JSON(http.StatusConflict, gin.H{"error": "Kode ini sudah pernah dipakai.", "code": "code_used"})
+		c.JSON(http.StatusConflict, gin.H{"error": "This code has already been used.", "code": "code_used"})
 		return
 	case err != nil:
 		log.Printf("[ERROR] Menebus kode untuk user %s: %v", userID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menebus kode"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not redeem the code"})
 		return
 	}
 
@@ -125,7 +125,7 @@ func (h *Handler) RedeemCode(c *gin.Context) {
 		// Penebusannya sudah berhasil dan tersimpan. Gagal menyusun ringkasan
 		// sesudahnya bukan alasan memberi tahu user bahwa kodenya gagal.
 		log.Printf("[WARN] Kode tertebus tapi status gagal dibaca untuk %s: %v", userID, err)
-		c.JSON(http.StatusOK, gin.H{"message": "Kode berhasil ditebus."})
+		c.JSON(http.StatusOK, gin.H{"message": "Your code was redeemed."})
 		return
 	}
 	c.JSON(http.StatusOK, status)
@@ -192,18 +192,18 @@ func (h *Handler) AdminSetSubscription(c *gin.Context) {
 		Months int    `json:"months"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Input tidak valid"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "That input is not valid"})
 		return
 	}
 	if input.UserID == "" || !planDikenal(input.Plan) || input.Months < 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id, plan, dan months wajib diisi dengan benar"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id, plan, and months must all be filled in correctly"})
 		return
 	}
 
 	sekarang := time.Now().UTC()
 	sub, err := langganan(h.DB, input.UserID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membaca langganan"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not read your subscription"})
 		return
 	}
 
@@ -216,7 +216,7 @@ func (h *Handler) AdminSetSubscription(c *gin.Context) {
 	baru := models.Subscription{UserID: input.UserID, Plan: input.Plan, ExpiresAt: &berakhir}
 	if err := h.DB.Save(&baru).Error; err != nil {
 		log.Printf("[ERROR] Menyetel langganan %s: %v", input.UserID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan langganan"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save the subscription"})
 		return
 	}
 
@@ -268,15 +268,15 @@ func (h *Handler) AdminCreateCodes(c *gin.Context) {
 		Note   string `json:"note"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Input tidak valid"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "That input is not valid"})
 		return
 	}
 	if !planDikenal(input.Plan) || input.Plan == models.PlanFree {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "plan harus freelance atau studio"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "plan must be freelance or studio"})
 		return
 	}
 	if input.Months < 1 || input.Count < 1 || input.Count > 200 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "months minimal 1, count antara 1 dan 200"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "months must be at least 1, and count between 1 and 200"})
 		return
 	}
 
@@ -285,7 +285,7 @@ func (h *Handler) AdminCreateCodes(c *gin.Context) {
 		k, err := buatKode()
 		if err != nil {
 			log.Printf("[ERROR] Membangkitkan kode: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membangkitkan kode"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate the codes"})
 			return
 		}
 		kode = append(kode, models.RedeemCode{
@@ -295,7 +295,7 @@ func (h *Handler) AdminCreateCodes(c *gin.Context) {
 
 	if err := h.DB.Create(&kode).Error; err != nil {
 		log.Printf("[ERROR] Menyimpan kode: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan kode"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save the codes"})
 		return
 	}
 

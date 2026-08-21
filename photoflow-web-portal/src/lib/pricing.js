@@ -10,8 +10,8 @@
 // hanya menjanjikan; janji yang lebih besar dari penegakannya menghasilkan
 // keluhan, yang lebih kecil menghasilkan pembeli yang merasa tertipu.
 
-export const PRICING_PATH = '/harga';
-export const GUIDE_PATH = '/panduan';
+export const PRICING_PATH = '/pricing';
+export const GUIDE_PATH = '/guide';
 
 /**
  * Nomor WhatsApp penjualan, dalam format 62xxxxxxxxxx.
@@ -28,13 +28,23 @@ export const SALES_WHATSAPP = import.meta.env.VITE_SALES_WHATSAPP || '';
 /** Tautan WhatsApp dengan pesan pembuka yang sudah terisi. */
 export function tautanWhatsApp(paket) {
   if (!SALES_WHATSAPP) return '';
+  // Pesan pembukanya berbahasa Indonesia meski halamannya berbahasa Inggris,
+  // dan itu bukan kelalaian: yang membaca pesan ini bukan pengunjung melainkan
+  // Anda, di WhatsApp, dalam percakapan yang akan berlanjut dalam bahasa
+  // Indonesia.
   const pesan = paket
     ? `Halo, saya mau berlangganan PhotoFlow paket ${paket}.`
     : 'Halo, saya mau tanya tentang PhotoFlow.';
   return `https://wa.me/${SALES_WHATSAPP}?text=${encodeURIComponent(pesan)}`;
 }
 
-/** Rp 99.000 — titik sebagai pemisah ribuan, seperti kebiasaan di Indonesia. */
+/**
+ * Rp 99.000 — titik sebagai pemisah ribuan, seperti kebiasaan di Indonesia.
+ *
+ * Mata uangnya tetap rupiah walau halamannya berbahasa Inggris. Yang membayar
+ * membayar dalam rupiah; menampilkan angka lain hanya menambah satu langkah
+ * konversi yang harus dikerjakan pembaca dan satu peluang salah paham.
+ */
 export function rupiah(angka) {
   return `Rp ${angka.toLocaleString('id-ID')}`;
 }
@@ -52,26 +62,29 @@ export function perBulan(harga, bulan) {
 
 export const PLANS = [
   {
+    // id TIDAK sama dengan name. Yang tersimpan di database dan diterima API
+    // adalah id; nama boleh berganti tanpa menyentuh satu pun baris langganan
+    // yang sudah terjual.
     id: 'free',
-    name: 'Free',
-    tagline: 'Untuk mencoba, dan untuk yang sebulan cuma sekali dua kali.',
+    name: 'Solo',
+    tagline: 'For trying it out, and for a shoot or two a month.',
     galleries: 3,
     prices: null,
     features: [
-      '3 galeri per bulan',
-      'Foto tetap di Google Drive Anda',
-      'Klien memilih tanpa perlu akun',
-      'Daftar pilihan siap tempel ke Lightroom',
+      '3 galleries per month',
+      'Photos stay in your own Google Drive',
+      'Clients pick without an account',
+      'Selection list ready to paste into Lightroom',
     ],
     // Disebut sebagai batasan, bukan disembunyikan. Orang yang baru tahu
     // setelah kliennya melihat merek orang lain di galerinya akan marah, dan
     // ia benar.
-    limits: ['Galeri memakai merek PhotoFlow, bukan nama studio Anda'],
+    limits: ['Galleries carry PhotoFlow branding, not your studio name'],
   },
   {
     id: 'freelance',
-    name: 'Freelance',
-    tagline: 'Untuk yang jalan 2-3 klien seminggu.',
+    name: 'Pro',
+    tagline: 'For 2-3 clients a week.',
     galleries: 20,
     popular: true,
     prices: [
@@ -79,25 +92,25 @@ export const PLANS = [
       { months: 6, amount: 179000 },
     ],
     features: [
-      '20 galeri per bulan',
-      'Nama studio Anda di galeri klien, bukan PhotoFlow',
-      'Semua yang ada di paket Free',
+      '20 galleries per month',
+      'Your studio name on client galleries, not PhotoFlow',
+      'Everything in Solo',
     ],
     limits: [],
   },
   {
     id: 'studio',
     name: 'Studio',
-    tagline: 'Untuk vendor dan agensi yang mengerjakan banyak acara sekaligus.',
+    tagline: 'For vendors and agencies running several events at once.',
     galleries: -1,
     prices: [
       { months: 3, amount: 249000 },
       { months: 6, amount: 449000 },
     ],
     features: [
-      'Galeri tanpa batas',
-      'Nama studio Anda di galeri klien',
-      'Semua yang ada di paket Freelance',
+      'Unlimited galleries',
+      'Your studio name on client galleries',
+      'Everything in Pro',
     ],
     limits: [],
   },
@@ -116,7 +129,7 @@ export const PLANS = [
  */
 export const PROMO = {
   slots: 10,
-  name: 'Perintis',
+  name: 'Founding',
   bonuses: [
     { pay: 3, get: 5 },
     { pay: 6, get: 9 },

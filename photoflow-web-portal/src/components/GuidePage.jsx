@@ -1,8 +1,5 @@
 // Panduan singkat.
 //
-// Bahasanya Indonesia dengan alasan yang sama seperti halaman harga: yang
-// membacanya orang yang belum punya akun. Lihat PricingPage.jsx.
-//
 // Isinya sengaja pendek dan berurutan sampai satu galeri pertama terkirim.
 // Panduan yang menjelaskan seluruh fitur adalah panduan yang tidak dibaca
 // sampai habis, dan yang paling menentukan orang bertahan atau pergi cuma satu:
@@ -17,112 +14,112 @@ export default function GuidePage({ themeChoice, cycleTheme }) {
   return (
     <PageShell themeChoice={themeChoice} cycleTheme={cycleTheme}>
       <h1 className="text-3xl font-semibold tracking-tight text-ash-900 dark:text-white">
-        Panduan singkat
+        Quick guide
       </h1>
       <p className="mt-3 text-[15px] leading-relaxed text-ash-600 dark:text-ash-400">
-        Dari mendaftar sampai klien mengirim pilihannya. Sekitar lima menit,
-        sekali saja — galeri berikutnya cuma dua menit.
+        From signing up to your client submitting their picks. About five
+        minutes, once — the next gallery takes two.
       </p>
 
       <Sorotan>
-        Satu hal yang paling sering bikin gagal: folder Google Drive harus
-        dibagikan sebagai <strong className="font-semibold">Anyone with the link</strong>.
-        Kalau masih <em>Restricted</em>, galerinya terbuka tapi kosong — dan
-        tidak ada pesan galat yang menjelaskan kenapa.
+        The single most common cause of failure: the Google Drive folder must
+        be shared as{' '}
+        <strong className="font-semibold">Anyone with the link</strong>. Left on{' '}
+        <em>Restricted</em>, the gallery opens but stays empty — with no error
+        message to explain why.
       </Sorotan>
 
-      <Langkah nomor={1} judul="Siapkan folder di Google Drive">
+      <Langkah nomor={1} judul="Prepare a folder in Google Drive">
         <p>
-          Kumpulkan foto mentah hasil pemotretan dalam satu folder. Klik kanan
-          folder itu &rarr; <strong>Share</strong> &rarr; ubah{' '}
-          <em>General access</em> dari <em>Restricted</em> jadi{' '}
-          <strong>Anyone with the link</strong>, peran <em>Viewer</em>.
+          Put the proofs from one shoot in a single folder. Right-click it
+          &rarr; <strong>Share</strong> &rarr; change <em>General access</em>{' '}
+          from <em>Restricted</em> to{' '}
+          <strong>Anyone with the link</strong>, role <em>Viewer</em>.
         </p>
         <p>
-          Salin tautannya. Bentuknya seperti{' '}
+          Copy the link. It looks like{' '}
           <code className="rounded bg-ash-100 px-1.5 py-0.5 text-[13px] dark:bg-white/10">
             drive.google.com/drive/folders/1AbC...
           </code>
         </p>
         <p className="text-ash-500 dark:text-ash-500">
-          Folder boleh milik akun Google mana pun, tidak harus akun yang Anda
-          pakai mendaftar. PhotoFlow tidak pernah masuk ke akun Google Anda.
+          The folder may belong to any Google account, not necessarily the one
+          you signed up with. PhotoFlow never signs in to your Google account.
         </p>
       </Langkah>
 
-      <Langkah nomor={2} judul="Buat akun">
+      <Langkah nomor={2} judul="Create an account">
         <p>
-          Daftar dengan email dan kata sandi. Tidak ada langkah izin Google,
-          tidak ada peringatan aplikasi belum terverifikasi.
+          Sign up with an email and a password. No Google consent screen, and
+          no &ldquo;this app isn&rsquo;t verified&rdquo; warning.
         </p>
       </Langkah>
 
-      <Langkah nomor={3} judul="Buat project">
+      <Langkah nomor={3} judul="Create a project">
         <p>
-          Di dashboard, tekan <strong>New project</strong>. Isi nama project,
-          nama klien, tautan folder tadi, jumlah maksimal foto yang boleh
-          dipilih, dan nomor WhatsApp klien.
+          In the dashboard, press <strong>New project</strong>. Fill in the
+          project name, the client name, the folder link from step 1, how many
+          photos the client may pick, and their WhatsApp number.
         </p>
         <p>
-          Daftar fotonya ditarik dari Drive beberapa detik setelah project
-          tersimpan. Kalau jumlah fotonya masih nol, tunggu sebentar atau tekan{' '}
+          The photo list is pulled from Drive a few seconds after the project
+          is saved. If the count is still zero, wait a moment or press{' '}
           <strong>Resync</strong>.
         </p>
       </Langkah>
 
-      <Langkah nomor={4} judul="Kirim tautannya ke klien">
+      <Langkah nomor={4} judul="Send the link to your client">
         <p>
-          Setiap project punya satu tautan. Salin, kirim lewat WhatsApp. Klien
-          tidak perlu akun, tidak perlu memasang apa pun — cukup buka dan pilih.
+          Every project has one link. Copy it and send it over WhatsApp. Your
+          client needs no account and installs nothing — they open it and pick.
         </p>
         <p>
-          Mau melihat dulu seperti apa tampilannya di mata klien? Pakai{' '}
-          <strong>Preview</strong>. Kunjungan pratinjau tidak dihitung sebagai
-          kunjungan klien.
-        </p>
-      </Langkah>
-
-      <Langkah nomor={5} judul="Klien memilih, lalu mengirim">
-        <p>
-          Klien menandai foto sampai batas yang Anda tetapkan, lalu menekan
-          kirim. Ada dialog konfirmasi lebih dulu, karena kiriman mengunci
-          galeri dan tidak bisa diubah sendiri sesudahnya.
-        </p>
-        <p>
-          Kalau klien salah tekan, Anda bisa membukanya kembali dari dashboard.
-          Dalam 24 jam pertama itu tidak memakai kuota.
+          Want to see it through their eyes first? Use <strong>Preview</strong>.
+          A preview visit is not recorded as a client visit.
         </p>
       </Langkah>
 
-      <Langkah nomor={6} judul="Ambil daftarnya">
+      <Langkah nomor={5} judul="Your client picks, then submits">
         <p>
-          Anda dapat pemberitahuan email. Di dashboard, buka{' '}
-          <strong>Copy list</strong> — isinya nama berkas yang dipilih klien,
-          siap ditempel ke penyaring nama berkas di Lightroom.
+          They tick photos up to the limit you set, then press submit. A
+          confirmation dialog comes first, because submitting locks the gallery
+          and they cannot change it themselves afterwards.
+        </p>
+        <p>
+          If they pressed it by mistake, you can reopen the selection from the
+          dashboard. Within the first 24 hours that costs no quota.
+        </p>
+      </Langkah>
+
+      <Langkah nomor={6} judul="Collect the list">
+        <p>
+          You get an email notification. In the dashboard, use{' '}
+          <strong>Copy list</strong> — the file names your client chose, ready
+          to paste into Lightroom&rsquo;s filename filter.
         </p>
       </Langkah>
 
       <section className="mt-12 border-t border-ash-200 pt-8 dark:border-white/10">
         <h2 className="text-xl font-semibold tracking-tight text-ash-900 dark:text-white">
-          Kalau ada yang tidak beres
+          When something is not right
         </h2>
         <dl className="mt-5 space-y-4">
           {[
             [
-              'Galeri terbuka tapi tidak ada fotonya',
-              'Hampir selalu karena folder belum dibagikan "Anyone with the link". Betulkan di Drive, lalu tekan Resync di dashboard.',
+              'The gallery opens but shows no photos',
+              'Almost always the folder is not shared as "Anyone with the link". Fix it in Drive, then press Resync in the dashboard.',
             ],
             [
-              'Foto baru tidak muncul di galeri',
-              'Daftar foto adalah salinan isi folder saat terakhir dibaca. Tekan Resync setelah menambah atau menghapus foto di Drive.',
+              'New photos are missing from the gallery',
+              'The photo list is a copy of the folder as it was last read. Press Resync after adding or removing photos in Drive.',
             ],
             [
-              'Tautan galeri terkirim ke orang yang salah',
-              'Terbitkan tautan baru dari dashboard. Tautan lama langsung mati, dan tindakan ini tidak memakai kuota.',
+              'The gallery link went to the wrong person',
+              'Issue a new link from the dashboard. The old one dies immediately, and this costs no quota.',
             ],
             [
-              'Nama studio saya tidak muncul di galeri',
-              'Nama studio hanya tampil pada paket berbayar. Galeri paket gratis memakai merek PhotoFlow.',
+              'My studio name is not showing on the gallery',
+              'The studio name appears on paid plans only. Free-plan galleries carry PhotoFlow branding.',
             ],
           ].map(([q, a]) => (
             <div key={q} className="border-l border-ash-200 pl-4 dark:border-white/10">
@@ -138,7 +135,7 @@ export default function GuidePage({ themeChoice, cycleTheme }) {
           href={PRICING_PATH}
           className="text-ash-600 underline underline-offset-4 transition-colors hover:text-ash-900 dark:text-ash-400 dark:hover:text-ash-100"
         >
-          Lihat harga dan batas tiap paket
+          See pricing and what each plan allows
         </a>
       </div>
     </PageShell>

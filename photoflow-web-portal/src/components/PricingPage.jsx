@@ -1,12 +1,7 @@
 // Halaman harga.
 //
-// Ditulis dalam bahasa Indonesia sementara antarmuka aplikasinya berbahasa
-// Inggris, dan itu keputusan sadar, bukan kelalaian: halaman ini dibuka orang
-// dari iklan, sebelum ia punya akun dan sebelum ia percaya apa pun. Fotografer
-// lepas wisuda dan event lari di Indonesia tidak membandingkan harga dalam
-// bahasa Inggris. Konsistensi bahasa di dalam aplikasi bisa diperbaiki
-// kemudian; kalimat penjualan yang tidak dimengerti pembacanya tidak bisa
-// diperbaiki oleh apa pun.
+// Bahasanya Inggris, sama seperti seluruh antarmuka aplikasi. Harganya tetap
+// rupiah: mata uang mengikuti siapa yang membayar, bukan bahasa halamannya.
 
 import { Check, Minus, MessageCircle } from 'lucide-react';
 
@@ -27,12 +22,12 @@ export default function PricingPage({ themeChoice, cycleTheme }) {
     <PageShell themeChoice={themeChoice} cycleTheme={cycleTheme} lebar="max-w-5xl">
       <div className="mx-auto max-w-2xl text-center">
         <h1 className="text-3xl font-semibold tracking-tight text-ash-900 dark:text-white sm:text-4xl">
-          Harga PhotoFlow
+          PhotoFlow pricing
         </h1>
         <p className="mt-3 text-[15px] leading-relaxed text-ash-600 dark:text-ash-400">
-          Kirim satu tautan, klien memilih fotonya sendiri, Anda terima daftar
-          nama berkas yang siap ditempel ke Lightroom. Foto tidak pernah keluar
-          dari Google Drive Anda.
+          Send one link, your client picks their own photos, you get back a
+          list of file names ready to paste into Lightroom. The photos never
+          leave your Google Drive.
         </p>
       </div>
 
@@ -45,8 +40,8 @@ export default function PricingPage({ themeChoice, cycleTheme }) {
       </div>
 
       <p className="mt-6 text-center text-xs text-ash-500 dark:text-ash-500">
-        Harga dalam rupiah. Tidak ada perpanjangan otomatis dan tidak ada kartu
-        yang disimpan — paket berhenti sendiri pada tanggalnya.
+        Prices in Indonesian rupiah. No auto-renewal and no card on file — a
+        plan simply stops on its date.
       </p>
 
       <CaraBerlangganan />
@@ -57,7 +52,7 @@ export default function PricingPage({ themeChoice, cycleTheme }) {
           href={GUIDE_PATH}
           className="text-ash-600 underline underline-offset-4 transition-colors hover:text-ash-900 dark:text-ash-400 dark:hover:text-ash-100"
         >
-          Lihat panduan singkat
+          Read the quick guide
         </a>
       </div>
     </PageShell>
@@ -68,20 +63,21 @@ function Perintis() {
   return (
     <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-amber-300 bg-amber-50 p-5 dark:border-amber-400/30 dark:bg-amber-400/10">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">
-        Paket {PROMO.name} &middot; {PROMO.slots} slot pertama
+        {PROMO.name} plan &middot; first {PROMO.slots} seats
       </p>
       <p className="mt-2 text-sm leading-relaxed text-amber-900 dark:text-amber-100">
         {PROMO.bonuses.map((b, i) => (
           <span key={b.pay}>
-            {i > 0 && ', '}
-            bayar {b.pay} bulan aktif <strong className="font-semibold">{b.get} bulan</strong>
+            {i === 0 ? 'Pay' : ', pay'} for {b.pay} months, get{' '}
+            <strong className="font-semibold">{b.get} months</strong>
           </span>
         ))}
-        . Bonusnya berupa bulan tambahan, bukan potongan harga, jadi
-        perpanjangan berikutnya tidak terasa naik.
+        . The bonus is extra months rather than a discount, so your next
+        renewal does not feel like a price rise.
       </p>
       <p className="mt-2 text-xs text-amber-800/80 dark:text-amber-200/70">
-        Berlaku untuk {PROMO.slots} pelanggan pertama saja. Habis berarti habis.
+        For the first {PROMO.slots} customers only. Once they are gone, they
+        are gone.
       </p>
     </div>
   );
@@ -101,7 +97,7 @@ function KartuPaket({ plan }) {
     >
       {plan.popular && (
         <span className="absolute -top-2.5 left-6 rounded-full bg-ash-800 px-2.5 py-0.5 text-[11px] font-semibold text-white dark:bg-ash-100 dark:text-ash-950">
-          Paling banyak dipakai
+          Most popular
         </span>
       )}
 
@@ -113,16 +109,16 @@ function KartuPaket({ plan }) {
       <div className="mt-5 space-y-2">
         {gratis ? (
           <p className="text-2xl font-semibold tracking-tight text-ash-900 dark:text-white">
-            Gratis
+            Free
           </p>
         ) : (
           plan.prices.map((h) => (
             <div key={h.months} className="flex items-baseline justify-between gap-2">
-              <span className="text-xl font-semibold tracking-tight text-ash-900 dark:text-white">
+              <span className="whitespace-nowrap text-xl font-semibold tracking-tight text-ash-900 dark:text-white">
                 {rupiah(h.amount)}
               </span>
-              <span className="text-xs text-ash-600 dark:text-ash-400">
-                {h.months} bulan &middot; {perBulan(h.amount, h.months)}/bln
+              <span className="text-right text-xs leading-tight text-ash-600 dark:text-ash-400">
+                {h.months} mo &middot; {perBulan(h.amount, h.months)}/mo
               </span>
             </div>
           ))
@@ -155,7 +151,7 @@ function KartuPaket({ plan }) {
             href="/"
             className="block rounded-xl border border-ash-200 px-4 py-3 text-center text-sm font-semibold text-ash-800 transition-colors duration-tint hover:bg-ash-100 dark:border-white/10 dark:text-ash-200 dark:hover:bg-white/5"
           >
-            Mulai gratis
+            Start free
           </a>
         ) : wa ? (
           <a
@@ -165,13 +161,13 @@ function KartuPaket({ plan }) {
             className="flex items-center justify-center gap-2 rounded-xl bg-ash-800 px-4 py-3 text-sm font-semibold text-white transition-colors duration-tint hover:bg-ash-900 dark:bg-ash-100 dark:text-ash-950 dark:hover:bg-white"
           >
             <MessageCircle size={16} strokeWidth={2} aria-hidden="true" />
-            Pesan lewat WhatsApp
+            Order on WhatsApp
           </a>
         ) : (
           // Nomor belum disetel. Tombol yang membuka percakapan ke nomor yang
           // tidak ada lebih merusak kepercayaan daripada tidak ada tombol.
           <p className="rounded-xl border border-dashed border-ash-300 px-4 py-3 text-center text-xs text-ash-500 dark:border-white/10">
-            Hubungi kami untuk berlangganan.
+            Contact us to subscribe.
           </p>
         )}
       </div>
@@ -181,26 +177,23 @@ function KartuPaket({ plan }) {
 
 function CaraBerlangganan() {
   const langkah = [
-    ['Pilih paketnya', 'Klik tombol WhatsApp di paket yang Anda mau.'],
-    ['Transfer', 'Kami balas nomor rekening dan jumlahnya. Kirim buktinya.'],
+    ['Pick a plan', 'Tap the WhatsApp button on the plan you want.'],
+    ['Transfer', 'We reply with the account number and the amount. Send the receipt.'],
+    ['Get a code', 'We send a code shaped PF-XXXX-XXXX on the same WhatsApp chat.'],
     [
-      'Terima kode',
-      'Kami kirim kode berbentuk PF-XXXX-XXXX lewat WhatsApp yang sama.',
-    ],
-    [
-      'Tebus kodenya',
-      'Di dashboard, klik penanda kuota di samping tombol "New project", tempel kodenya, tekan Redeem. Paket aktif seketika.',
+      'Redeem it',
+      'In your dashboard, click the quota badge next to "New project", paste the code, press Redeem. The plan is active immediately.',
     ],
   ];
 
   return (
     <section className="mt-14">
       <h2 className="text-xl font-semibold tracking-tight text-ash-900 dark:text-white">
-        Cara berlangganan
+        How to subscribe
       </h2>
       <p className="mt-2 text-sm text-ash-600 dark:text-ash-400">
-        Aktivasinya lewat kode, bukan lewat kami yang harus online. Kode bisa
-        ditebus sendiri jam berapa pun.
+        Activation runs on codes rather than on us being online, so you can
+        redeem one at two in the morning without waiting for anybody.
       </p>
 
       <ol className="mt-6 space-y-4">
@@ -227,35 +220,35 @@ function Pertanyaan() {
   // yang tidak enak itu lewat WhatsApp, satu per satu, selamanya.
   const tanya = [
     [
-      'Apa yang dihitung sebagai satu galeri?',
-      'Membuat project baru. Selain itu ada dua: mengganti folder Drive pada galeri yang sudah pernah dibuka klien, dan membuka kembali pemilihan lebih dari 24 jam setelah dikirim — keduanya berarti melayani klien baru. Membetulkan tautan yang salah tempel sebelum klien membukanya tidak dihitung, begitu juga membuka kembali dalam 24 jam saat klien salah tekan kirim.',
+      'What counts as one gallery?',
+      'Creating a project. Two other things also count: changing the Drive folder of a gallery a client has already opened, and reopening a selection more than 24 hours after it was submitted — both mean serving a new client. Fixing a link you pasted wrong before anyone opened it is free, and so is reopening within 24 hours when a client pressed send by mistake.',
     ],
     [
-      'Kalau project saya hapus, kuotanya kembali?',
-      'Tidak. Penghitungnya hanya naik dan reset setiap tanggal 1. Kalau menghapus mengembalikan jatah, batasnya tidak berarti apa-apa.',
+      'If I delete a project, do I get the gallery back?',
+      'No. The counter only goes up, and it resets on the 1st. If deleting returned the slot, the limit would mean nothing: create, send, delete, repeat.',
     ],
     [
-      'Kalau paket saya habis, project lama hilang?',
-      'Tidak. Project dan pilihan klien tetap ada. Yang berubah hanya jatah bulanan dan nama di galeri kembali jadi PhotoFlow.',
+      'If my plan expires, do I lose my old projects?',
+      'No. Projects and client selections stay exactly where they are. Only the monthly allowance and the studio-name branding change back.',
     ],
     [
-      'Perpanjang lebih awal, sisa hari saya hangus?',
-      'Tidak. Perpanjangan dihitung dari tanggal berakhir yang sudah ada, bukan dari hari Anda menebus kode.',
+      'If I renew early, do I lose the days I have left?',
+      'No. A renewal is counted from your existing expiry date, not from the day you redeem the code.',
     ],
     [
-      'Foto saya diunggah ke server Anda?',
-      'Tidak pernah. PhotoFlow membaca daftar isi folder Drive Anda; fotonya tetap di Drive Anda dan dimuat langsung dari Google ke peramban klien.',
+      'Are my photos uploaded to your server?',
+      'Never. PhotoFlow reads the file list of your Drive folder; the photos stay in your Drive and load straight from Google into your client\u2019s browser.',
     ],
     [
-      'Ada jaminan uptime?',
-      'Tidak, dan itu tertulis di ketentuan layanan. Yang Anda bayar adalah jatah bulanan dan nama studio Anda di galeri klien. Selalu ekspor daftar pilihan begitu diterima.',
+      'Is there an uptime guarantee?',
+      'No, and the terms of service say so. What you pay for is the monthly allowance and your studio name on client galleries. Always export the selection list once you receive it.',
     ],
   ];
 
   return (
     <section className="mt-14">
       <h2 className="text-xl font-semibold tracking-tight text-ash-900 dark:text-white">
-        Pertanyaan yang sering muncul
+        Frequently asked
       </h2>
 
       <dl className="mt-6 space-y-5">
@@ -268,15 +261,15 @@ function Pertanyaan() {
       </dl>
 
       <p className="mt-6 text-xs text-ash-500 dark:text-ash-500">
-        Selengkapnya di{' '}
+        More detail in the{' '}
         <a
           href={TERMS_PATH}
           className="underline underline-offset-4 hover:text-ash-700 dark:hover:text-ash-300"
         >
-          ketentuan layanan
+          terms of service
         </a>
         .
-        {SALES_WHATSAPP && ' Pertanyaan lain, tanya saja lewat WhatsApp.'}
+        {SALES_WHATSAPP && ' Anything else, just ask on WhatsApp.'}
       </p>
     </section>
   );

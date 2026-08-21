@@ -10,15 +10,23 @@ import { API_BASE } from './api';
 /** Kuota tanpa batas, sesuai models.KuotaTakTerbatas di backend. */
 export const TANPA_BATAS = -1;
 
+// Nama yang DITAMPILKAN, terpisah dari id yang tersimpan di database.
+//
+// Kunci di kiri ('free', 'freelance', 'studio') adalah nilai kolom plan di
+// tabel subscriptions dan nilai yang diterima /api/admin/subscriptions. Nilai
+// itu TIDAK ikut berubah saat namanya diganti: baris langganan yang sudah
+// terjual menyimpannya, dan mengganti id berarti setiap pelanggan lama
+// tiba-tiba memegang paket yang tidak dikenal siapa pun — yang oleh
+// KuotaBulanan diturunkan diam-diam ke kuota gratis.
 export const NAMA_PAKET = {
-  free: 'Free',
-  freelance: 'Freelance',
+  free: 'Solo',
+  freelance: 'Pro',
   studio: 'Studio',
 };
 
 /** Nama paket yang layak dibaca, apa pun isi datanya. */
 export function namaPaket(plan) {
-  return NAMA_PAKET[plan] || 'Free';
+  return NAMA_PAKET[plan] || 'Solo';
 }
 
 /**

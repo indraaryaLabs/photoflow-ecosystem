@@ -27,7 +27,7 @@ export default function PageShell({ themeChoice, cycleTheme, lebar = 'max-w-3xl'
               href="/"
               className="ml-1 rounded-xl bg-ash-800 px-3.5 py-2 text-sm font-semibold text-white transition-colors duration-tint hover:bg-ash-900 dark:bg-ash-100 dark:text-ash-950 dark:hover:bg-white"
             >
-              Masuk
+              Sign in
             </a>
           </div>
         </div>

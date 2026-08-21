@@ -49,7 +49,7 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 
 	var input profilInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Data profil tidak valid"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The profile data is not valid"})
 		return
 	}
 
@@ -74,7 +74,7 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		userID, name).Error
 	if err != nil {
 		log.Printf("[ERROR] Menyimpan nama studio untuk %s: %v", userID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan profil"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save your profile"})
 		return
 	}
 
