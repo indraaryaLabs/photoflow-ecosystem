@@ -37,12 +37,18 @@ import (
 // managedTables adalah tabel yang skemanya dikelola perintah ini. Setiap
 // penambahan model baru harus ikut didaftarkan di sini, dan kalau terlupa,
 // verifyRLS di bawah yang akan menangkapnya.
-var managedTables = []string{"projects", "photos", "profiles", "rate_limits", "oauth_states"}
+var managedTables = []string{
+	"projects", "photos", "profiles", "rate_limits", "oauth_states",
+	"subscriptions", "usage_counters", "redeem_codes",
+}
 
 // dikelola adalah model yang skemanya diurus perintah ini. Satu daftar dipakai
 // AutoMigrate maupun pemeriksaan, supaya keduanya tidak bisa berbeda isi.
 func dikelola() []any {
-	return []any{&models.Project{}, &models.Photo{}, &models.RateLimit{}, &models.OAuthState{}}
+	return []any{
+		&models.Project{}, &models.Photo{}, &models.RateLimit{}, &models.OAuthState{},
+		&models.Subscription{}, &models.UsageCounter{}, &models.RedeemCode{},
+	}
 }
 
 func main() {
@@ -134,7 +140,7 @@ func run() error {
 		return err
 	}
 
-	if err := conn.AutoMigrate(&models.Project{}, &models.Photo{}, &models.RateLimit{}, &models.OAuthState{}); err != nil {
+	if err := conn.AutoMigrate(dikelola()...); err != nil {
 		return fmt.Errorf("automigrate: %w", err)
 	}
 

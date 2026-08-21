@@ -99,6 +99,25 @@ func SetupRouter() (*gin.Engine, error) {
 	r.GET("/api/p/:magic_link/photos", h.GalleryPhotos)
 	r.POST("/api/p/:magic_link/submit", h.SubmitSelection)
 
+	// --- LANGGANAN ---
+	// Dibaca dashboard untuk menampilkan sisa kuota dan ajakan berlangganan.
+	r.GET("/api/subscription", requireAuth, h.GetSubscription)
+
+	// Menukar kode jadi langganan aktif. Ada supaya aktivasi tidak menuntut
+	// pemilik aplikasi online: pembeli menebus sendiri kapan pun.
+	r.POST("/api/subscription/redeem", requireAuth, h.RedeemCode)
+
+	// --- ADMIN ---
+	// RequireAdmin dipasang SESUDAH requireAuth, jadi identitas yang diperiksa
+	// berasal dari JWT terverifikasi. Tanpa ADMIN_USER_IDS terisi, seluruh
+	// kelompok ini membalas 404 — variabel yang lupa diisi tidak berubah jadi
+	// rute tanpa penjaga.
+	admin := r.Group("/api/admin", requireAuth, handlers.RequireAdmin())
+	{
+		admin.POST("/subscriptions", h.AdminSetSubscription)
+		admin.POST("/codes", h.AdminCreateCodes)
+	}
+
 	// --- PROFIL FOTOGRAFER ---
 	// Nama studio yang dilihat klien di kepala galerinya, menggantikan
 	// "PhotoFlow". Lihat handlers.UpdateProfile.

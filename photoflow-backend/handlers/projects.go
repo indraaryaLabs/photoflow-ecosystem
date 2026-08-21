@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -84,7 +86,44 @@ func (h *Handler) CreateProject(c *gin.Context) {
 		newProject.MaxSelections = 50
 	}
 
-	if err := h.DB.Create(&newProject).Error; err != nil {
+	// Kuota diperiksa dan dipakai DI DALAM transaksi yang menyimpan project.
+	//
+	// Memeriksa dulu di luar transaksi lalu menyimpan kemudian akan menyisakan
+	// celah: dua permintaan bersamaan sama-sama membaca "masih ada sisa satu"
+	// sebelum salah satunya sempat menaikkan penghitung, dan keduanya lolos.
+	// Di sini penghitungnya dinaikkan lebih dulu secara atomik, dan kalau nilai
+	// barunya melewati kuota seluruh transaksi dibatalkan — project tidak
+	// tersimpan, dan jatah yang tadi naik ikut kembali.
+	sekarang := time.Now().UTC()
+	sub, err := langganan(h.DB, userID)
+	if err != nil {
+		log.Printf("[ERROR] Membaca langganan user %s: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan project"})
+		return
+	}
+
+	err = h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := pakaiKuotaGaleri(tx, userID, sub.KuotaBulanan(sekarang), sekarang); err != nil {
+			return err
+		}
+		return tx.Create(&newProject).Error
+	})
+	switch {
+	case errors.Is(err, ErrKuotaHabis):
+		// 402, bukan 403. Yang menghalangi bukan izin melainkan pembayaran, dan
+		// kodenya membuat frontend dapat membedakan "Anda tidak boleh" dari
+		// "jatah bulan ini habis, ini caranya menambah".
+		kuota := sub.KuotaBulanan(sekarang)
+		c.JSON(http.StatusPaymentRequired, gin.H{
+			"error": fmt.Sprintf(
+				"Jatah %d galeri bulan ini sudah terpakai. Perpanjang paket untuk membuat lagi.", kuota),
+			"code":  "quota_exceeded",
+			"plan":  sub.PlanEfektif(sekarang),
+			"quota": kuota,
+		})
+		return
+	case err != nil:
+		log.Printf("[ERROR] Menyimpan project untuk user %s: %v", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan project"})
 		return
 	}

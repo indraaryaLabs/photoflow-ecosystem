@@ -48,13 +48,30 @@ func (h *Handler) GetGallery(c *gin.Context) {
 	})
 }
 
-// namaStudio membaca nama studio pemilik project.
+// namaStudio membaca nama studio pemilik project, kalau paketnya mengizinkan.
 //
 // Mengembalikan string kosong pada kegagalan apa pun, termasuk profil yang
 // belum ada. Galeri klien tidak boleh mati karena sebuah nama tidak terbaca —
 // tanpa nama itu yang tampil hanya "PhotoFlow", persis seperti sebelum fitur
 // ini ada.
+//
+// Paket gratis SELALU mengembalikan kosong, jadi galerinya tampil bermerek
+// PhotoFlow. Itu pembeda utama paket berbayar, dan ia dipilih justru karena
+// tidak dapat diakali: batas jumlah galeri bisa direset dengan membuat akun
+// baru, merek tidak. Fotografer yang ingin kliennya melihat nama studionya
+// sendiri harus membayar, berapa pun akun yang ia punya.
 func (h *Handler) namaStudio(userID string) string {
+	sub, err := langganan(h.DB, userID)
+	if err != nil {
+		// Kegagalan membaca langganan tidak boleh diam-diam memberi merek
+		// gratis kepada pelanggan yang membayar. Tapi ia juga tidak boleh
+		// mematikan galeri. Jalan tengahnya: teruskan ke pembacaan nama, dan
+		// biarkan kegagalan di sana yang menentukan.
+		log.Printf("[WARN] Membaca langganan pemilik galeri %s: %v", userID, err)
+	} else if !sub.BolehTanpaMerek(time.Now().UTC()) {
+		return ""
+	}
+
 	var profil models.Profile
 	if err := h.DB.Where("id = ?", userID).First(&profil).Error; err != nil {
 		return ""
