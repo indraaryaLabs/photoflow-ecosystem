@@ -6,6 +6,7 @@ import { openedFromRecoveryLink, clearUrlFragment } from '../lib/recovery';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
 import { PRIVACY_PATH, TERMS_PATH } from '../lib/legal';
+import { GUIDE_PATH, PRICING_PATH } from '../lib/pricing';
 
 /**
  * Terjemahkan error Supabase Auth jadi kalimat yang benar untuk user.
@@ -531,7 +532,27 @@ export default function AdminLogin({ themeChoice, cycleTheme, onNavigate }) {
               verifikasi OAuth Google menuntut tautan kebijakan privasi terlihat
               dari halaman depan aplikasi, dan bagi orang yang belum masuk,
               inilah halaman depannya. */}
-          <p className="mt-6 text-center text-xs text-ash-500 dark:text-ash-500">
+          {/* Harga dan panduan ditaruh DI ATAS baris hukum, bukan bersamanya.
+              Yang mendarat di sini dari iklan belum memutuskan apa pun, dan
+              satu-satunya yang ditawarkan layar ini kepadanya adalah formulir
+              masuk untuk akun yang belum ia punya. */}
+          <p className="mt-6 text-center text-xs text-ash-600 dark:text-ash-400">
+            <a
+              href={PRICING_PATH}
+              className="hover:text-ash-900 dark:hover:text-ash-100 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"
+            >
+              Harga
+            </a>
+            <span className="mx-2 opacity-50">·</span>
+            <a
+              href={GUIDE_PATH}
+              className="hover:text-ash-900 dark:hover:text-ash-100 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"
+            >
+              Panduan
+            </a>
+          </p>
+
+          <p className="mt-2 text-center text-xs text-ash-500 dark:text-ash-500">
             <a
               href={PRIVACY_PATH}
               className="hover:text-ash-700 dark:hover:text-ash-300 underline underline-offset-4 decoration-ash-300 dark:decoration-ash-600 transition-colors"

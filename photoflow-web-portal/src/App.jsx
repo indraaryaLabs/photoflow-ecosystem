@@ -8,6 +8,7 @@ import { useDensity } from './lib/useDensity';
 import FloatingBar from './components/FloatingBar';
 import SubmitConfirmModal from './components/SubmitConfirmModal';
 import { ingatGaleri, lupakanGaleri, PRIVACY_PATH, TERMS_PATH } from './lib/legal';
+import { GUIDE_PATH, PRICING_PATH } from './lib/pricing';
 
 import { API_BASE } from './lib/api';
 import { openedFromRecoveryLink } from './lib/recovery';
@@ -34,6 +35,8 @@ import { useRoute } from './lib/router';
 const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
 const AdminLogin = lazy(() => import('./components/AdminLogin'));
 const LegalPage = lazy(() => import('./components/LegalPage'));
+const PricingPage = lazy(() => import('./components/PricingPage'));
+const GuidePage = lazy(() => import('./components/GuidePage'));
 const PreviewModal = lazy(() => import('./components/PreviewModal'));
 
 
@@ -584,6 +587,28 @@ export default function App() {
           themeChoice={themeChoice}
           cycleTheme={cycleTheme}
         />
+      </Suspense>
+    );
+  }
+
+  // Harga dan panduan mendahului pemeriksaan sesi, sama seperti dokumen hukum.
+  //
+  // Keduanya adalah halaman pendaratan iklan: yang membukanya belum punya akun,
+  // dan menunggu pemeriksaan sesi selesai hanya menampilkan pemuat berputar
+  // kepada orang yang baru saja mengklik iklan — bagian termahal dari seluruh
+  // perjalanan, dihabiskan untuk memeriksa sesi yang jelas tidak ada.
+  if (pathname === PRICING_PATH) {
+    return (
+      <Suspense fallback={<Memuat />}>
+        <PricingPage themeChoice={themeChoice} cycleTheme={cycleTheme} />
+      </Suspense>
+    );
+  }
+
+  if (pathname === GUIDE_PATH) {
+    return (
+      <Suspense fallback={<Memuat />}>
+        <GuidePage themeChoice={themeChoice} cycleTheme={cycleTheme} />
       </Suspense>
     );
   }
