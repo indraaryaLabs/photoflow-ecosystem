@@ -193,6 +193,15 @@ function Privacy() {
             failed attempts and block link-guessing. Counters are kept per
             address and per time window, not as a log of your browsing.
           </Term>
+          <Term label="Subscription and usage">
+            which plan your account is on, when it expires, and how many
+            galleries you have created in the current month. If you buy a plan,
+            we also hold whatever you send us to identify the payment — usually
+            a WhatsApp message and a transfer receipt. That conversation happens
+            in WhatsApp and in your bank&rsquo;s records, not inside PhotoFlow;
+            we keep only what we need to match a payment to an account.
+            PhotoFlow never sees or stores card or bank credentials.
+          </Term>
           <Term label="Local browser storage">
             your light or dark theme preference, your gallery layout density,
             and an unsent draft of a client&rsquo;s picks so a closed tab does
@@ -380,6 +389,13 @@ function Privacy() {
           <Term label="Rate-limit counters">
             a matter of hours; old windows are discarded.
           </Term>
+          <Term label="Subscription and usage records">
+            kept after a plan expires and after the month ends. An expired plan
+            is not erased — it is the record of what you paid for, which we need
+            in order to answer a question about it later, and monthly counters
+            are what stop a deleted project from returning its allowance. They
+            are deleted with the account.
+          </Term>
         </List>
         <p>
           To delete your account and everything attached to it, contact{' '}
@@ -461,6 +477,52 @@ function Terms() {
         <p>One person, one account. Do not share account credentials.</p>
       </Section>
 
+      <Section heading="Plans, quota, and payment">
+        <p>
+          PhotoFlow has a free plan and paid plans. Every plan allows a number
+          of galleries per calendar month; the free plan allows three. Your
+          current plan, how much of the month&rsquo;s allowance you have used,
+          and when a paid plan expires are all shown in your dashboard.
+        </p>
+        <p>
+          Four things count as one gallery against that allowance, and it is
+          worth knowing which before you are surprised by them:
+        </p>
+        <List>
+          <li>creating a project;</li>
+          <li>
+            changing the Drive folder of a project a client has already opened
+            — that is a new set of photos for a new client, whatever the project
+            is called;
+          </li>
+          <li>
+            reopening a selection more than 24 hours after it was submitted.
+            Reopening within 24 hours is free, because that is the case the
+            feature exists for: a client who pressed send too early;
+          </li>
+          <li>nothing else — issuing a fresh gallery link is always free.</li>
+        </List>
+        <p>
+          The allowance resets at the start of each calendar month, Western
+          Indonesian Time. It does not carry over, and deleting a project does
+          not return the gallery you spent on it. If that were not so, the
+          allowance would mean nothing: create, send, delete, repeat.
+        </p>
+        <p>
+          Paid plans are activated manually after payment, by redeeming a code
+          or by us setting your plan directly. There is no automatic renewal and
+          no stored card — a plan simply expires on its date and the account
+          returns to the free plan. Your projects and your clients&rsquo;
+          selections are not deleted when that happens; only the monthly
+          allowance and the studio-name branding change.
+        </p>
+        <p>
+          Prices are in Indonesian rupiah and may change. A change never affects
+          time you have already paid for. If we discontinue the service while
+          you hold unused paid time, we will refund it pro rata.
+        </p>
+      </Section>
+
       <Section heading="Your content, and your clients">
         <p>
           Your photographs remain yours. PhotoFlow claims no licence over them
@@ -485,6 +547,10 @@ function Terms() {
             place automated load on the service beyond ordinary use, or attempt
             to circumvent rate limits;
           </li>
+          <li>
+            open more than one account in order to obtain more free galleries
+            than a single account allows;
+          </li>
           <li>probe, scan, or interfere with the service or its providers.</li>
         </List>
       </Section>
@@ -508,11 +574,17 @@ function Terms() {
 
       <Section heading="Availability">
         <p>
-          PhotoFlow is currently offered free of charge and without a service
-          level agreement. It runs on free infrastructure tiers, which means it
-          can be slow, briefly unavailable, or subject to provider limits. Do
-          not treat it as the only record of a client&rsquo;s selection for work
-          you cannot afford to redo — export the list once you receive it.
+          PhotoFlow is offered without a service level agreement, on paid plans
+          as much as on the free one. It runs on shared infrastructure, which
+          means it can be slow, briefly unavailable, or subject to a
+          provider&rsquo;s limits. Paying for a plan buys a monthly allowance
+          and the removal of PhotoFlow branding; it does not buy a guarantee of
+          uptime, and we would rather say so here than imply otherwise.
+        </p>
+        <p>
+          Do not treat PhotoFlow as the only record of a client&rsquo;s
+          selection for work you cannot afford to redo — export the list once
+          you receive it.
         </p>
         <p>
           Features may change or be removed. Where a change removes something
@@ -532,9 +604,9 @@ function Terms() {
         <p>
           To the fullest extent permitted by law, PhotoFlow and its operator are
           not liable for lost work, lost profit, lost data, or any indirect or
-          consequential loss arising from use of the service. Because the
-          service is provided free of charge, total liability for any claim is
-          limited to the amount you have paid for it, which is zero.
+          consequential loss arising from use of the service. Total liability
+          for any claim is limited to what you paid for PhotoFlow in the three
+          months before the claim arose — which, on the free plan, is nothing.
         </p>
         <p>
           Nothing in these terms excludes liability that cannot lawfully be
@@ -549,6 +621,12 @@ function Terms() {
           acceptable-use section above, or where required by law; except in
           cases of abuse, we will tell you first and give you a chance to export
           your data.
+        </p>
+        <p>
+          If you close your account while a paid plan is still running, the
+          remaining time is not refunded — you chose to stop early. If we close
+          your account for a reason other than a breach of these terms, we
+          refund the remaining time pro rata.
         </p>
       </Section>
 
