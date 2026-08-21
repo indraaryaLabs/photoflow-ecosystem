@@ -62,6 +62,53 @@ jobs:
             echo "::error::Secret DATABASE_URL belum disetel."
             exit 1
           fi
+
+          # Alamat tujuan diperiksa SEBELUM pg_dump dijalankan.
+          #
+          # Tanpa ini, kegagalan yang paling mungkin terjadi hanya muncul
+          # sebagai "exit code 1" tanpa satu pun petunjuk. Penyebabnya bukan
+          # hal yang bisa ditebak: host langsung Supabase
+          # (db.<ref>.supabase.co) sejak 2024 hanya punya alamat IPv6, dan
+          # runner GitHub Actions tidak punya IPv6 sama sekali. Connection
+          # string yang sama bekerja sempurna dari Vercel dan dari laptop,
+          # lalu gagal di sini — persis jenis perbedaan yang menghabiskan
+          # waktu paling lama untuk ditemukan.
+          #
+          # Pemeriksaannya sengaja umum, bukan mencocokkan nama Supabase:
+          # host mana pun yang tidak punya A record tidak akan dapat dihubungi
+          # dari runner ini, apa pun penyedianya.
+          python3 - <<'PY'
+          import os, socket, sys, urllib.parse
+
+          url = urllib.parse.urlparse(os.environ["DATABASE_URL"])
+          host, port = url.hostname or "", url.port or 5432
+
+          # HANYA host dan port yang dicetak. Log Actions pada repositori
+          # publik dapat dibaca siapa pun, dan connection string memuat kata
+          # sandi basis data.
+          print(f"Tujuan: {host}:{port}")
+
+          if not host:
+              print("::error::DATABASE_URL tidak memuat nama host yang sah.")
+              sys.exit(1)
+
+          try:
+              socket.getaddrinfo(host, port, socket.AF_INET)
+          except socket.gaierror:
+              print(f"::error::{host} tidak punya alamat IPv4, dan runner "
+                    "GitHub Actions tidak punya IPv6 — koneksinya tidak akan "
+                    "pernah tersambung. Pakai connection string Session "
+                    "pooler dari Supabase (Connect -> Session pooler, port "
+                    "5432), bukan Direct connection.")
+              sys.exit(1)
+
+          if port == 6543:
+              print("::error::Port 6543 adalah transaction pooler, yang tidak "
+                    "mendukung perintah yang dibutuhkan pg_dump. Pakai Session "
+                    "pooler pada port 5432.")
+              sys.exit(1)
+          PY
+
           pg_dump "$DATABASE_URL" \
             --no-owner --no-privileges --clean --if-exists \
             --file=photoflow.sql
