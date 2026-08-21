@@ -3,8 +3,10 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"photoflow-backend/models"
@@ -98,6 +100,26 @@ func catatPemakaian(tx *gorm.DB, userID string, pada time.Time, batas *int) erro
 	return nil
 }
 
+// kuotaHabis melaporkan apakah jatah bulan ini sudah terpakai penuh, tanpa
+// menaikkan apa pun.
+//
+// Ini pemeriksaan awal, BUKAN penjaga. Penjaganya tetap pakaiKuotaGaleri di
+// dalam transaksi; jawaban di sini bisa basi begitu dibaca. Gunanya menghindari
+// pekerjaan mahal yang sudah pasti sia-sia — memanggil Google Drive untuk
+// permintaan yang akan ditolak beberapa baris kemudian. Tanpa itu, seorang user
+// yang kuotanya habis dapat memancing satu pembacaan folder ke Google pada
+// setiap percobaan, dan kuota API key itu dipakai bersama semua user.
+func kuotaHabis(db *gorm.DB, userID string, kuota int, pada time.Time) (bool, error) {
+	if kuota == models.KuotaTakTerbatas {
+		return false, nil
+	}
+	dipakai, err := pemakaianBulanIni(db, userID, pada)
+	if err != nil {
+		return false, err
+	}
+	return dipakai >= kuota, nil
+}
+
 // StatusLangganan adalah bentuk yang dibaca frontend untuk memutuskan apa yang
 // ditampilkan: sisa kuota, ajakan berlangganan, dan apakah merek PhotoFlow
 // masih menempel di galeri klien.
@@ -147,4 +169,34 @@ func statusLangganan(db *gorm.DB, userID string, pada time.Time) (StatusLanggana
 		status.Remaining = &sisa
 	}
 	return status, nil
+}
+
+// jedaSalahKirim adalah tenggang membuka kembali pemilihan tanpa memakai kuota.
+//
+// "Buka kembali" ada untuk satu keadaan: klien menekan kirim padahal belum
+// selesai memilih. Kesalahan seperti itu disadari dalam hitungan menit atau jam,
+// bukan minggu. Membuka kembali jauh sesudahnya berarti project lama dipakai
+// ulang untuk klien berikutnya — putaran pemilihan baru, dan itu yang dihitung.
+//
+// Menagih setiap pembukaan kembali akan menghukum fotografer karena kesalahan
+// kliennya. Tidak menagih sama sekali membuat batas kuota tidak berarti: satu
+// project bisa melayani klien tanpa batas.
+const jedaSalahKirim = 24 * time.Hour
+
+// TolakKuotaHabis membalas 402 beserta keterangan yang dapat ditindaklanjuti
+// frontend.
+//
+// 402, bukan 403: yang menghalangi bukan izin melainkan pembayaran. Kodenya
+// membuat frontend dapat membedakan "Anda tidak boleh" dari "jatah bulan ini
+// habis, ini caranya menambah".
+func tolakKuotaHabis(c *gin.Context, sub models.Subscription, pada time.Time, tindakan string) {
+	kuota := sub.KuotaBulanan(pada)
+	c.JSON(http.StatusPaymentRequired, gin.H{
+		"error": fmt.Sprintf(
+			"Jatah %d galeri bulan ini sudah terpakai, dan %s terhitung sebagai galeri baru. "+
+				"Perpanjang paket untuk melanjutkan.", kuota, tindakan),
+		"code":  "quota_exceeded",
+		"plan":  sub.PlanEfektif(pada),
+		"quota": kuota,
+	})
 }

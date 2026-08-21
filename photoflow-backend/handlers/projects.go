@@ -423,6 +423,40 @@ func (h *Handler) UpdateProject(c *gin.Context) {
 		project.ClientWhatsApp = input.ClientWhatsApp
 	}
 
+	// Mengganti folder pada galeri yang SUDAH pernah dibuka klien terhitung
+	// sebagai galeri baru, dan memakai kuota.
+	//
+	// Tanpa aturan ini seluruh batas kuota dapat dilewati dengan satu project:
+	// kirim ke klien A, ganti folder, kirim ke klien B, dan seterusnya tanpa
+	// pernah membuat project kedua.
+	//
+	// Yang belum pernah dibuka TIDAK ditagih. Itu keadaan "saya menempel tautan
+	// yang salah" — kesalahan yang wajar dan tidak boleh berbiaya.
+	galeriBaru := driveChanged && project.FirstViewedAt != nil
+	sekarang := time.Now().UTC()
+	sub, err := langganan(h.DB, userID)
+	if err != nil {
+		log.Printf("[ERROR] Membaca langganan user %s: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui project"})
+		return
+	}
+
+	// Ditolak di sini, sebelum Drive disentuh. Penjaga yang sebenarnya ada di
+	// dalam transaksi di bawah; yang ini hanya mencegah pembacaan folder yang
+	// sudah pasti dibuang. Lihat kuotaHabis.
+	if galeriBaru {
+		habis, err := kuotaHabis(h.DB, userID, sub.KuotaBulanan(sekarang), sekarang)
+		if err != nil {
+			log.Printf("[ERROR] Membaca pemakaian user %s: %v", userID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui project"})
+			return
+		}
+		if habis {
+			tolakKuotaHabis(c, sub, sekarang, "mengganti folder galeri yang sudah dibuka klien")
+			return
+		}
+	}
+
 	// Daftar foto baru ditarik dari Drive SEBELUM transaksi dibuka. Panggilan
 	// jaringan di dalam transaksi akan menahan lock baris selama permintaan
 	// HTTP berlangsung, dan lamanya ditentukan pihak lain.
@@ -439,6 +473,11 @@ func (h *Handler) UpdateProject(c *gin.Context) {
 	}
 
 	if err := h.DB.Transaction(func(tx *gorm.DB) error {
+		if galeriBaru {
+			if err := pakaiKuotaGaleri(tx, userID, sub.KuotaBulanan(sekarang), sekarang); err != nil {
+				return err
+			}
+		}
 		if err := tx.Save(&project).Error; err != nil {
 			return err
 		}
@@ -453,6 +492,10 @@ func (h *Handler) UpdateProject(c *gin.Context) {
 		}
 		return markSynced(tx, project.ID)
 	}); err != nil {
+		if errors.Is(err, ErrKuotaHabis) {
+			tolakKuotaHabis(c, sub, sekarang, "mengganti folder galeri yang sudah dibuka klien")
+			return
+		}
 		log.Printf("[ERROR] Update project %s: %v", project.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengupdate project"})
 		return
@@ -488,21 +531,6 @@ func (h *Handler) DeleteProject(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Project berhasil dihapus"})
 }
 
-// ReopenSelection mengembalikan project yang sudah dikirim ke keadaan pending.
-//
-// Mengirim pilihan sengaja dibuat satu arah: SubmitSelection mengunci status
-// lewat `WHERE status <> 'submitted'` supaya dua klien yang menekan kirim pada
-// saat bersamaan tidak saling menimpa. Yang belum ada sampai sekarang adalah
-// jalan pulangnya. Akibatnya satu klik keliru dari klien membuat galerinya mati
-// permanen, dan satu-satunya perbaikan adalah membuka database langsung.
-//
-// Hanya pemilik project yang boleh melakukannya — sama seperti UpdateProject
-// dan DeleteProject, kepemilikan diperiksa lewat `user_id` yang diambil dari
-// klaim `sub` pada JWT, bukan dari apa pun yang dikirim browser.
-//
-// Pilihan foto ikut dikosongkan. Membuka status tanpa mengosongkan pilihan akan
-// menaruh klien kembali di galeri dengan semua foto sudah tercentang, sehingga
-// pemilihan ulang justru lebih menyulitkan daripada memulai dari nol.
 // ListSelections mengembalikan nama berkas yang dipilih klien pada satu proyek.
 //
 // Sampai sekarang daftar ini hanya bisa diambil aplikasi desktop, yang membaca
@@ -605,6 +633,21 @@ func (h *Handler) RotateMagicLink(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"magic_link_token": token})
 }
 
+// ReopenSelection mengembalikan project yang sudah dikirim ke keadaan pending.
+//
+// Mengirim pilihan sengaja dibuat satu arah: SubmitSelection mengunci status
+// lewat `WHERE status <> 'submitted'` supaya dua klien yang menekan kirim pada
+// saat bersamaan tidak saling menimpa. Yang belum ada sampai sekarang adalah
+// jalan pulangnya. Akibatnya satu klik keliru dari klien membuat galerinya mati
+// permanen, dan satu-satunya perbaikan adalah membuka database langsung.
+//
+// Hanya pemilik project yang boleh melakukannya — sama seperti UpdateProject
+// dan DeleteProject, kepemilikan diperiksa lewat `user_id` yang diambil dari
+// klaim `sub` pada JWT, bukan dari apa pun yang dikirim browser.
+//
+// Pilihan foto ikut dikosongkan. Membuka status tanpa mengosongkan pilihan akan
+// menaruh klien kembali di galeri dengan semua foto sudah tercentang, sehingga
+// pemilihan ulang justru lebih menyulitkan daripada memulai dari nol.
 func (h *Handler) ReopenSelection(c *gin.Context) {
 	userID := c.GetString(middleware.ContextUserIDKey)
 	projectID := c.Param("id")
@@ -623,10 +666,37 @@ func (h *Handler) ReopenSelection(c *gin.Context) {
 		return
 	}
 
+	// Membuka kembali JAUH sesudah kiriman terhitung sebagai galeri baru.
+	//
+	// Fiturnya ada untuk satu keadaan: klien menekan kirim sebelum selesai
+	// memilih. Kesalahan itu disadari dalam hitungan jam. Membukanya kembali
+	// berminggu-minggu kemudian berarti project lama dipakai ulang untuk klien
+	// berikutnya — dan tanpa aturan ini, satu project dapat melayani klien tanpa
+	// batas sehingga seluruh kuota kehilangan artinya.
+	//
+	// Yang di dalam tenggang tidak ditagih: menghukum fotografer karena
+	// kliennya salah tekan adalah cara tercepat membuat fitur ini tidak dipakai,
+	// dan galeri yang terkunci selamanya jauh lebih merugikan.
+	sekarang := time.Now().UTC()
+	galeriBaru := project.SubmittedAt != nil &&
+		sekarang.Sub(*project.SubmittedAt) > jedaSalahKirim
+
+	sub, err := langganan(h.DB, userID)
+	if err != nil {
+		log.Printf("[ERROR] Membaca langganan user %s: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuka kembali pemilihan"})
+		return
+	}
+
 	// Keduanya dalam satu transaksi. Kalau pengosongan pilihan gagal setelah
 	// status terlanjur dibuka, klien akan masuk ke galeri terbuka yang seluruh
 	// fotonya tercentang — persis keadaan yang ingin dihindari.
-	err := h.DB.Transaction(func(tx *gorm.DB) error {
+	err = h.DB.Transaction(func(tx *gorm.DB) error {
+		if galeriBaru {
+			if err := pakaiKuotaGaleri(tx, userID, sub.KuotaBulanan(sekarang), sekarang); err != nil {
+				return err
+			}
+		}
 		if err := tx.Model(&models.Photo{}).
 			Where("project_id = ?", project.ID).
 			Update("is_selected", false).Error; err != nil {
@@ -643,7 +713,11 @@ func (h *Handler) ReopenSelection(c *gin.Context) {
 			}).Error
 	})
 	if err != nil {
-		log.Printf("reopen selection %s: %v", project.ID, err)
+		if errors.Is(err, ErrKuotaHabis) {
+			tolakKuotaHabis(c, sub, sekarang, "membuka kembali pemilihan lama")
+			return
+		}
+		log.Printf("[ERROR] Reopen selection %s: %v", project.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuka kembali pemilihan"})
 		return
 	}
